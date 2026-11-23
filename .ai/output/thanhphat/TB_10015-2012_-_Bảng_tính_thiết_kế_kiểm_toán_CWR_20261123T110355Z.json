@@ -1,0 +1,7421 @@
+{
+  "saved_at": "2026-11-23T11:03:55.905964+00:00",
+  "source": {
+    "path": "C:\\Users\\Admin\\Desktop\\ThanhPhat\\TB 10015-2012 - Bảng tính thiết kế kiểm toán CWR.xlsx",
+    "name": "TB 10015-2012 - Bảng tính thiết kế kiểm toán CWR.xlsx",
+    "suffix": ".xlsx",
+    "size_bytes": 110786
+  },
+  "result": {
+    "format": "xlsx",
+    "metadata": {
+      "title": null,
+      "creator": "openpyxl",
+      "subject": null,
+      "created": "2026-11-03T08:49:37",
+      "modified": "2026-11-19T03:18:53",
+      "last_modified_by": "Phuc a",
+      "sheet_names": [
+        "Hướng dẫn",
+        "Nhập liệu",
+        "Tổng hợp",
+        "1_Độ bền ray",
+        "2_Ổn định",
+        "3_Khe đứt ray",
+        "4_Nhiệt độ khóa",
+        "5_Co giãn-Đệm",
+        "6_Cầu",
+        "7_Ghi",
+        "Tra cứu"
+      ]
+    },
+    "stats": {
+      "sheet_count": 11,
+      "total_rows": 1007,
+      "filled_cells": 4794
+    },
+    "sheets": [
+      {
+        "name": "Hướng dẫn",
+        "rows": 16,
+        "cols": 3,
+        "headers": [
+          "Bảng tính thiết kế – kiểm toán đường ray hàn liền theo TB 10015—2012"
+        ],
+        "columns": [
+          "A",
+          "B",
+          "C"
+        ],
+        "data": [
+          [
+            "Bảng tính thiết kế – kiểm toán đường ray hàn liền theo TB 10015—2012"
+          ],
+          [
+            "Quy phạm thiết kế đường ray hàn liền đường sắt (Trung Quốc, 2012) – theo bản dịch tiếng Việt kèm theo."
+          ],
+          [
+            null,
+            "Mục đích",
+            "Tính toán và kiểm toán đường ray hàn liền (CWR) đường sắt tốc độ cao theo trình tự của TB 10015—2012: độ bền ray, ổn định, khe đứt ray, nhiệt độ khóa ray thiết kế, vùng co giãn và khe dự trữ vùng đệm, cầu và ghi hàn liền."
+          ],
+          [
+            null,
+            "Cách dùng",
+            "1) Điền các ô nền vàng chữ xanh ở sheet \"Nhập liệu\" (mục A–F), và các ô nhập riêng ở sheet 6, 7.  2) Xem kết quả từng bước ở sheet 1–7.  3) Xem sheet \"Tổng hợp\" để biết ĐẠT/KHÔNG ĐẠT.  Mọi công thức đều sống: đổi dữ liệu nhập là kết quả tự cập nhật."
+          ],
+          [
+            null,
+            "Quy ước màu",
+            "Nền vàng + chữ xanh: ô nhập.  Chữ đen: công thức.  Nền xanh nhạt: kết quả chính.  Sheet \"Tra cứu\": số liệu của tiêu chuẩn (chữ xanh), có thể bổ sung."
+          ],
+          [
+            null,
+            "Đơn vị",
+            "Lực kN; ứng suất MPa; chiều dài mm (đơn vị cm riêng trong sheet 2 theo công thức Phụ lục B); nhiệt độ °C. Lực cản dọc r: kN/(m·ray) ≡ N/mm."
+          ],
+          [
+            null,
+            "Sheet 1",
+            "Độ bền ray (điều 4.1, Phụ lục A): ray trên nền đàn hồi liên tục, chùm bánh xe, M_d, σ_đầu/đáy, [ΔT_d]."
+          ],
+          [
+            null,
+            "Sheet 2",
+            "Ổn định đường có ba lát (điều 4.2, Phụ lục B): công thức thống nhất B.0.3 và công thức bước sóng không đều B.0.4; [ΔT_u]."
+          ],
+          [
+            null,
+            "Sheet 3",
+            "Khe đứt ray λ (điều 4.3) và ΔT_λ."
+          ],
+          [
+            null,
+            "Sheet 4",
+            "Nhiệt độ khóa ray thiết kế T_e, T_u, T_d (điều 4.4) và khoảng T_e khả dụng."
+          ],
+          [
+            null,
+            "Sheet 5",
+            "Chiều dài vùng co giãn l_s (4.7), khe ray dự trữ vùng đệm a₁, a₂ (Phụ lục E)."
+          ],
+          [
+            null,
+            "Sheet 6",
+            "Cầu: tra bảng F.0.6 (lực co giãn, lực uốn), lực đứt ray, tổ hợp bảng 5.4.3, độ cứng mố trụ (bảng 5.4.5), dự trữ co giãn bộ điều chỉnh (5.5.2)."
+          ],
+          [
+            null,
+            "Sheet 7",
+            "Ghi hàn liền: ổn định, bu lông, dịch chuyển lưỡi ghi/mũi tâm (điều 7.2)."
+          ],
+          [
+            null,
+            "PHẠM VI – CHƯA CÓ",
+            "(a) Phương pháp lặp tương tác cầu–ray của F.0.3 (phần tử hữu hạn phi tuyến) và ghi trên cầu 7.3 – cần phần mềm chuyên dụng; kết quả P_f của chúng được NHẬP vào bảng này.  (b) Kiểm toán ổn định đường không ba lát: tiêu chuẩn không quy định công thức; sheet 2 trả \"n/a\".  (c) Các yêu cầu cấu tạo (bố trí đơn nguyên ray, cọc quan trắc, nhiệt độ khóa các đơn nguyên 4.4.4, hầm) không kiểm tra bằng công thức."
+          ],
+          [
+            null,
+            "GIẢ ĐỊNH CẦN XÁC NHẬN",
+            "• E = 2,1×10⁵ MPa (tiêu chuẩn không nêu trị số).  • Chùm bánh xe, tải trục, vị trí trục ở sheet Nhập liệu mục F chỉ là ví dụ.  • Hệ số lực ngang f cho R nằm giữa hai mốc của bảng A.0.2-2 lấy mốc nhỏ hơn.  • r của tà vẹt loại II mới 1 840 thanh/km lấy bằng giá trị 1 760 thanh/km.  • Bảng B.0.4-1 gắn tham số theo loại tà vẹt (II/III), bản gốc ghi 1 840 và 1 760 thanh/km (không khớp 1 667 thanh/km của điều 3.2.2).  • Phụ lục E: P_t max hiểu là lực nén lớn nhất cho vế nhiệt độ cao (E.0.2-5, -6) và lực kéo lớn nhất cho vế nhiệt độ thấp (E.0.2-3, -4); kiểm toán vùng đệm mặc định TẮT (bật ở sheet 5).  • [ΔT_u] dùng trong thiết kế mặc định lấy theo công thức bước sóng không đều (B.0.4); đổi ở sheet Nhập liệu mục D.  • B.0.4-13 trừ 8 °C chỉ áp dụng cho phương pháp bước sóng không đều.  • Đơn vị u = D/a trong A.0.3-2 được quy đổi đúng (D kN/mm, a m → N/mm²)."
+          ],
+          [
+            null,
+            "Nguồn",
+            "TB 10015—2012 «Quy phạm thiết kế đường ray hàn liền đường sắt» (Bộ Đường sắt nước CHND Trung Hoa) và thuyết minh điều văn; số điều khoản ghi ở cột cuối từng sheet."
+          ]
+        ]
+      },
+      {
+        "name": "Nhập liệu",
+        "rows": 79,
+        "cols": 6,
+        "headers": [
+          "Nhập liệu – Thiết kế và kiểm toán đường ray hàn liền (TB 10015—2012)"
+        ],
+        "columns": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F"
+        ],
+        "data": [
+          [
+            "Nhập liệu – Thiết kế và kiểm toán đường ray hàn liền (TB 10015—2012)"
+          ],
+          [
+            "Ô nền vàng, chữ xanh = ô nhập. Ô chữ đen = công thức, không sửa. Đơn vị: kN, mm, MPa, °C trừ khi ghi khác."
+          ],
+          [
+            "STT",
+            "Tham số",
+            "Ký hiệu",
+            "Giá trị",
+            "Đơn vị",
+            "Điều khoản / ghi chú"
+          ],
+          [
+            "A. Thông tin chung"
+          ],
+          [
+            null,
+            "Tên công trình / đoạn tuyến",
+            null,
+            "Ví dụ: Đoạn Km… – Km…, tuyến đường sắt tốc độ cao"
+          ],
+          [
+            "B. Đoạn tuyến, kết cấu đường, ray"
+          ],
+          [
+            null,
+            "Vị trí tính toán",
+            null,
+            "Nền đường",
+            null,
+            "Quyết định lực dọc phụ thêm P_f: nền đường/hầm → dùng ΔP theo bảng B.0.4; cầu hoặc ghi → dùng P_f nhập ở mục E."
+          ],
+          [
+            null,
+            "Kết cấu đường / phụ kiện",
+            null,
+            "Có ba lát – tà vẹt BT loại III (1 667 thanh/km)",
+            null,
+            "Điều 3.2.2, 3.2.3. Quyết định loại đường (có/không ba lát), r, Q, cự ly nút."
+          ],
+          [
+            null,
+            "Ghi đè lực cản dọc r (không tải)",
+            "r",
+            null,
+            "kN/(m·ray)",
+            "Để trống = tra bảng. Dùng cho phụ kiện lực cản nhỏ (8,0), giá trị đo thực tế, hoặc quy đổi theo cự ly tà vẹt (3.2.2-4,5,6)."
+          ],
+          [
+            null,
+            "Ghi đè lực cản ngang tương đương Q",
+            "Q",
+            null,
+            "kN/m",
+            "Để trống = tra bảng 3.2.3."
+          ],
+          [
+            null,
+            "Ghi đè cự ly nút phụ kiện a",
+            "a",
+            null,
+            "m",
+            "Để trống = tra theo kết cấu đường."
+          ],
+          [
+            null,
+            "Loại ray",
+            null,
+            60,
+            "kg/m",
+            "Phụ lục C. Chọn 50, 60 hoặc 75."
+          ],
+          [
+            null,
+            "Độ mòn đứng của ray",
+            null,
+            0,
+            "mm",
+            "Phụ lục C: 0, 3, 6, 9 mm (ảnh hưởng W, I_x)."
+          ],
+          [
+            null,
+            "Mác thép ray",
+            null,
+            "U75V / U75VG / U76CrRE / U77MnCr / U78CrV",
+            null,
+            "Bảng 3.2.4 → σ_s."
+          ],
+          [
+            null,
+            "Vận tốc thiết kế",
+            "v",
+            350,
+            "km/h",
+            "Bảng A.0.2-1: v > 160 km/h → hệ số vận tốc = 1,0."
+          ],
+          [
+            null,
+            "Loại động lực kéo (chỉ dùng khi v ≤ 160 km/h)",
+            null,
+            "Điện",
+            null,
+            "Bảng A.0.2-1."
+          ],
+          [
+            null,
+            "Bán kính đường cong (0 = đường thẳng)",
+            "R",
+            0,
+            "m",
+            "R nhỏ nhất cho phép rải CWR: 300 m (3.1.3)."
+          ],
+          [
+            null,
+            "Siêu cao chưa được cân bằng",
+            "Δh",
+            0,
+            "mm",
+            "A.0.2-3: β = 0,002·Δh. Đường thẳng nhập 0."
+          ],
+          [
+            null,
+            "Độ cứng điểm tựa ray D",
+            "D",
+            "Có ba lát – tà vẹt III, đệm dưới ray 80 kN/mm",
+            null,
+            "Bảng A.0.3-1/A.0.3-2 (đường không ba lát: phải tính bằng hệ lò xo nối tiếp; bảng chỉ cho độ cứng đệm)."
+          ],
+          [
+            null,
+            "Ghi đè D",
+            "D",
+            null,
+            "kN/mm",
+            "Để trống = tra bảng."
+          ],
+          [
+            "C. Khí hậu"
+          ],
+          [
+            null,
+            "Nguồn nhiệt độ",
+            null,
+            "Tra bảng D",
+            null,
+            "Bảng D hoặc nhập tay (điều 4.4.1: vùng đặc biệt phải điều tra bổ sung)."
+          ],
+          [
+            null,
+            "Địa danh (khi tra bảng D)",
+            null,
+            "Bắc Kinh (Beijing) – Bắc Kinh (Beijing)"
+          ],
+          [
+            null,
+            "Nhiệt độ không khí cao nhất (nhập tay)",
+            "T_kk,max",
+            40,
+            "°C",
+            "Nhiệt độ ray cao nhất = nhiệt độ không khí cao nhất + 20 °C (2.1.12)."
+          ],
+          [
+            null,
+            "Nhiệt độ không khí thấp nhất (nhập tay)",
+            "T_kk,min",
+            -10,
+            "°C",
+            "Nhiệt độ ray thấp nhất = nhiệt độ không khí thấp nhất (2.1.13)."
+          ],
+          [
+            "D. Hằng số và hệ số thiết kế"
+          ],
+          [
+            null,
+            "Mô đun đàn hồi của thép ray",
+            "E",
+            210000,
+            "MPa",
+            "GIẢ ĐỊNH: tiêu chuẩn có ký hiệu E nhưng không nêu trị số; 2,1×10⁵ MPa theo thông lệ."
+          ],
+          [
+            null,
+            "Hệ số giãn nở dài của thép ray",
+            "α",
+            1.18e-05,
+            "1/°C",
+            "4.1.2"
+          ],
+          [
+            null,
+            "Hệ số an toàn độ bền ray",
+            "K",
+            1.3,
+            null,
+            "3.2.4"
+          ],
+          [
+            null,
+            "Hệ số an toàn ổn định",
+            "K",
+            1.3,
+            null,
+            "B.0.3-6 (công thức thống nhất)."
+          ],
+          [
+            null,
+            "Lực cản mối nối",
+            "P_j",
+            400,
+            "kN",
+            "4.7.1: mômen xiết bu lông ≥ 900 N·m → 400 kN."
+          ],
+          [
+            null,
+            "Giá trị cho phép của khe đứt ray",
+            "[λ]",
+            "Thông thường (70 mm)",
+            null,
+            "4.3.1: 70 mm; 90 mm trong điều kiện khó khăn (thuyết minh: cần thêm điều kiện về mối hàn và dò khuyết tật)."
+          ],
+          [
+            null,
+            "Phạm vi khóa ray quanh T_e",
+            "±",
+            5,
+            "°C",
+            "4.4.3: nên ±5 °C, điều kiện khó khăn ±3 °C."
+          ],
+          [
+            null,
+            "Hiệu chỉnh nhiệt độ khóa ray (có dấu)",
+            "ΔT_k",
+            0,
+            "°C",
+            "4.4.2: ±ΔT_k, lấy trong khoảng 0 ~ 5 °C (miền Bắc có thể thiên thấp, miền Nam thiên cao – thuyết minh 4.4.2)."
+          ],
+          [
+            null,
+            "Phương pháp ổn định dùng cho [ΔT_u]",
+            null,
+            "Bước sóng không đều (B.0.4)",
+            null,
+            "Phụ lục B cho phép dùng một trong hai; chọn \"Giá trị nhỏ hơn\" để thiên an toàn."
+          ],
+          [
+            "E. Lực dọc phụ thêm của ray (chỉ dùng khi vị trí là Cầu hoặc Ghi hàn liền)"
+          ],
+          [
+            null,
+            "Lực dọc phụ thêm lớn nhất của ray – KÉO",
+            "P_f,kéo",
+            0,
+            "kN",
+            "Cầu: max(lực co giãn, lực uốn) trong ray (Phụ lục F, phân tích tương tác cầu–ray). Ghi: lực phụ thêm lớn nhất ΔP_max của ray cơ bản (7.2.2). Dùng cho σ_f."
+          ],
+          [
+            null,
+            "Lực dọc phụ thêm lớn nhất của ray – NÉN",
+            "P_f,nén",
+            0,
+            "kN",
+            "Dùng cho ổn định (B.0.3-8, B.0.4-12) và 7.2.3 (ΔP′_max)."
+          ],
+          [
+            null,
+            "Ứng suất kéo (hãm) của ray",
+            "σ_z",
+            0,
+            "MPa",
+            "A.0.5-6; xác định theo Phụ lục F (F.0.5). Nền đường: thường lấy 0 nếu không tính."
+          ],
+          [
+            "F. Chùm bánh xe tĩnh (Phụ lục A, A.0.4-7) – tối đa 12 bánh"
+          ],
+          [
+            null,
+            "VÍ DỤ minh họa: xe động lực/toa EMU, tải trục 17 t (P_j ≈ 83,4 kN/bánh), cự ly trục trong giá chuyển hướng 2,5 m, hai giá liền kề giữa hai toa cách nhau 5,0 m (tim giá 7,5 m), tim giá cùng toa 17,5 m. THAY BẰNG SƠ ĐỒ TRỤC CỦA ĐOÀN TÀU KHAI THÁC THỰC TẾ (3.2.1). Để trống bánh không dùng."
+          ],
+          [
+            "Bánh",
+            "Bánh số",
+            null,
+            "x (m)",
+            "P_j (kN)"
+          ],
+          [
+            1,
+            "Bánh số 1",
+            null,
+            -17.5,
+            83.4
+          ],
+          [
+            2,
+            "Bánh số 2",
+            null,
+            -15,
+            83.4
+          ],
+          [
+            3,
+            "Bánh số 3",
+            null,
+            0,
+            83.4
+          ],
+          [
+            4,
+            "Bánh số 4",
+            null,
+            2.5,
+            83.4
+          ],
+          [
+            5,
+            "Bánh số 5",
+            null,
+            7.5,
+            83.4
+          ],
+          [
+            6,
+            "Bánh số 6",
+            null,
+            10,
+            83.4
+          ],
+          [
+            7,
+            "Bánh số 7",
+            null,
+            25,
+            83.4
+          ],
+          [
+            8,
+            "Bánh số 8",
+            null,
+            27.5,
+            83.4
+          ],
+          [
+            9,
+            "Bánh số 9"
+          ],
+          [
+            10,
+            "Bánh số 10"
+          ],
+          [
+            11,
+            "Bánh số 11"
+          ],
+          [
+            12,
+            "Bánh số 12"
+          ],
+          [
+            "G. Giá trị tra bảng tự động (công thức – không sửa)"
+          ],
+          [
+            null,
+            "Chỉ số kết cấu đường trong bảng",
+            null,
+            1
+          ],
+          [
+            null,
+            "Loại đường",
+            null,
+            "Có ba lát",
+            null,
+            "Có ba lát / Không ba lát"
+          ],
+          [
+            null,
+            "Lực cản dọc r (không tải)",
+            "r",
+            15,
+            "kN/(m·ray)"
+          ],
+          [
+            null,
+            "Lực cản ngang tương đương Q",
+            "Q",
+            11.5,
+            "kN/m"
+          ],
+          [
+            null,
+            "Q đổi sang N/cm",
+            "Q",
+            115,
+            "N/cm",
+            "1 kN/m = 10 N/cm"
+          ],
+          [
+            null,
+            "Cự ly nút phụ kiện a",
+            "a",
+            0.6,
+            "m"
+          ],
+          [
+            null,
+            "Loại tà vẹt cho B.0.4-1",
+            null,
+            "III"
+          ],
+          [
+            null,
+            "Diện tích mặt cắt ray",
+            "F",
+            7745,
+            "mm²",
+            "Bảng C (giá trị chưa mòn)."
+          ],
+          [
+            null,
+            "Mô đun chống uốn đầu ray",
+            "W_đầu",
+            339400,
+            "mm³"
+          ],
+          [
+            null,
+            "Mô đun chống uốn đáy ray",
+            "W_đáy",
+            396000,
+            "mm³"
+          ],
+          [
+            null,
+            "Mô men quán tính theo trục ngang",
+            "I_x",
+            32170000,
+            "mm⁴"
+          ],
+          [
+            null,
+            "Mô men quán tính theo trục đứng",
+            "I_y",
+            5240000,
+            "mm⁴"
+          ],
+          [
+            null,
+            "Giới hạn chảy σ_s",
+            "σ_s",
+            472,
+            "MPa"
+          ],
+          [
+            null,
+            "Độ cứng điểm tựa ray D",
+            "D",
+            33,
+            "kN/mm"
+          ],
+          [
+            null,
+            "Nhiệt độ không khí cao nhất",
+            "T_kk,max",
+            41.9,
+            "°C"
+          ],
+          [
+            null,
+            "Nhiệt độ không khí thấp nhất",
+            "T_kk,min",
+            -27.4,
+            "°C"
+          ],
+          [
+            null,
+            "Nhiệt độ ray cao nhất",
+            "T_max",
+            61.9,
+            "°C",
+            "2.1.12"
+          ],
+          [
+            null,
+            "Nhiệt độ ray thấp nhất",
+            "T_min",
+            -27.4,
+            "°C",
+            "2.1.13"
+          ],
+          [
+            null,
+            "Hệ số vận tốc",
+            "α_v",
+            1,
+            null,
+            "Bảng A.0.2-1"
+          ],
+          [
+            null,
+            "Hệ số lực ngang",
+            "f",
+            1.25,
+            null,
+            "Bảng A.0.2-2"
+          ],
+          [
+            null,
+            "Hệ số lệch tải",
+            "β",
+            0,
+            null,
+            "A.0.2-3"
+          ],
+          [
+            null,
+            "Giá trị cho phép khe đứt ray",
+            "[λ]",
+            70,
+            "mm",
+            "4.3.1"
+          ],
+          [
+            null,
+            "P_f,kéo áp dụng",
+            "P_f,kéo",
+            0,
+            "kN",
+            "Nền đường/hầm: 0"
+          ],
+          [
+            null,
+            "P_f,nén áp dụng",
+            "P_f,nén",
+            0,
+            "kN"
+          ]
+        ]
+      },
+      {
+        "name": "Tổng hợp",
+        "rows": 18,
+        "cols": 6,
+        "headers": [
+          "Tổng hợp kết quả kiểm toán – TB 10015—2012"
+        ],
+        "columns": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F"
+        ],
+        "data": [
+          [
+            "Tổng hợp kết quả kiểm toán – TB 10015—2012"
+          ],
+          [
+            "Ví dụ: Đoạn Km… – Km…, tuyến đường sắt tốc độ cao"
+          ],
+          [
+            "STT",
+            "Hạng mục kiểm toán",
+            "Giá trị tính",
+            "Giới hạn",
+            "Kết luận",
+            "Điều khoản"
+          ],
+          [
+            1,
+            "Bán kính đường cong ≥ 300 m",
+            0,
+            300,
+            "ĐẠT",
+            "3.1.3"
+          ],
+          [
+            2,
+            "Độ bền ray: Σσ ≤ [σ] (MPa)",
+            252.9480131125042,
+            363.07692307692304,
+            "ĐẠT",
+            "A.0.5-6"
+          ],
+          [
+            3,
+            "Ổn định: ΔT_u max ≤ [ΔT_u] (°C)",
+            39.263981367497756,
+            83.70664075588307,
+            "ĐẠT",
+            "4.4.3-3, Phụ lục B"
+          ],
+          [
+            4,
+            "Độ bền: ΔT_d max ≤ [ΔT_d] (°C)",
+            60.03601863250224,
+            104.47867802088756,
+            "ĐẠT",
+            "4.4.3-4, 4.1.2"
+          ],
+          [
+            5,
+            "Khe đứt ray: λ ≤ [λ] (mm)",
+            54.417331330783405,
+            70,
+            "ĐẠT",
+            "4.3.1"
+          ],
+          [
+            6,
+            "Khe đứt: ΔT_d max ≤ ΔT_λ (bắt buộc với cầu) (°C)",
+            60.03601863250224,
+            68.09140316539735,
+            "ĐẠT",
+            "4.4.1"
+          ],
+          [
+            7,
+            "Tồn tại nhiệt độ khóa ray thỏa mãn mọi điều kiện (T_e thiết kế; khoảng khả dụng)",
+            27.636018632502243,
+            "-16,8 ~ 72,1",
+            "ĐẠT",
+            "4.4"
+          ],
+          [
+            8,
+            "Khe dự trữ vùng đệm a₁ (mm) – chỉ khi chọn có vùng đệm",
+            "—",
+            "—",
+            "Không áp dụng",
+            "E.0.2"
+          ],
+          [
+            9,
+            "Khe dự trữ vùng đệm a₂ (mm) – chỉ khi chọn có vùng đệm",
+            "—",
+            "—",
+            "Không áp dụng",
+            "E.0.2"
+          ],
+          [
+            10,
+            "Độ cứng đỉnh mố trụ ≥ bảng 5.4.5 (kN/cm) – chỉ khi vị trí = Cầu",
+            "—",
+            "—",
+            "Không áp dụng",
+            "5.4.5"
+          ],
+          [
+            11,
+            "Ghi: ổn định 2(P_t max + ΔP′) ≤ [P] (kN) – chỉ khi vị trí = Ghi",
+            "—",
+            "—",
+            "Không áp dụng",
+            "7.2.3"
+          ],
+          [
+            12,
+            "Ghi: bu lông τ ≤ [τ] (MPa)",
+            "—",
+            "—",
+            "Không áp dụng",
+            "7.2.4"
+          ],
+          [
+            13,
+            "Ghi: dịch chuyển lưỡi ghi, mũi tâm (mm)",
+            "—",
+            "—",
+            "Không áp dụng",
+            "7.2.5"
+          ],
+          [
+            null,
+            "KẾT LUẬN CHUNG",
+            null,
+            null,
+            "ĐẠT"
+          ],
+          [
+            null,
+            "Các hạng mục \"Không áp dụng\" bị bỏ qua. Kết quả chỉ có giá trị khi dữ liệu đầu vào (đặc biệt chùm bánh xe, P_f từ phân tích cầu–ray, nhiệt độ vùng) đã được thay bằng số liệu thực của công trình."
+          ]
+        ]
+      },
+      {
+        "name": "1_Độ bền ray",
+        "rows": 46,
+        "cols": 6,
+        "headers": [
+          "1. Kiểm toán độ bền ray – Điều 4.1, Phụ lục A"
+        ],
+        "columns": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F"
+        ],
+        "data": [
+          [
+            "1. Kiểm toán độ bền ray – Điều 4.1, Phụ lục A"
+          ],
+          [
+            "Ray là dầm vô hạn trên nền đàn hồi liên tục; chồng chất tác dụng của hệ bánh xe (A.0.4-7); σ_đáy,d + σ_t + σ_f + σ_z ≤ [σ] (A.0.5-6)."
+          ],
+          [
+            "STT",
+            "Đại lượng",
+            "Ký hiệu",
+            "Giá trị",
+            "Đơn vị",
+            "Công thức / điều khoản"
+          ],
+          [
+            "1.1 Tham số đường ray"
+          ],
+          [
+            null,
+            "Mô đun đàn hồi thép ray",
+            "E",
+            210000,
+            "N/mm²"
+          ],
+          [
+            null,
+            "Mô men quán tính I_x",
+            "I_x",
+            32170000,
+            "mm⁴",
+            "Bảng C"
+          ],
+          [
+            null,
+            "Độ cứng điểm tựa ray",
+            "D",
+            33,
+            "kN/mm",
+            "Bảng A.0.3"
+          ],
+          [
+            null,
+            "Cự ly nút phụ kiện",
+            "a",
+            0.6,
+            "m"
+          ],
+          [
+            null,
+            "Mô đun đàn hồi nền ray",
+            "u",
+            55,
+            "N/mm²",
+            "A.0.3-2: u = D/a (đổi sang N, mm)"
+          ],
+          [
+            null,
+            "Hệ số độ cứng tương đối nền–ray",
+            "k",
+            0.0011944228019571154,
+            "1/mm",
+            "k = (u / 4EI_x)^¼"
+          ],
+          [
+            "1.2 Hệ số tải trọng"
+          ],
+          [
+            null,
+            "Hệ số vận tốc",
+            "α",
+            1,
+            null,
+            "Bảng A.0.2-1"
+          ],
+          [
+            null,
+            "Hệ số lực ngang",
+            "f",
+            1.25,
+            null,
+            "Bảng A.0.2-2"
+          ],
+          [
+            null,
+            "Hệ số lệch tải",
+            "β",
+            0,
+            null,
+            "A.0.2-3"
+          ],
+          [
+            "1.3 Nội lực tĩnh dưới chùm bánh xe (mỗi dòng: mặt cắt đặt dưới bánh i)"
+          ],
+          [
+            null,
+            "M₀,i = (1/4k)·ΣP_j·μ(k|x_i−x_j|), μ(z)=e^(−z)(cos z − sin z) (A.0.4-7, A.0.4-9). Độ lún y₀,i = (k/2u)·ΣP_j·η, η(z)=e^(−z)(cos z + sin z); áp lực lên điểm tựa Q₀,i = (k·a/2)·ΣP_j·η. Đơn vị: N, mm."
+          ],
+          [
+            "Bánh",
+            "x_i (m)",
+            "P_j (kN)",
+            "M₀,i (N·mm)",
+            "y₀,i (mm)",
+            "Q₀,i (N)"
+          ],
+          [
+            1,
+            -17.5,
+            83.4,
+            16448956.087894307,
+            0.8675042553634648,
+            28627.64042699434
+          ],
+          [
+            2,
+            -15,
+            83.4,
+            16448956.491244089,
+            0.8675042522656593,
+            28627.64032476676
+          ],
+          [
+            3,
+            0,
+            83.4,
+            16446098.079504898,
+            0.867453952526952,
+            28625.98043338942
+          ],
+          [
+            4,
+            2.5,
+            83.4,
+            16501915.416280324,
+            0.8689435396051871,
+            28675.13680697118
+          ],
+          [
+            5,
+            7.5,
+            83.4,
+            16501915.416280324,
+            0.8689435396051871,
+            28675.13680697118
+          ],
+          [
+            6,
+            10,
+            83.4,
+            16446098.079504892,
+            0.8674539525269521,
+            28625.980433389424
+          ],
+          [
+            7,
+            25,
+            83.4,
+            16448956.491244093,
+            0.8675042522656593,
+            28627.64032476676
+          ],
+          [
+            8,
+            27.5,
+            83.4,
+            16448956.087894304,
+            0.867504255363465,
+            28627.64042699435
+          ],
+          [
+            9,
+            null,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            10,
+            null,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            11,
+            null,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            12,
+            null,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            "1.4 Ứng suất uốn động"
+          ],
+          [
+            null,
+            "Mô men uốn tĩnh lớn nhất",
+            "M₀",
+            16501915.416280324,
+            "N·mm",
+            "Lấy bánh bất lợi nhất (A.0.4)"
+          ],
+          [
+            null,
+            "Độ lún ray lớn nhất",
+            "y₀",
+            0.8689435396051871,
+            "mm",
+            "Thông tin"
+          ],
+          [
+            null,
+            "Áp lực lớn nhất lên điểm tựa",
+            "Q₀",
+            28.675136806971178,
+            "kN",
+            "Thông tin"
+          ],
+          [
+            null,
+            "Mô men uốn động",
+            "M_d",
+            33003830.832560647,
+            "N·mm",
+            "A.0.5-1: M_d = M₀(1+α+β)"
+          ],
+          [
+            null,
+            "Ứng suất uốn động biên đầu ray",
+            "σ_đầu,d",
+            121.5521170910454,
+            "MPa",
+            "A.0.5-2"
+          ],
+          [
+            null,
+            "Ứng suất uốn động biên đáy ray",
+            "σ_đáy,d",
+            104.17875894116365,
+            "MPa",
+            "A.0.5-3"
+          ],
+          [
+            "1.5 Kiểm toán độ bền (A.0.5-6) và độ giảm nhiệt cho phép (4.1.2)"
+          ],
+          [
+            null,
+            "Ứng suất cho phép của ray",
+            "[σ]",
+            363.07692307692304,
+            "MPa",
+            "3.2.4: [σ] = σ_s / K"
+          ],
+          [
+            null,
+            "Ứng suất kéo phụ thêm lớn nhất",
+            "σ_f",
+            0,
+            "MPa",
+            "A.0.5-5: σ_f = P_f / F (P_f,kéo từ mục E sheet Nhập liệu)"
+          ],
+          [
+            null,
+            "Ứng suất kéo (hãm)",
+            "σ_z",
+            0,
+            "MPa"
+          ],
+          [
+            null,
+            "Độ giảm nhiệt cho phép theo độ bền",
+            "[ΔT_d]",
+            104.47867802088756,
+            "°C",
+            "4.1.2: ([σ] − σ_d − σ_f − σ_z)/(E·α)"
+          ],
+          [
+            null,
+            "Biên độ giảm nhiệt lớn nhất (từ sheet 4)",
+            "ΔT_d max",
+            60.03601863250224,
+            "°C",
+            "ΔT_d max = T_u − T_min"
+          ],
+          [
+            null,
+            "Ứng suất nhiệt kéo lớn nhất",
+            "σ_t",
+            148.76925417134058,
+            "MPa",
+            "A.0.5-4: σ_t = E·α·ΔT_d max"
+          ],
+          [
+            null,
+            "Tổng ứng suất tác dụng",
+            "Σσ",
+            252.9480131125042,
+            "MPa",
+            "σ_đáy,d + σ_t + σ_f + σ_z"
+          ],
+          [
+            null,
+            "Hệ số sử dụng",
+            "Σσ/[σ]",
+            0.6966788496742702
+          ],
+          [
+            null,
+            "Kết luận độ bền",
+            null,
+            "ĐẠT",
+            null,
+            "A.0.5-6"
+          ]
+        ]
+      },
+      {
+        "name": "2_Ổn định",
+        "rows": 335,
+        "cols": 6,
+        "headers": [
+          "2. Kiểm toán ổn định đường – Điều 4.2, Phụ lục B (đường có ba lát)"
+        ],
+        "columns": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F"
+        ],
+        "data": [
+          [
+            "2. Kiểm toán ổn định đường – Điều 4.2, Phụ lục B (đường có ba lát)"
+          ],
+          [
+            "Hai phương pháp: (A) công thức ổn định thống nhất B.0.3; (B) công thức bước sóng không đều B.0.4 (quét l bằng bảng, không cần lặp). Đơn vị tính trong sheet: N, cm."
+          ],
+          [
+            "STT",
+            "Đại lượng",
+            "Ký hiệu",
+            "Giá trị",
+            "Đơn vị",
+            "Công thức / điều khoản"
+          ],
+          [
+            "2.0 Tham số chung"
+          ],
+          [
+            null,
+            "Áp dụng cho",
+            null,
+            "Có ba lát – tính",
+            null,
+            "Phụ lục B chỉ quy định cho đường có ba lát; với đường không ba lát tiêu chuẩn không có công thức kiểm toán ổn định."
+          ],
+          [
+            null,
+            "Cờ tính toán (1 = đường có ba lát)",
+            null,
+            1,
+            null,
+            "Sheet này chỉ tính khi đường có ba lát; ngược lại các ô hiển thị n/a."
+          ],
+          [
+            null,
+            "E",
+            "E",
+            21000000,
+            "N/cm²",
+            "MPa × 100"
+          ],
+          [
+            null,
+            "I_y",
+            "I_y",
+            524,
+            "cm⁴"
+          ],
+          [
+            null,
+            "F",
+            "F",
+            77.45,
+            "cm²"
+          ],
+          [
+            null,
+            "Độ cong tuyến 1/R",
+            "1/R",
+            0,
+            "1/cm",
+            "R = 0: đường thẳng"
+          ],
+          [
+            null,
+            "Lực dọc phụ thêm (nén)",
+            "P_f",
+            0,
+            "N",
+            "Cầu / ghi; nền đường = 0"
+          ],
+          [
+            "2.1 Phương pháp A – Công thức ổn định thống nhất (B.0.3)"
+          ],
+          [
+            null,
+            "Hệ số độ cứng khung của đường ray",
+            "β",
+            1,
+            null,
+            "B.0.3: đường có ba lát lấy 1,0"
+          ],
+          [
+            null,
+            "Độ võng biến dạng uốn",
+            "f",
+            0.2,
+            "cm",
+            "B.0.3-3"
+          ],
+          [
+            null,
+            "Độ cong tương đối ban đầu f₀/l²",
+            "f₀/l²",
+            2.103e-06,
+            null,
+            "B.0.3 (thống kê hiện trường)"
+          ],
+          [
+            null,
+            "Tỷ lệ uốn đàn hồi",
+            null,
+            0.17,
+            null,
+            "Uốn đàn hồi 17%, uốn dẻo 83%"
+          ],
+          [
+            null,
+            "Độ cong tương đối uốn đàn hồi",
+            "t",
+            3.5751000000000003e-07,
+            null,
+            "t = f_oe/l²"
+          ],
+          [
+            null,
+            "Độ cong dẻo ban đầu 1/R_op",
+            "1/R_op",
+            1.396392e-05,
+            "1/cm",
+            "Bằng 8·f_op/l²"
+          ],
+          [
+            null,
+            "Độ cong tổng hợp 1/R′",
+            "1/R′",
+            1.396392e-05,
+            "1/cm",
+            "1/R′ = 1/R + 1/R_op"
+          ],
+          [
+            null,
+            "Lực cản ngang tương đương",
+            "Q",
+            115,
+            "N/cm",
+            "Bảng 3.2.3"
+          ],
+          [
+            null,
+            "ω",
+            "ω",
+            468944.2062642409,
+            "N",
+            "ω = 2βEI_yπ²(t + 4/(π³R′))"
+          ],
+          [
+            null,
+            "4Q/π³ − ωt/f",
+            null,
+            13.997444623364125,
+            "N/cm",
+            "Mẫu số của B.0.3-5"
+          ],
+          [
+            null,
+            "Bình phương nửa bước sóng tới hạn",
+            "l²",
+            98509.53556722634,
+            "cm²",
+            "B.0.3-5"
+          ],
+          [
+            null,
+            "Nửa bước sóng tới hạn",
+            "l",
+            313.86228758362535,
+            "cm"
+          ],
+          [
+            null,
+            "Độ võng uốn đàn hồi ban đầu",
+            "f_oe",
+            0.03521814406063909,
+            "cm",
+            "f_oe = t·l²"
+          ],
+          [
+            null,
+            "Áp lực nhiệt tới hạn của hai ray",
+            "P_w",
+            4798207.753399335,
+            "N",
+            "B.0.3-4"
+          ],
+          [
+            null,
+            "Áp lực nhiệt cho phép của hai ray",
+            "[P]",
+            3690929.0410764115,
+            "N",
+            "B.0.3-6: [P] = P_w / K"
+          ],
+          [
+            null,
+            "Độ tăng nhiệt cho phép (A)",
+            "[ΔT_u]",
+            96.15745848362717,
+            "°C",
+            "B.0.3-7/8: (1/EαF)·([P]/2 − P_f)"
+          ],
+          [
+            "2.2 Phương pháp B – Công thức bước sóng không đều (B.0.4)"
+          ],
+          [
+            null,
+            "Độ võng biến dạng uốn",
+            "f",
+            0.02,
+            "cm",
+            "B.0.4-2; thuyết minh: 0,02 ~ 0,05 cm, thường lấy 0,02 cm"
+          ],
+          [
+            null,
+            "q₀",
+            "q₀",
+            27.4,
+            "N/cm",
+            "B.0.4-1 (theo loại tà vẹt)"
+          ],
+          [
+            null,
+            "B",
+            "B",
+            92
+          ],
+          [
+            null,
+            "Z",
+            "Z",
+            1.2
+          ],
+          [
+            null,
+            "C",
+            "C",
+            179
+          ],
+          [
+            null,
+            "N",
+            "N",
+            2.5
+          ],
+          [
+            null,
+            "Hệ số mô men cản phụ kiện H",
+            "H",
+            22000,
+            "N·cm/cm",
+            "Bảng B.0.4-2 (thanh đàn hồi loại II)"
+          ],
+          [
+            null,
+            "Hệ số μ",
+            "μ",
+            2,
+            null,
+            "Bảng B.0.4-2"
+          ],
+          [
+            null,
+            "Nửa/bước sóng cong ban đầu bất lợi",
+            "l₀",
+            720,
+            "cm",
+            "Bảng B.0.4-3"
+          ],
+          [
+            null,
+            "Tỷ số độ võng/bước sóng ban đầu",
+            "i₀",
+            0.001,
+            null,
+            "Bảng B.0.4-3 (‰ → tỷ số)"
+          ],
+          [
+            null,
+            "Tỷ lệ uốn đàn hồi so với tổng uốn ban đầu",
+            "d",
+            0.5833,
+            null,
+            "B.0.4: 58,33%"
+          ],
+          [
+            null,
+            "Hàm tích phân giảm lực cản nền đá",
+            "G",
+            0.3595330343177154,
+            null,
+            "B.0.4-8; Z=1,2 → 0,359 533 (giá trị tiêu chuẩn)"
+          ],
+          [
+            null,
+            "Hàm tích phân tăng lực cản nền đá",
+            "K",
+            0.4368311507404211,
+            null,
+            "B.0.4-9; N=2,5 → 0,436 831 1"
+          ],
+          [
+            null,
+            "Hàm tích phân mô men cản phụ kiện",
+            "ψ",
+            3.0983173396006456,
+            null,
+            "B.0.4-10; μ=2 → 3,0983 (tiêu chuẩn: 3,098 3); tính bằng hàm Gamma, lấy trị tuyệt đối của sin"
+          ],
+          [
+            null,
+            "Áp lực nhiệt dọc phân bố không đều ΔP",
+            "ΔP",
+            154000,
+            "N",
+            "B.0.4-12: ΔP = 0,8P_f (cầu, ghi); nền đường: bảng B.0.4"
+          ],
+          [
+            "2.3 Kết quả phương pháp B"
+          ],
+          [
+            null,
+            "Áp lực nhiệt tới hạn (cực tiểu của P(l))",
+            "P",
+            3828087.874234782,
+            "N",
+            "B.0.4-5"
+          ],
+          [
+            null,
+            "Nửa bước sóng tới hạn",
+            "l",
+            385,
+            "cm"
+          ],
+          [
+            null,
+            "Độ tăng nhiệt tính được",
+            "ΔT",
+            91.70664075588307,
+            "°C",
+            "B.0.4-11: (1/EαF)(P/2 − ΔP)"
+          ],
+          [
+            null,
+            "Độ tăng nhiệt cho phép (B)",
+            "[ΔT_u]",
+            83.70664075588307,
+            "°C",
+            "B.0.4-13: trừ 8 °C khi đường thẳng hoặc R ≥ 2 000 m"
+          ],
+          [
+            "2.4 Độ tăng nhiệt cho phép dùng trong thiết kế"
+          ],
+          [
+            null,
+            "Độ tăng nhiệt cho phép về ổn định",
+            "[ΔT_u]",
+            83.70664075588307,
+            "°C",
+            "Theo phương pháp chọn ở sheet Nhập liệu; không có ba lát: n/a"
+          ],
+          [
+            "2.5 Bảng quét bước sóng l (công thức B.0.4-5)"
+          ],
+          [
+            null,
+            "Quét bước sóng l (cm) từ 100 đến 1 500, bước 5: P(l) = (τ_i + τ_q + τ_m)/τ₀ (B.0.4-5). P_min của bảng chính là lực nhiệt tới hạn; sai số rời rạc hóa < 0,1%."
+          ],
+          [
+            "l (cm)",
+            "φ",
+            "η",
+            "τ_i (N·cm)",
+            "τ_q+τ_m (N·cm)",
+            "P(l) (N)"
+          ],
+          [
+            100,
+            0.0381026636394921,
+            0.2743391782043431,
+            1764501.8043307466,
+            79819.74879793906,
+            38881914.83803939
+          ],
+          [
+            105,
+            0.04195451339102441,
+            0.2876880918241674,
+            1605659.84709448,
+            86481.42242628876,
+            33703126.174050026
+          ],
+          [
+            110,
+            0.0459836008814136,
+            0.3009835694056163,
+            1468467.874730585,
+            93433.16892281195,
+            29409794.72600795
+          ],
+          [
+            115,
+            0.05018842249931648,
+            0.3142231669522423,
+            1349263.9841071838,
+            100675.75431317104,
+            25829207.850239817
+          ],
+          [
+            120,
+            0.0545674090600784,
+            0.3274044543604704,
+            1245132.6426916828,
+            108209.86218400615,
+            22826378.08065282
+          ],
+          [
+            125,
+            0.05911892639222031,
+            0.34052501601918894,
+            1153729.240628116,
+            116036.10559367122,
+            20294935.20736406
+          ],
+          [
+            130,
+            0.06384127594815017,
+            0.35358245140513944,
+            1073150.936748702,
+            124155.03685773705,
+            18150427.184249263
+          ],
+          [
+            135,
+            0.06873269543886185,
+            0.36657437567392986,
+            1001840.3469238669,
+            132567.15565513918,
+            16325336.756638423
+          ],
+          [
+            140,
+            0.07379135949237633,
+            0.3794984202465068,
+            938512.8658114778,
+            141272.91579433816,
+            14765336.348812394
+          ],
+          [
+            145,
+            0.07901538033566975,
+            0.39235223339091185,
+            882101.2193754364,
+            150272.7309006709,
+            13426447.293501878
+          ],
+          [
+            150,
+            0.08440280849982475,
+            0.4051334807991588,
+            831712.7328457588,
+            159566.9792279602,
+            12272866.665834555
+          ],
+          [
+            155,
+            0.08995163354813197,
+            0.41783984615906467,
+            786596.0876140601,
+            169156.00775376402,
+            11275291.796999792
+          ],
+          [
+            160,
+            0.09565978482686018,
+            0.4304690317208708,
+            746115.2332294205,
+            179040.13568446017,
+            10409619.124576837
+          ],
+          [
+            165,
+            0.10152513223840416,
+            0.4430187588584909,
+            709728.7471193096,
+            189219.6574709004,
+            9655926.92897232
+          ],
+          [
+            170,
+            0.10754548703651144,
+            0.45548676862522497,
+            676973.3797020603,
+            199694.845415658,
+            8997675.00273443
+          ],
+          [
+            175,
+            0.11371860264328057,
+            0.46787082230378296,
+            647450.8423420743,
+            210465.9519375016,
+            8421071.264298882
+          ],
+          [
+            180,
+            0.12004217548761413,
+            0.4801687019504565,
+            620817.1278416464,
+            221533.21154661613,
+            7914567.695929928
+          ],
+          [
+            185,
+            0.12651384586480308,
+            0.4923782109332876,
+            596773.8235214346,
+            232896.84257448633,
+            7468457.083885755
+          ],
+          [
+            190,
+            0.13313119881690944,
+            0.5044971744640778,
+            575061.0030824865,
+            244557.04869469107,
+            7074548.787377381
+          ],
+          [
+            195,
+            0.13989176503360715,
+            0.5165234401240879,
+            555451.3776707958,
+            256514.02026469092,
+            6725906.807197833
+          ],
+          [
+            200,
+            0.14679302177313344,
+            0.5284548783832804,
+            537745.4575421341,
+            268767.93551370717,
+            6416637.222473489
+          ],
+          [
+            205,
+            0.1538323938029931,
+            0.5402893831129514,
+            521767.5296092332,
+            281318.9615977348,
+            6141714.942205484
+          ],
+          [
+            210,
+            0.16100725436005459,
+            0.5520248720916158,
+            507362.2973663783,
+            294167.2555394135,
+            5896841.9134741435
+          ],
+          [
+            215,
+            0.16831492612966448,
+            0.5636592875039926,
+            494392.0614304085,
+            307312.9650677539,
+            5678330.612419132
+          ],
+          [
+            220,
+            0.1757526822434042,
+            0.5751905964329592,
+            482734.34355132724,
+            320756.2293704594,
+            5483007.943586902
+          ],
+          [
+            225,
+            0.18331774729510214,
+            0.5866167913443269,
+            472279.8761529058,
+            334497.1797697111,
+            5308135.681201939
+          ],
+          [
+            230,
+            0.19100729837470948,
+            0.5979358905643078,
+            462930.89454224636,
+            348535.94033072586,
+            5151344.37173124
+          ],
+          [
+            235,
+            0.19881846611964057,
+            0.609145938749537,
+            454599.68083284865,
+            362872.6284110818,
+            5010578.232696701
+          ],
+          [
+            240,
+            0.206748335783172,
+            0.6202450073495159,
+            447207.31807762274,
+            377507.35515771044,
+            4884049.067152189
+          ],
+          [
+            245,
+            0.21479394831948778,
+            0.6312311950613518,
+            440682.6206515031,
+            392440.22595752333,
+            4770197.596197931
+          ],
+          [
+            250,
+            0.2229523014849521,
+            0.642102628276662,
+            434961.2129734281,
+            407671.34084685176,
+            4667660.915907587
+          ],
+          [
+            255,
+            0.2312203509551854,
+            0.6528574615205234,
+            429984.7335332253,
+            423200.79488421034,
+            4575245.027355124
+          ],
+          [
+            260,
+            0.2395950114575116,
+            0.6634938778823398,
+            425700.1451363472,
+            439028.67849032074,
+            4491901.582326473
+          ],
+          [
+            265,
+            0.24807315791834156,
+            0.6740100894385129,
+            422059.13548922597,
+            455155.0777588436,
+            4416708.143045071
+          ],
+          [
+            270,
+            0.2566516266250485,
+            0.684404337666796,
+            419017.59486909123,
+            471580.07474084484,
+            4348851.37979527
+          ],
+          [
+            275,
+            0.2653272164018897,
+            0.6946748938522204,
+            416535.1597710494,
+            488303.74770565936,
+            4287612.731901857
+          ],
+          [
+            280,
+            0.2740966897995194,
+            0.7048200594844785,
+            414574.8131939572,
+            505326.17138050374,
+            4232356.139978181
+          ],
+          [
+            285,
+            0.28295677429763605,
+            0.7148381666466596,
+            413102.5336878418,
+            522647.417170915,
+            4182517.5245095734
+          ],
+          [
+            290,
+            0.29190416352029996,
+            0.7247275783952275,
+            412086.9864971287,
+            540267.5533638586,
+            4137595.7407068256
+          ],
+          [
+            295,
+            0.3009355184634543,
+            0.7344866891311427,
+            411499.2511418946,
+            558186.6453151429,
+            4097144.7845330797
+          ],
+          [
+            300,
+            0.31004746873417544,
+            0.7441139249620211,
+            411312.5806207546,
+            576404.7556225958,
+            4060767.0617736997
+          ],
+          [
+            305,
+            0.3192366138011778,
+            0.7536077440552393,
+            411502.1881236116,
+            594921.944286305,
+            4028107.5624949452
+          ],
+          [
+            310,
+            0.32849952425609036,
+            0.7629666369818873,
+            412045.0577344042,
+            613738.2688570833,
+            3998848.8084345204
+          ],
+          [
+            315,
+            0.33783274308502054,
+            0.7721891270514756,
+            412919.77610270487,
+            632853.7845742,
+            3972706.4617568413
+          ],
+          [
+            320,
+            0.34723278694991694,
+            0.7812737706373131,
+            414106.3824844349,
+            652268.5444933102,
+            3949425.5009709923
+          ],
+          [
+            325,
+            0.3566961474792377,
+            0.7902191574924651,
+            415586.2349090541,
+            671982.5996054227,
+            3928776.884282176
+          ],
+          [
+            330,
+            0.3662192925674288,
+            0.7990239110562083,
+            417341.89053398627,
+            691995.9989476642,
+            3910554.632740201
+          ],
+          [
+            335,
+            0.3757986676827138,
+            0.8076866887509073,
+            419356.99850550975,
+            712308.7897065146,
+            3894573.2756775455
+          ],
+          [
+            340,
+            0.38543069718269174,
+            0.8162061822692296,
+            421616.20386608003,
+            732921.0173141375,
+            3880665.609434226
+          ],
+          [
+            345,
+            0.3951117856372395,
+            0.8245811178516302,
+            424105.06123704097,
+            753832.725538355,
+            3868680.7275240016
+          ],
+          [
+            350,
+            0.4048383191582096,
+            0.8328102565540313,
+            426809.9571678636,
+            775043.9565667764,
+            3858482.286433872
+          ],
+          [
+            355,
+            0.41460666673541513,
+            0.8408923945056307,
+            429718.04018255783,
+            796554.7510855375,
+            3849946.9763526674
+          ],
+          [
+            360,
+            0.42441318157838753,
+            0.8488263631567751,
+            432817.1576741701,
+            818365.1483530647,
+            3842963.1704486897
+          ],
+          [
+            365,
+            0.4342542024633954,
+            0.8566110295168348,
+            436095.7989021876,
+            840475.1862692457,
+            3837429.729987654
+          ],
+          [
+            370,
+            0.44412605508520514,
+            0.8642452963820209,
+            439543.043437629,
+            862884.9014403493,
+            3833254.945705507
+          ],
+          [
+            375,
+            0.45402505341306937,
+            0.8717281025530932,
+            443148.51447865623,
+            885594.3292400104,
+            3830355.5985134277
+          ],
+          [
+            380,
+            0.46394750105042093,
+            0.8790584230429028,
+            446902.3365273842,
+            908603.5038665676,
+            3828656.124886602
+          ],
+          [
+            385,
+            0.4738896925977537,
+            0.8862352692737213,
+            450795.0969776616,
+            931912.4583970171,
+            3828087.874234782
+          ],
+          [
+            390,
+            0.4838479150181688,
+            0.8932576892643117,
+            454817.81121516915,
+            955521.2248378221,
+            3828588.4472215157
+          ],
+          [
+            395,
+            0.49381844900506366,
+            0.9001247678066983,
+            458961.890876256,
+            979429.834172801,
+            3830101.105432452
+          ],
+          [
+            400,
+            0.5037975703514421,
+            0.9068356266325958,
+            463219.1149514246,
+            1003638.316408295,
+            3832574.2440267666
+          ],
+          [
+            405,
+            0.5137815513203211,
+            0.9133894245694597,
+            467581.60345401167,
+            1028146.7006158044,
+            3835960.920069176
+          ],
+          [
+            410,
+            0.5237666620157123,
+            0.919785357686129,
+            472041.7934050539,
+            1052955.0149722612,
+            3840218.4301582547
+          ],
+          [
+            415,
+            0.5337491717536548,
+            0.9260226594280276,
+            476592.41691212443,
+            1078063.2867980993,
+            3845307.9317611596
+          ],
+          [
+            420,
+            0.543725350432775,
+            0.9321006007419,
+            481226.4811435513,
+            1103471.5425932673,
+            3851194.103352954
+          ],
+          [
+            425,
+            0.5536914699038533,
+            0.9380184901900573,
+            485937.2500202921,
+            1129179.808071315,
+            3857844.8390559787
+          ],
+          [
+            430,
+            0.5636438053378742,
+            0.943775674054115,
+            490718.2274661925,
+            1155188.1081916837,
+            3865230.9739937717
+          ],
+          [
+            435,
+            0.5735786365920386,
+            0.9493715364282017,
+            495563.1420736964,
+            1181496.4671903097,
+            3873326.037025857
+          ],
+          [
+            440,
+            0.5834922495732204,
+            0.9548054993016334,
+            500465.93305657606,
+            1208104.9086086482,
+            3882106.027923654
+          ],
+          [
+            445,
+            0.5933809375983462,
+            0.960077022631032,
+            505420.737374125,
+            1235013.4553212211,
+            3891549.2163917636
+          ],
+          [
+            450,
+            0.6032410027511824,
+            0.9651856044018918,
+            510421.8779227159,
+            1262222.129561771,
+            3901635.960639501
+          ],
+          [
+            455,
+            0.6130687572350151,
+            0.9701307806795844,
+            515463.85270082497,
+            1289730.952948113,
+            3912348.5434710146
+          ],
+          [
+            460,
+            0.622860524720706,
+            0.9749121256498007,
+            520541.3248627264,
+            1317539.9465057633,
+            3923671.024093155
+          ],
+          [
+            465,
+            0.6326126416896175,
+            0.9795292516484401,
+            525649.1135841932,
+            1345649.1306904103,
+            3935589.1040430227
+          ],
+          [
+            470,
+            0.6423214587708929,
+            0.9839818091809424,
+            530782.1856708002,
+            1374058.5254093045,
+            3948090.005815446
+          ],
+          [
+            475,
+            0.651983342072588,
+            0.9882694869310807,
+            535935.6478459403,
+            1402768.1500416268,
+            3961162.3629275193
+          ],
+          [
+            480,
+            0.6615946745061505,
+            0.9923920117592258,
+            541104.7396614968,
+            1431778.0234578925,
+            3974796.1202957565
+          ],
+          [
+            485,
+            0.6711518571037427,
+            0.9963491486900923,
+            546284.8269793461,
+            1461088.1640384512,
+            3988982.4439235386
+          ],
+          [
+            490,
+            0.6806513103279128,
+            1.0001407008899943,
+            551471.395976575,
+            1490698.589691127,
+            4003713.63900447
+          ],
+          [
+            495,
+            0.6900894753731178,
+            1.003766509633626,
+            556660.0476315273,
+            1520609.3178680534,
+            4018983.075642807
+          ],
+          [
+            500,
+            0.6994628154586101,
+            1.0072264542603986,
+            561846.492651606,
+            1550820.365581744,
+            4034785.1214767415
+          ],
+          [
+            505,
+            0.7087678171121916,
+            1.0105204521203524,
+            567026.5468071873,
+            1581331.7494204412,
+            4051115.0805654656
+          ],
+          [
+            510,
+            0.7180009914443648,
+            1.0136484585096914,
+            572196.1266391203,
+            1612143.4855627841,
+            4067969.1379675358
+          ],
+          [
+            515,
+            0.7271588754123883,
+            1.0166104665959603,
+            577351.2455100687,
+            1643255.5897918285,
+            4085344.309497488
+          ],
+          [
+            520,
+            0.7362380330737673,
+            1.0194065073329086,
+            582488.0099724988,
+            1674668.0775084589,
+            4103238.3962003696
+          ],
+          [
+            525,
+            0.7452350568287087,
+            1.0220366493650863,
+            587602.6164284095,
+            1706380.9637442175,
+            4121649.9431309444
+          ],
+          [
+            530,
+            0.7541465686510707,
+            1.0245009989222091,
+            592691.3480579782,
+            1738394.26317359,
+            4140578.202066378
+          ],
+          [
+            535,
+            0.7629692213073481,
+            1.026799699703347,
+            597750.5719961829,
+            1770707.9901257658,
+            4160023.097818678
+          ],
+          [
+            540,
+            0.7716996995632338,
+            1.0289329327509784,
+            602776.7367381762,
+            1803322.1585959082,
+            4179985.197846813
+          ],
+          [
+            545,
+            0.780334721377308,
+            1.0309009163149756,
+            607766.3697557435,
+            1836236.7822559534,
+            4200465.684898454
+          ],
+          [
+            550,
+            0.7888710390814048,
+            1.0327039057065663,
+            612716.075308594,
+            1869451.8744649682,
+            4221466.332438304
+          ],
+          [
+            555,
+            0.7973054405472183,
+            1.0343421931423373,
+            617622.5324355201,
+            1902967.4482790811,
+            4242989.482644177
+          ],
+          [
+            560,
+            0.8056347503387135,
+            1.0358161075783459,
+            622482.4931116471,
+            1936783.5164610136,
+            4265038.026773739
+          ],
+          [
+            565,
+            0.8138558308499053,
+            1.0371260145343926,
+            627292.7805590517,
+            1970900.09148923,
+            4287615.387724518
+          ],
+          [
+            570,
+            0.8219655834275953,
+            1.0382723159085414,
+            632050.2876990243,
+            2005317.1855667224,
+            4310725.504627334
+          ],
+          [
+            575,
+            0.8299609494786373,
+            1.039255449781946,
+            636751.9757351351,
+            2040034.81062945,
+            4334372.819329363
+          ],
+          [
+            580,
+            0.8378389115613208,
+            1.0400758902140534,
+            641394.8728570798,
+            2075052.9783544482,
+            4358562.264637445
+          ],
+          [
+            585,
+            0.8455964944604805,
+            1.0407341470282836,
+            645976.0730560477,
+            2110371.700167626,
+            4383299.254205229
+          ],
+          [
+            590,
+            0.8532307662459195,
+            1.041230765588241,
+            650492.7350430206,
+            2145990.9872512612,
+            4408589.673959731
+          ],
+          [
+            595,
+            0.86073883931376,
+            1.04156632656455,
+            654942.0812620521,
+            2181910.8505512127,
+            4434439.87497354
+          ],
+          [
+            600,
+            0.8681178714103381,
+            1.041741445692406,
+            659321.3969911563,
+            2218131.3007838586,
+            4460856.667698715
+          ],
+          [
+            605,
+            0.8753650666382728,
+            1.041756773519928,
+            663628.029523967,
+            2254652.3484427775,
+            4487847.317487361
+          ],
+          [
+            610,
+            0.8824776764443186,
+            1.0416129951473925,
+            667859.387425799,
+            2291474.003805178,
+            4515419.541332098
+          ],
+          [
+            615,
+            0.8894530005886636,
+            1.0413108299574598,
+            672012.9398582237,
+            2328596.2769380957,
+            4543581.505766963
+          ],
+          [
+            620,
+            0.8962883880953005,
+            1.040851031336478,
+            676086.2159666549,
+            2366019.1777043594,
+            4572341.825876309
+          ],
+          [
+            625,
+            0.9029812381831329,
+            1.0402343863869692,
+            680076.8043258429,
+            2403742.715768347,
+            4601709.565365481
+          ],
+          [
+            630,
+            0.9095290011774707,
+            1.0394617156313952,
+            683982.3524385105,
+            2441766.900601527,
+            4631694.237652928
+          ],
+          [
+            635,
+            0.915929179401588,
+            1.0385338727073126,
+            687800.566282706,
+            2480091.7414878113,
+            4662305.807948804
+          ],
+          [
+            640,
+            0.9221793280480161,
+            1.037451744054018,
+            691529.2099037295,
+            2518717.2475287076,
+            4693554.696290124
+          ],
+          [
+            645,
+            0.9282770560292575,
+            1.036216248590799,
+            695166.1050467842,
+            2557643.4276483064,
+            4725451.781507247
+          ],
+          [
+            650,
+            0.9342200268076155,
+            1.0348283373868972,
+            698709.1308267463,
+            2596870.2905980772,
+            4758008.406100795
+          ],
+          [
+            655,
+            0.9400059592038342,
+            1.0332889933232987,
+            702156.2234316925,
+            2636397.844961513,
+            4791236.382012296
+          ],
+          [
+            660,
+            0.9456326281842672,
+            1.0315992307464732,
+            705505.3758570425,
+            2676226.0991586056,
+            4825147.997275678
+          ],
+          [
+            665,
+            0.9510978656262836,
+            1.0297600951141717,
+            708754.637667378,
+            2716355.061450176,
+            4859756.023540465
+          ],
+          [
+            670,
+            0.9563995610616549,
+            1.0277726626334203,
+            711902.1147831916,
+            2756784.739942053,
+            4895073.724460981
+          ],
+          [
+            675,
+            0.9615356623976179,
+            1.0256380398907923,
+            714945.9692899745,
+            2797515.142589116,
+            4931114.86494946
+          ],
+          [
+            680,
+            0.9665041766154328,
+            1.023357363475164,
+            717884.4192672767,
+            2838546.277199201,
+            4967893.721293704
+          ],
+          [
+            685,
+            0.971303170446098,
+            1.020931799592979,
+            720715.7386354224,
+            2879878.1514368756,
+            5005425.092143827
+          ],
+          [
+            690,
+            0.9759307710230488,
+            1.0183625436762247,
+            723438.2570178107,
+            2921510.7728270963,
+            5043724.310374985
+          ],
+          [
+            695,
+            0.9803851665116178,
+            1.0156508199832588,
+            726050.3596168204,
+            2963444.148758741,
+            5082807.255836263
+          ],
+          [
+            700,
+            0.9846646067149694,
+            1.01279788119254,
+            728550.487101411,
+            3005678.2864880296,
+            5122690.368999175
+          ],
+          [
+            705,
+            0.9887674036563524,
+            1.0098050079894663,
+            730937.1355047144,
+            3048213.193141835,
+            5163390.665521636
+          ],
+          [
+            710,
+            0.99269193213752,
+            1.0066735086464993,
+            733208.8561300128,
+            3091048.8757208856,
+            5204925.751746227
+          ],
+          [
+            715,
+            0.9964366302729531,
+            1.0034047185965402,
+            735364.2554634439,
+            3134185.3411028753,
+            5247313.841155457
+          ],
+          [
+            720,
+            1,
+            1,
+            737401.9950921991,
+            3177622.596045463,
+            5290573.771807652
+          ],
+          [
+            725,
+            0.9895896773425187,
+            0.9964618278796195,
+            729613.6055389858,
+            3221360.647189189,
+            5321644.565361186
+          ],
+          [
+            730,
+            0.9791969715858688,
+            0.9927969295245614,
+            721847.051248179,
+            3265399.5010602972,
+            5353864.620208613
+          ],
+          [
+            735,
+            0.9688288850789876,
+            0.9890128201847999,
+            714107.0051857568,
+            3309739.164073467,
+            5387219.973316704
+          ],
+          [
+            740,
+            0.9584919222217404,
+            0.985116697839011,
+            706397.7984349993,
+            3354379.6425344697,
+            5421697.4798885165
+          ],
+          [
+            745,
+            0.9481921174286313,
+            0.9811154548393476,
+            698723.4395339092,
+            3399320.9426427362,
+            5457284.765929561
+          ],
+          [
+            750,
+            0.9379350616766715,
+            0.9770156892465328,
+            691087.6328321282,
+            3444563.070493855,
+            5493970.184173346
+          ],
+          [
+            755,
+            0.9277259276984857,
+            0.9728237158504954,
+            683493.795909489,
+            3490106.032081984,
+            5531742.77308541
+          ],
+          [
+            760,
+            0.9175694938804274,
+            0.9685455768737845,
+            675945.0760974805,
+            3535949.8333022073,
+            5570592.21869172
+          ],
+          [
+            765,
+            0.9074701669239301,
+            0.9641870523566758,
+            668444.3661438561,
+            3582094.4799528033,
+            5610508.819001201
+          ],
+          [
+            770,
+            0.8974320033266415,
+            0.959753670224325,
+            660994.3190594806,
+            3628539.977737463,
+            5651483.450813961
+          ],
+          [
+            775,
+            0.8874587297381066,
+            0.9552507160375452,
+            653597.3621852952,
+            3675286.3322674325,
+            5693507.538725997
+          ],
+          [
+            780,
+            0.877553762242991,
+            0.9506832424299069,
+            646255.7105160746,
+            3722333.549063597,
+            5736573.026158425
+          ],
+          [
+            785,
+            0.867720224622993,
+            0.946056078234791,
+            638971.3793163822,
+            3769681.6335585075,
+            5780672.3482546145
+          ],
+          [
+            790,
+            0.8579609656466499,
+            0.941373837306741,
+            631746.1960628014,
+            3817330.5910983454,
+            5825798.406502945
+          ],
+          [
+            795,
+            0.8482785754344697,
+            0.936640927042227,
+            624581.8117452996,
+            3865280.4269448305,
+            5871944.544954878
+          ],
+          [
+            800,
+            0.83867540094485,
+            0.9318615566053889,
+            617479.7115592279,
+            3913531.1462770817,
+            5919104.527919843
+          ],
+          [
+            805,
+            0.8291535606244608,
+            0.9270397448648485,
+            610441.2250182272,
+            3962082.75419342,
+            5967272.519028263
+          ],
+          [
+            810,
+            0.8197149582649029,
+            0.9221793280480158,
+            603467.5355170303,
+            4010935.2557131182,
+            6016443.061563422
+          ],
+          [
+            815,
+            0.8103612961056776,
+            0.9172839671196211,
+            596559.6893719155,
+            4060088.65577811,
+            6066611.059971131
+          ],
+          [
+            820,
+            0.8010940872217465,
+            0.9123571548914335,
+            589718.6043653642,
+            4109542.9592546523,
+            6117771.7624636805
+          ],
+          [
+            825,
+            0.7919146672322356,
+            0.90740222287027,
+            582945.0778202727,
+            4159298.1709349235,
+            6169920.744641458
+          ],
+          [
+            830,
+            0.7828242053652051,
+            0.902422347851556,
+            576239.7942279443,
+            4209354.295538612,
+            6223053.894061703
+          ],
+          [
+            835,
+            0.7738237149117657,
+            0.8974205582657283,
+            569603.3324529548,
+            4259711.337714425,
+            6277167.3956895815
+          ],
+          [
+            840,
+            0.7649140631012722,
+            0.8923997402848176,
+            563036.1725369032,
+            4310369.302041586,
+            6332257.718171922
+          ],
+          [
+            845,
+            0.7560959804278359,
+            0.8873626436965574,
+            556538.7021220368,
+            4361328.19303127,
+            6388321.60087846
+          ],
+          [
+            850,
+            0.7473700694569189,
+            0.8823118875533069,
+            550111.2225147086,
+            4412588.015128023,
+            6445356.04165988
+          ],
+          [
+            855,
+            0.7387368131393967,
+            0.8772499656030336,
+            543753.9544076764,
+            4464148.772711121,
+            6503358.285275709
+          ],
+          [
+            860,
+            0.7301965826591279,
+            0.8721792515095139,
+            537467.0432793119,
+            4516010.470095905,
+            6562325.812448703
+          ],
+          [
+            865,
+            0.7217496448387849,
+            0.8671020038688179,
+            531250.5644869037,
+            4568173.111535091,
+            6622256.329505594
+          ],
+          [
+            870,
+            0.713396169127457,
+            0.8620203710290105,
+            525104.5280703735,
+            4620636.701220021,
+            6683147.758567051
+          ],
+          [
+            875,
+            0.7051362341923728,
+            0.8569363957198975,
+            519028.8832819119,
+            4673401.243281905,
+            6744998.228252433
+          ],
+          [
+            880,
+            0.6969698341359417,
+            0.8518520194994843,
+            513023.5228562551,
+            4726466.741793017,
+            6807806.064867359
+          ],
+          [
+            885,
+            0.6888968843582517,
+            0.8467690870236845,
+            507088.28703557496,
+            4779833.200767869,
+            6871569.78404446
+          ],
+          [
+            890,
+            0.680917227084114,
+            0.8416893501456408,
+            501222.96736223437,
+            4833500.62416435,
+            6936288.082809799
+          ],
+          [
+            895,
+            0.6730306365727756,
+            0.8366144718508808,
+            495427.31025198614,
+            4887469.015884839,
+            7001959.832049284
+          ],
+          [
+            900,
+            0.6652368240274769,
+            0.831546030034346,
+            489701.02035953617,
+            4941738.3797772825,
+            7068584.069351308
+          ],
+          [
+            905,
+            0.6575354422211434,
+            0.8264855211251871,
+            484043.7637477777,
+            4996308.719636264,
+            7136159.992203379
+          ],
+          [
+            910,
+            0.6499260898536479,
+            0.8214343635650271,
+            478455.1708714075,
+            5051180.039204022,
+            7204686.95152206
+          ],
+          [
+            915,
+            0.6424083156552681,
+            0.8163939011452366,
+            472934.8393850749,
+            5106352.342171463,
+            7274164.445496977
+          ],
+          [
+            920,
+            0.6349816222502033,
+            0.8113654062085931,
+            467482.336785683,
+            5161825.632179137,
+            7344592.113730897
+          ],
+          [
+            925,
+            0.6276454697932794,
+            0.8063500827205325,
+            462097.20289795386,
+            5217599.912818199,
+            7415969.731658984
+          ],
+          [
+            930,
+            0.6203992793922739,
+            0.8013490692150204,
+            456778.95221188106,
+            5273675.187631341,
+            7488297.205231669
+          ],
+          [
+            935,
+            0.6132424363276325,
+            0.7963634416199117,
+            451527.07608023763,
+            5330051.460113695,
+            7561574.565846363
+          ],
+          [
+            940,
+            0.6061742930807349,
+            0.7913942159665149,
+            446341.04478388105,
+            5386728.733713736,
+            7635801.96551429
+          ],
+          [
+            945,
+            0.5991941721812512,
+            0.7864423509878922,
+            441220.3094721647,
+            5443707.011834136,
+            7710979.672249597
+          ],
+          [
+            950,
+            0.5923013688835881,
+            0.7815087506102898,
+            436164.3039853939,
+            5500986.297832623,
+            7787108.065668685
+          ],
+          [
+            955,
+            0.5854951536818728,
+            0.7765942663419284,
+            431172.44656587567,
+            5558566.595022797,
+            7864187.632788473
+          ],
+          [
+            960,
+            0.5787747746724253,
+            0.7716996995632338,
+            426244.141463774,
+            5616447.906674942,
+            7942218.964012969
+          ],
+          [
+            965,
+            0.5721394597721828,
+            0.7668258037224395,
+            421378.78044363303,
+            5674630.236016819,
+            8021202.749298262
+          ],
+          [
+            970,
+            0.5655884188010842,
+            0.7619732864403497,
+            416575.7441971254,
+            5733113.586234432,
+            8101139.774486578
+          ],
+          [
+            975,
+            0.5591208454359999,
+            0.7571428115279166,
+            411834.4036672802,
+            5791897.960472775,
+            8182030.917800539
+          ],
+          [
+            980,
+            0.5527359190433612,
+            0.7523350009201304,
+            407154.12128915085,
+            5850983.36183658,
+            8263877.146489603
+          ],
+          [
+            985,
+            0.5464328063972871,
+            0.7475504365296218,
+            402534.2521516333,
+            5910369.793391021,
+            8346679.513620614
+          ],
+          [
+            990,
+            0.540210663289605,
+            0.7427896620232068,
+            397974.14508486696,
+            5970057.25816243,
+            8430439.155005472
+          ],
+          [
+            995,
+            0.5340686360378407,
+            0.7380531845245161,
+            393473.14367742714,
+            6030045.759138968,
+            8515157.286258837
+          ],
+          [
+            1000,
+            0.5280058628969106,
+            0.7333414762457093,
+            389030.58722728025,
+            6090335.299271309,
+            8600835.199979462
+          ],
+          [
+            1005,
+            0.5220214753799371,
+            0.7286549760511623,
+            384645.8116302563,
+            6150925.881473286,
+            8687474.263049092
+          ],
+          [
+            1010,
+            0.5161145994933215,
+            0.7239940909559094,
+            380318.15020959347,
+            6211817.508622536,
+            8775075.91404306
+          ],
+          [
+            1015,
+            0.510284356890916,
+            0.7193591975614996,
+            376046.93448990793,
+            6273010.183561126,
+            8863641.660747318
+          ],
+          [
+            1020,
+            0.5045298659518886,
+            0.7147506434318422,
+            371831.4949187664,
+            6334503.909096162,
+            8953173.077776566
+          ],
+          [
+            1025,
+            0.49885024278660667,
+            0.7101687484114887,
+            367671.1615388581,
+            6396298.688000393,
+            9043671.804288836
+          ],
+          [
+            1030,
+            0.4932446021746429,
+            0.7056138058887252,
+            363565.2646136039,
+            6458394.523012796,
+            9135139.541791823
+          ],
+          [
+            1035,
+            0.487712058438775,
+            0.7010860840057391,
+            359513.13520888024,
+            6520791.416839146,
+            9227578.05203668
+          ],
+          [
+            1040,
+            0.4822517262586403,
+            0.6965858268180359,
+            355514.10573339165,
+            6583489.37215258,
+            9320989.154995225
+          ],
+          [
+            1045,
+            0.4768627214275083,
+            0.692113255405203,
+            351567.5104400857,
+            6646488.391594143,
+            9415374.7269166
+          ],
+          [
+            1050,
+            0.4715441615554413,
+            0.6876685689350186,
+            347672.68589087046,
+            6709788.477773324,
+            9510736.698459804
+          ],
+          [
+            1055,
+            0.46629516672193444,
+            0.6832519456828345,
+            343828.9713867726,
+            6773389.633268589,
+            9607077.052898636
+          ],
+          [
+            1060,
+            0.4611148600809601,
+            0.6788635440080801,
+            340035.70936555567,
+            6837291.860627884,
+            9704397.824395625
+          ],
+          [
+            1065,
+            0.456002368421175,
+            0.6745035032896547,
+            336292.24576870556,
+            6901495.162369149,
+            9802701.096342048
+          ],
+          [
+            1070,
+            0.4509568226839029,
+            0.6701719448219112,
+            332597.9303795862,
+            6965999.540980796,
+            9901988.99976088
+          ],
+          [
+            1075,
+            0.4459773584413569,
+            0.6658689726728593,
+            328952.1171344681,
+            7030804.998922211,
+            10002263.711770028
+          ],
+          [
+            1080,
+            0.44106311633743367,
+            0.6615946745061505,
+            325354.16440803907,
+            7095911.538624208,
+            10103527.45410308
+          ],
+          [
+            1085,
+            0.43621324249328,
+            0.6573491223683455,
+            321803.43527491525,
+            7161319.162489504,
+            10205782.491685126
+          ],
+          [
+            1090,
+            0.4314268888797134,
+            0.6531323734428994,
+            318299.297748589,
+            7227027.872893159,
+            10309031.131261192
+          ],
+          [
+            1095,
+            0.4267032136584617,
+            0.6489444707722438,
+            314841.12499916914,
+            7293037.672183036,
+            10413275.720075099
+          ],
+          [
+            1100,
+            0.4220413814940791,
+            0.6447854439492875,
+            311428.2955511927,
+            7359348.562680221,
+            10518518.64459646
+          ],
+          [
+            1105,
+            0.4174405638382932,
+            0.6406553097796028,
+            308060.1934627194,
+            7425960.546679456,
+            10624762.329293864
+          ],
+          [
+            1110,
+            0.41289993918843887,
+            0.6365540729155099,
+            304736.20848684787,
+            7492873.62644955,
+            10732009.23545227
+          ],
+          [
+            1115,
+            0.4084186933215465,
+            0.6324817264632283,
+            301455.7362167342,
+            7560087.804233793,
+            10840261.860032704
+          ],
+          [
+            1120,
+            0.40399601950556135,
+            0.6284382525642066,
+            298218.17821512977,
+            7627603.082250357,
+            10949522.734572534
+          ],
+          [
+            1125,
+            0.3996311186890905,
+            0.624423622951704,
+            295022.94212939864,
+            7695419.462692679,
+            11059794.424124643
+          ],
+          [
+            1130,
+            0.3953231996709973,
+            0.6204377994836486,
+            291869.4417929231,
+            7763536.947729857,
+            11171079.52623384
+          ],
+          [
+            1135,
+            0.39107147925108693,
+            0.6164807346527551,
+            288757.09731375234,
+            7831955.539507017,
+            11283380.66994908
+          ],
+          [
+            1140,
+            0.38687518236306057,
+            0.6125523720748459,
+            285685.33515130426,
+            7900675.240145686,
+            11396700.51486989
+          ],
+          [
+            1145,
+            0.38273354219084704,
+            0.6086526469562775,
+            282653.58818188147,
+            7969696.051744159,
+            11511041.750225788
+          ],
+          [
+            1150,
+            0.37864580026936073,
+            0.60478148654134,
+            279661.2957537225,
+            8039017.976377842,
+            11626407.093987206
+          ],
+          [
+            1155,
+            0.374611206570675,
+            0.6009388105404577,
+            276707.9037322671,
+            8108641.016099609,
+            11742799.292006787
+          ],
+          [
+            1160,
+            0.3706290195765447,
+            0.5971245315399887,
+            273792.86453627615,
+            8178565.172940143,
+            11860221.117189746
+          ],
+          [
+            1165,
+            0.36669850633816053,
+            0.5933385553943847,
+            270915.637165412,
+            8248790.448908266,
+            11978675.36869222
+          ],
+          [
+            1170,
+            0.362818942523965,
+            0.5895807816014431,
+            268075.6872198479,
+            8319316.845991269,
+            12098164.87114648
+          ],
+          [
+            1175,
+            0.35898961245631683,
+            0.5858511036613504,
+            265272.4869124449,
+            8390144.36615523,
+            12218692.473911937
+          ],
+          [
+            1180,
+            0.3552098091377438,
+            0.5821494094201912,
+            262505.51507400454,
+            8461273.011345344,
+            12340261.050350996
+          ],
+          [
+            1185,
+            0.3514788342674816,
+            0.5784755813985635,
+            259774.25715207373,
+            8532702.78348621,
+            12462873.497128706
+          ],
+          [
+            1190,
+            0.34779599824895974,
+            0.5748294971059196,
+            257078.2052037533,
+            8604433.684482154,
+            12586532.733535446
+          ],
+          [
+            1195,
+            0.3441606201888545,
+            0.5712110293412238,
+            254416.8578829362,
+            8676465.716217514,
+            12711241.700831564
+          ],
+          [
+            1200,
+            0.34057202788829566,
+            0.5676200464804928,
+            251789.72042237385,
+            8748798.880556943,
+            12837003.361613344
+          ],
+          [
+            1205,
+            0.3370295578267792,
+            0.5640564127517624,
+            249196.30461094956,
+            8821433.179345688,
+            12963820.699199343
+          ],
+          [
+            1210,
+            0.333532555139308,
+            0.5605199884980038,
+            246636.12876651378,
+            8894368.614409877,
+            13091696.717036432
+          ],
+          [
+            1215,
+            0.33008037358724973,
+            0.557010630428484,
+            244108.71770461605,
+            8967605.187556783,
+            13220634.438124701
+          ],
+          [
+            1220,
+            0.32667237552337647,
+            0.5535281918590546,
+            241613.60270344844,
+            9041142.900575118,
+            13350636.904460726
+          ],
+          [
+            1225,
+            0.3233079318515211,
+            0.5500725229418241,
+            239150.3214652992,
+            9114981.755235275,
+            13481707.176498221
+          ],
+          [
+            1230,
+            0.319986421981261,
+            0.5466434708846541,
+            236718.41807479292,
+            9189121.753289608,
+            13613848.332625763
+          ],
+          [
+            1235,
+            0.3167072337780158,
+            0.5432408801609021,
+            234317.44295418306,
+            9263562.896472674,
+            13747063.468660712
+          ],
+          [
+            1240,
+            0.3134697635089245,
+            0.5398645927098145,
+            231946.95281594223,
+            9338305.186501492,
+            13881355.697358895
+          ],
+          [
+            1245,
+            0.31027341578484274,
+            0.5365144481279572,
+            229606.51061288395,
+            9413348.625075797,
+            14016728.147939414
+          ],
+          [
+            1250,
+            0.3071176034987847,
+            0.5331902838520567,
+            227295.68548603405,
+            9488693.213878267,
+            14153183.965624033
+          ],
+          [
+            1255,
+            0.3040017477611119,
+            0.5298919353336047,
+            225014.05271045762,
+            9564338.954574771,
+            14290726.311190674
+          ],
+          [
+            1260,
+            0.30092527783175466,
+            0.5266192362055706,
+            222761.19363923406,
+            9640285.848814607,
+            14429358.360540513
+          ],
+          [
+            1265,
+            0.29788763104973565,
+            0.5233720184415495,
+            220536.69564576307,
+            9716533.898230722,
+            14569083.304278085
+          ],
+          [
+            1270,
+            0.2948882527602461,
+            0.5201501125076563,
+            218340.15206457017,
+            9793083.10443995,
+            14709904.347304149
+          ],
+          [
+            1275,
+            0.2919265962395133,
+            0.5169533475074715,
+            216171.1621307733,
+            9869933.469043212,
+            14851824.708420614
+          ],
+          [
+            1280,
+            0.2890021226176806,
+            0.5137815513203211,
+            214029.3309183589,
+            9947084.99362577,
+            14994847.61994744
+          ],
+          [
+            1285,
+            0.2861143007999117,
+            0.5106345507331757,
+            211914.2692774108,
+            10024537.6797574,
+            15138976.32735066
+          ],
+          [
+            1290,
+            0.283262607385912,
+            0.5075121715664257,
+            209825.59377042035,
+            10102291.528992638,
+            15284214.08888156
+          ],
+          [
+            1295,
+            0.28044652658805397,
+            0.5044142387937914,
+            207762.92660780414,
+            10180346.542870957,
+            15430564.175226426
+          ],
+          [
+            1300,
+            0.2776655501482781,
+            0.5013405766566132,
+            205725.8955827442,
+            10258702.722916998,
+            15578029.869166456
+          ],
+          [
+            1305,
+            0.274919177253931,
+            0.4982910087727499,
+            203714.13400545856,
+            10337360.070640748,
+            15726614.465247693
+          ],
+          [
+            1310,
+            0.27220691445269396,
+            0.4952653582403182,
+            201727.28063700403,
+            10416318.587537747,
+            15876321.269460356
+          ],
+          [
+            1315,
+            0.2695282755667413,
+            0.4922634477364789,
+            199764.97962270566,
+            10495578.275089273,
+            16027153.598927587
+          ],
+          [
+            1320,
+            0.2668827816062642,
+            0.4892850996114844,
+            197826.8804253013,
+            10575139.134762548,
+            16179114.781603
+          ],
+          [
+            1325,
+            0.26426996068248276,
+            0.4863301359781801,
+            195912.63775788445,
+            10655001.1680109,
+            16332208.155976897
+          ],
+          [
+            1330,
+            0.26168934792026183,
+            0.4833983787971503,
+            194021.91151672107,
+            10735164.376273967,
+            16486437.07079089
+          ],
+          [
+            1335,
+            0.2591404853704419,
+            0.48048964995769433,
+            192154.36671401415,
+            10815628.760977868,
+            16641804.88476051
+          ],
+          [
+            1340,
+            0.2566229219219824,
+            0.47760377135480053,
+            190309.67341068067,
+            10896394.323535377,
+            16798314.966305695
+          ],
+          [
+            1345,
+            0.2541362132140155,
+            0.4747405649622929,
+            188487.506649205,
+            10977461.06534611,
+            16955970.693288818
+          ],
+          [
+            1350,
+            0.2516799215478959,
+            0.47189985290230485,
+            186687.5463866254,
+            11058828.987796677,
+            17114775.452759974
+          ],
+          [
+            1355,
+            0.24925361579932973,
+            0.46908145751123853,
+            184909.4774277079,
+            11140498.092260871,
+            17274732.640709445
+          ],
+          [
+            1360,
+            0.24685687133065795,
+            0.4662852014023539,
+            183152.9893583565,
+            11222468.380099814,
+            17435845.661826905
+          ],
+          [
+            1365,
+            0.24448926990336634,
+            0.463510907525132,
+            181417.77647930713,
+            11304739.852662137,
+            17598117.929267354
+          ],
+          [
+            1370,
+            0.2421503995908859,
+            0.46075839922154677,
+            179703.5377401463,
+            11387312.511284124,
+            17761552.86442336
+          ],
+          [
+            1375,
+            0.23983985469174587,
+            0.4580275002793758,
+            178009.97667369523,
+            11470186.357289884,
+            17926153.89670362
+          ],
+          [
+            1380,
+            0.23755723564313497,
+            0.45531803498267537,
+            176336.80133079452,
+            11553361.391991502,
+            18091924.46331749
+          ],
+          [
+            1385,
+            0.23530214893492324,
+            0.4526298281595399,
+            174683.7242155235,
+            11636837.61668918,
+            18258868.009065356
+          ],
+          [
+            1390,
+            0.23307420702419265,
+            0.4499627052272608,
+            173050.46222088495,
+            11720615.032671398,
+            18426987.9861346
+          ],
+          [
+            1395,
+            0.23087302825031952,
+            0.44731649223499403,
+            171436.73656498175,
+            11804693.641215067,
+            18596287.85390118
+          ],
+          [
+            1400,
+            0.22869823675065143,
+            0.4446910159040444,
+            169842.27272771404,
+            11889073.44358566,
+            18766771.078736316
+          ],
+          [
+            1405,
+            0.2265494623768133,
+            0.4420861036658648,
+            168266.8003880164,
+            11973754.44103736,
+            18938441.1338185
+          ],
+          [
+            1410,
+            0.22442634061167963,
+            0.43950158369787257,
+            166710.05336166013,
+            12058736.634813204,
+            19111301.498950366
+          ],
+          [
+            1415,
+            0.22232851248704108,
+            0.43693728495717105,
+            165171.76953963665,
+            12144020.02614522,
+            19285355.660380427
+          ],
+          [
+            1420,
+            0.22025562450199612,
+            0.43439303721227013,
+            163651.6908271415,
+            12229604.616254559,
+            19460607.110629532
+          ],
+          [
+            1425,
+            0.21820732854209188,
+            0.4318686710728902,
+            162149.56308317327,
+            12315490.406351633,
+            19637059.34832179
+          ],
+          [
+            1430,
+            0.21618328179923813,
+            0.4293640180179313,
+            160665.136060762,
+            12401677.39763625,
+            19814715.878019974
+          ],
+          [
+            1435,
+            0.21418314669241512,
+            0.4268789104216885,
+            159198.16334783885,
+            12488165.591297733,
+            19993580.21006512
+          ],
+          [
+            1440,
+            0.21220659078919377,
+            0.42441318157838753,
+            157748.4023087586,
+            12574954.988515053,
+            20173655.86042033
+          ],
+          [
+            1445,
+            0.210253286728085,
+            0.421966665725115,
+            156315.6140264835,
+            12662045.590456963,
+            20354946.35051857
+          ],
+          [
+            1450,
+            0.20832291214173254,
+            0.4195391980632114,
+            154899.56324543728,
+            12749437.398282105,
+            20537455.2071144
+          ],
+          [
+            1455,
+            0.2064151495809633,
+            0.4171306147781967,
+            153500.0183150366,
+            12837130.413139155,
+            20721185.96213941
+          ],
+          [
+            1460,
+            0.2045296864397044,
+            0.41474075305828945,
+            152116.75113390488,
+            12925124.636166917,
+            20906142.152561445
+          ],
+          [
+            1465,
+            0.20266621488077857,
+            0.4123694511115842,
+            150749.5370947739,
+            13013420.068494452,
+            21092327.320247255
+          ],
+          [
+            1470,
+            0.2008244317625847,
+            0.4100165481819437,
+            149398.15503007712,
+            13102016.711241206,
+            21279745.011828795
+          ],
+          [
+            1475,
+            0.19900403856667062,
+            0.4076818845636655,
+            148062.38715823714,
+            13190914.565517107,
+            21468398.778572682
+          ],
+          [
+            1480,
+            0.19720474132620375,
+            0.40536530161497436,
+            146742.0190306493,
+            13280113.632422687,
+            21658292.1762531
+          ],
+          [
+            1485,
+            0.19542625055534352,
+            0.403066641770396,
+            145436.8394793634,
+            13369613.913049188,
+            21849428.76502771
+          ],
+          [
+            1490,
+            0.19366828117951862,
+            0.40078574855205934,
+            144146.64056546308,
+            13459415.408478674,
+            22041812.10931679
+          ],
+          [
+            1495,
+            0.19193055246661128,
+            0.3985224665799776,
+            142871.21752814294,
+            13549518.119784147,
+            22235445.777685273
+          ],
+          [
+            1500,
+            0.19021278795904908,
+            0.3962766415813523,
+            141610.36873448276,
+            13639922.048029633,
+            22430333.342727736
+          ]
+        ]
+      },
+      {
+        "name": "3_Khe đứt ray",
+        "rows": 14,
+        "cols": 6,
+        "headers": [
+          "3. Kiểm toán khe đứt ray – Điều 4.3"
+        ],
+        "columns": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F"
+        ],
+        "data": [
+          [
+            "3. Kiểm toán khe đứt ray – Điều 4.3"
+          ],
+          [
+            "λ = E·F·(α·ΔT_d max)² / r ≤ [λ]   (4.3.1)"
+          ],
+          [
+            "STT",
+            "Đại lượng",
+            "Ký hiệu",
+            "Giá trị",
+            "Đơn vị",
+            "Công thức / điều khoản"
+          ],
+          [
+            "3.1 Dữ liệu"
+          ],
+          [
+            null,
+            "Diện tích mặt cắt ray",
+            "F",
+            7745,
+            "mm²"
+          ],
+          [
+            null,
+            "Lực cản dọc của đường (không tải)",
+            "r",
+            15,
+            "kN/(m·ray) = N/mm",
+            "Có ba lát: tham chiếu giá trị đo khi nghiệm thu; không ba lát: lấy giá trị bất lợi nhất."
+          ],
+          [
+            null,
+            "Biên độ giảm nhiệt lớn nhất",
+            "ΔT_d max",
+            60.03601863250224,
+            "°C",
+            "ΔT_d max = T_u − T_min"
+          ],
+          [
+            "3.2 Kiểm toán"
+          ],
+          [
+            null,
+            "Khe đứt ray tính toán",
+            "λ",
+            54.417331330783405,
+            "mm",
+            "4.3.1"
+          ],
+          [
+            null,
+            "Giá trị cho phép",
+            "[λ]",
+            70,
+            "mm",
+            "70 mm (90 mm khi khó khăn)"
+          ],
+          [
+            null,
+            "Hệ số sử dụng",
+            "λ/[λ]",
+            0.7773904475826201
+          ],
+          [
+            null,
+            "Kết luận khe đứt ray",
+            null,
+            "ĐẠT"
+          ],
+          [
+            null,
+            "Biên độ giảm nhiệt tối đa theo điều kiện khe đứt",
+            "ΔT_λ",
+            68.09140316539735,
+            "°C",
+            "Giải ngược 4.3.1: ΔT = (1/α)·√([λ]·r/(E·F)); dùng để giới hạn T_e (4.4.1)."
+          ],
+          [
+            null,
+            "Cầu nhịp lớn: công thức này không xét lực phụ thêm, độ cứng mố trụ và ảnh hưởng đường liền kề → cần phân tích tương tác cầu–ray (4.3.2)."
+          ]
+        ]
+      },
+      {
+        "name": "4_Nhiệt độ khóa",
+        "rows": 27,
+        "cols": 6,
+        "headers": [
+          "4. Nhiệt độ khóa ray thiết kế – Điều 4.4"
+        ],
+        "columns": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F"
+        ],
+        "data": [
+          [
+            "4. Nhiệt độ khóa ray thiết kế – Điều 4.4"
+          ],
+          [
+            "T_e (có ba lát) = (T_max+T_min)/2 + ([ΔT_d]−[ΔT_u])/2 ± ΔT_k;  T_e (không ba lát) = (T_max+T_min)/2 ± ΔT_k"
+          ],
+          [
+            "STT",
+            "Đại lượng",
+            "Ký hiệu",
+            "Giá trị",
+            "Đơn vị",
+            "Công thức / điều khoản"
+          ],
+          [
+            "4.1 Dữ liệu"
+          ],
+          [
+            null,
+            "Nhiệt độ ray cao nhất",
+            "T_max",
+            61.9,
+            "°C",
+            "Bảng D / nhập tay"
+          ],
+          [
+            null,
+            "Nhiệt độ ray thấp nhất",
+            "T_min",
+            -27.4,
+            "°C"
+          ],
+          [
+            null,
+            "Độ giảm nhiệt cho phép [ΔT_d]",
+            "[ΔT_d]",
+            104.47867802088756,
+            "°C",
+            "Sheet 1"
+          ],
+          [
+            null,
+            "Độ tăng nhiệt cho phép [ΔT_u]",
+            "[ΔT_u]",
+            83.70664075588307,
+            "°C",
+            "Sheet 2 (n/a với đường không ba lát)"
+          ],
+          [
+            null,
+            "Phạm vi khóa ray",
+            "±",
+            5,
+            "°C",
+            "4.4.3"
+          ],
+          [
+            null,
+            "Hiệu chỉnh ΔT_k",
+            "ΔT_k",
+            0,
+            "°C",
+            "4.4.2"
+          ],
+          [
+            "4.2 Nhiệt độ khóa ray thiết kế"
+          ],
+          [
+            null,
+            "Nhiệt độ ray trung bình",
+            "(T_max+T_min)/2",
+            17.25,
+            "°C"
+          ],
+          [
+            null,
+            "Nhiệt độ khóa ray thiết kế",
+            "T_e",
+            27.636018632502243,
+            "°C",
+            "4.4.2-1 (có ba lát) / 4.4.2-2 (không ba lát)"
+          ],
+          [
+            null,
+            "Giới hạn trên nhiệt độ khóa ray",
+            "T_u",
+            32.63601863250224,
+            "°C",
+            "4.4.3-1"
+          ],
+          [
+            null,
+            "Giới hạn dưới nhiệt độ khóa ray",
+            "T_d",
+            22.636018632502243,
+            "°C",
+            "4.4.3-2"
+          ],
+          [
+            "4.3 Kiểm tra điều kiện (4.4.3)"
+          ],
+          [
+            null,
+            "Biên độ tăng nhiệt lớn nhất",
+            "ΔT_u max",
+            39.263981367497756,
+            "°C",
+            "4.4.3-3: T_max − T_d ≤ [ΔT_u]"
+          ],
+          [
+            null,
+            "Biên độ giảm nhiệt lớn nhất",
+            "ΔT_d max",
+            60.03601863250224,
+            "°C",
+            "4.4.3-4: T_u − T_min ≤ [ΔT_d]"
+          ],
+          [
+            null,
+            "Điều kiện ổn định (tăng nhiệt)",
+            null,
+            "ĐẠT"
+          ],
+          [
+            null,
+            "Điều kiện độ bền (giảm nhiệt)",
+            null,
+            "ĐẠT"
+          ],
+          [
+            null,
+            "ΔT_λ theo khe đứt ray",
+            "ΔT_λ",
+            68.09140316539735,
+            "°C",
+            "Sheet 3"
+          ],
+          [
+            null,
+            "Điều kiện khe đứt ray (bắt buộc cho cầu – 4.4.1)",
+            null,
+            "ĐẠT"
+          ],
+          [
+            "4.4 Khoảng T_e khả dụng"
+          ],
+          [
+            null,
+            "Giới hạn dưới của T_e",
+            null,
+            -16.806640755883073,
+            "°C",
+            "T_e ≥ T_max − [ΔT_u] + ±"
+          ],
+          [
+            null,
+            "Giới hạn trên của T_e",
+            null,
+            72.07867802088757,
+            "°C",
+            "T_e ≤ T_min + [ΔT_d] − ± (và ≤ T_min + ΔT_λ − ± nếu là cầu)"
+          ],
+          [
+            null,
+            "Có T_e thỏa mãn mọi điều kiện?",
+            null,
+            "CÓ",
+            null,
+            "KHÔNG: không thể chọn T_e thỏa đồng thời các điều kiện – cần gia cường đường hoặc giảm lực phụ thêm."
+          ],
+          [
+            null,
+            "4.4.4: chênh lệch nhiệt độ khóa ray giữa các đơn nguyên liền kề ≤ 5 °C; giữa nhiệt độ khóa cao nhất và thấp nhất các đơn nguyên cùng khu gian ≤ 10 °C; giữa ray trái và phải ≤ 5 °C (≤ 3 °C khi v > 160 km/h). Trong hầm: nhất quán với đơn nguyên liền kề; trong 200 m kể từ cửa hầm dài nhất quán với ngoài hầm (chương 6). Không kiểm tra được bằng bảng này."
+          ]
+        ]
+      },
+      {
+        "name": "5_Co giãn-Đệm",
+        "rows": 28,
+        "cols": 6,
+        "headers": [
+          "5. Chiều dài vùng co giãn và khe ray dự trữ vùng đệm – Điều 4.7, Phụ lục E"
+        ],
+        "columns": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F"
+        ],
+        "data": [
+          [
+            "5. Chiều dài vùng co giãn và khe ray dự trữ vùng đệm – Điều 4.7, Phụ lục E"
+          ],
+          [
+            "l_s = (P_t max − P_j)/r;  Δ_dài = (P_t max − P_j)²/(2EFr);  Δ_đệm = [(P_t max − P_j)·L − r·L²/4]/(2EF)"
+          ],
+          [
+            "STT",
+            "Đại lượng",
+            "Ký hiệu",
+            "Giá trị",
+            "Đơn vị",
+            "Công thức / điều khoản"
+          ],
+          [
+            "5.1 Lực nhiệt lớn nhất và vùng co giãn"
+          ],
+          [
+            null,
+            "Lực nén nhiệt lớn nhất",
+            "P_t,u",
+            753.5586494429674,
+            "kN",
+            "E·α·F·ΔT_u max"
+          ],
+          [
+            null,
+            "Lực kéo nhiệt lớn nhất",
+            "P_t,d",
+            1152.2178735570326,
+            "kN",
+            "E·α·F·ΔT_d max"
+          ],
+          [
+            null,
+            "Lực nhiệt lớn nhất (kéo hoặc nén)",
+            "P_t max",
+            1152.2178735570326,
+            "kN",
+            "4.7.1 (lấy bất lợi nhất)"
+          ],
+          [
+            null,
+            "Lực cản mối nối",
+            "P_j",
+            400,
+            "kN"
+          ],
+          [
+            null,
+            "Lực cản dọc (không tải)",
+            "r",
+            15,
+            "kN/(m·ray)"
+          ],
+          [
+            null,
+            "Chiều dài vùng co giãn",
+            "l_s",
+            50.14785823713551,
+            "m",
+            "4.7.1"
+          ],
+          [
+            "5.2 Khe ray dự trữ vùng đệm (Phụ lục E)"
+          ],
+          [
+            null,
+            "Kiểm toán vùng đệm?",
+            null,
+            "Không",
+            null,
+            "Chỉ chọn \"Có\" khi phương án đầu cuối ray hàn liền dùng vùng đệm (E.0.1). Chọn \"Không\": các dòng dưới vẫn tính nhưng không đưa vào Tổng hợp."
+          ],
+          [
+            null,
+            "Chiều dài ray chuẩn vùng đệm",
+            "L",
+            25,
+            "m",
+            "E.0.1: 2 ~ 4 ray chuẩn 25 m"
+          ],
+          [
+            null,
+            "Khe ray cấu tạo",
+            "a_g",
+            18,
+            "mm",
+            "E.0.2: 18 mm (50, 60 kg/m); 20 mm (75 kg/m)"
+          ],
+          [
+            null,
+            "Co giãn một đầu thanh ray dài – nhiệt độ cao (lực nén P_t,u)",
+            "Δ_dài,u",
+            2.5618928462999198,
+            "mm",
+            "E.0.2-1 với P_t max = lực nén nhiệt lớn nhất"
+          ],
+          [
+            null,
+            "Co giãn một đầu ray chuẩn vùng đệm – nhiệt độ cao",
+            "Δ_đệm,u",
+            1.996746360501148,
+            "mm",
+            "E.0.2-2 với P_t max = lực nén"
+          ],
+          [
+            null,
+            "Co giãn một đầu thanh ray dài – nhiệt độ thấp (lực kéo P_t,d)",
+            "Δ_dài,d",
+            11.596457095692333,
+            "mm",
+            "E.0.2-1 với P_t max = lực kéo nhiệt lớn nhất"
+          ],
+          [
+            null,
+            "Co giãn một đầu ray chuẩn vùng đệm – nhiệt độ thấp",
+            "Δ_đệm,d",
+            5.060621857089308,
+            "mm",
+            "E.0.2-2 với P_t max = lực kéo"
+          ],
+          [
+            null,
+            "a₁ tối thiểu (khe lớn hơn không ở nhiệt độ cao nhất)",
+            "a₁,min",
+            4.558639206801068,
+            "mm",
+            "E.0.2-5"
+          ],
+          [
+            null,
+            "a₁ tối đa (khe ≤ khe cấu tạo ở nhiệt độ thấp nhất)",
+            "a₁,max",
+            1.3429210472183577,
+            "mm",
+            "E.0.2-3"
+          ],
+          [
+            null,
+            "a₂ tối thiểu",
+            "a₂,min",
+            3.993492721002296,
+            "mm",
+            "E.0.2-6"
+          ],
+          [
+            null,
+            "a₂ tối đa",
+            "a₂,max",
+            7.8787562858213835,
+            "mm",
+            "E.0.2-4"
+          ],
+          [
+            null,
+            "Khoảng a₁ và a₂ có tồn tại?",
+            null,
+            "RỖNG",
+            null,
+            "RỖNG (a_min > a_max): biên độ nhiệt quá lớn so với khe cấu tạo a_g, không có khe dự trữ nào thỏa mãn E.0.2 (xem ghi chú dưới bảng)."
+          ],
+          [
+            null,
+            "Khe dự trữ chọn a₁ (thanh ray dài – ray chuẩn)",
+            "a₁",
+            6,
+            "mm",
+            "Nhập giá trị thiết kế để kiểm tra"
+          ],
+          [
+            null,
+            "Khe dự trữ chọn a₂ (giữa các ray chuẩn)",
+            "a₂",
+            8,
+            "mm"
+          ],
+          [
+            null,
+            "Kiểm tra a₁",
+            null,
+            "KHÔNG ĐẠT"
+          ],
+          [
+            null,
+            "Kiểm tra a₂",
+            null,
+            "KHÔNG ĐẠT"
+          ],
+          [
+            null,
+            "Cách đọc E.0.2: \"P_t max — lực nhiệt kéo hoặc nén lớn nhất\" được hiểu là lực NÉN lớn nhất khi xét nhiệt độ ray cao nhất (E.0.2-5, -6) và lực KÉO lớn nhất khi xét nhiệt độ ray thấp nhất (E.0.2-3, -4). Nếu a_min > a_max thì không có khe dự trữ nào thỏa mãn: biên độ nhiệt T_max − T_min quá lớn so với khe cấu tạo a_g, phải đổi phương án đầu cuối (neo cố định, bộ điều chỉnh co giãn…)."
+          ]
+        ]
+      },
+      {
+        "name": "6_Cầu",
+        "rows": 50,
+        "cols": 6,
+        "headers": [
+          "6. Đường ray hàn liền trên cầu – Chương 5, Phụ lục F (bảng F.0.6)"
+        ],
+        "columns": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F"
+        ],
+        "data": [
+          [
+            "6. Đường ray hàn liền trên cầu – Chương 5, Phụ lục F (bảng F.0.6)"
+          ],
+          [
+            "Dùng cho cầu dầm giản đơn bê tông; lực dọc trong ray P_f (cho độ bền, ổn định) phải lấy từ phân tích tương tác cầu–ray (F.0.3: phương pháp lặp) – NHẬP ở sheet Nhập liệu mục E."
+          ],
+          [
+            "STT",
+            "Đại lượng",
+            "Ký hiệu",
+            "Giá trị",
+            "Đơn vị",
+            "Công thức / điều khoản"
+          ],
+          [
+            "6.1 Dữ liệu nhập riêng cho cầu"
+          ],
+          [
+            null,
+            "Vị trí cầu trên đường ray hàn liền",
+            null,
+            "Vùng cố định",
+            null,
+            "5.2.1"
+          ],
+          [
+            null,
+            "Khẩu độ nhịp (liên) dầm",
+            "L",
+            32,
+            "m"
+          ],
+          [
+            null,
+            "Loại dầm",
+            null,
+            "Dầm hộp",
+            null,
+            "Chữ T hoặc hộp (bảng F.0.6-3…6)"
+          ],
+          [
+            null,
+            "Chiều cao dầm (nhập khi nhịp có 2 phương án chiều cao; 0 = tự chọn nếu duy nhất)",
+            "h",
+            0,
+            "m"
+          ],
+          [
+            null,
+            "Hoạt tải thiết kế",
+            null,
+            "Trung (中—活载)",
+            null,
+            "Bảng F.0.6-3…6"
+          ],
+          [
+            null,
+            "Vị trí gối cố định",
+            null,
+            "Trụ cầu",
+            null,
+            "Chọn cột Mố/Trụ cầu của bảng F.0.6 và hàng bảng 5.4.5"
+          ],
+          [
+            null,
+            "Số tuyến (số đường) trên mố trụ",
+            "n",
+            2,
+            null,
+            "Bảng 5.4.3"
+          ],
+          [
+            null,
+            "Độ cứng ngang–dọc đỉnh mố trụ thực tế (cả mố trụ)",
+            "K",
+            400,
+            "kN/cm",
+            "So với bảng 5.4.5"
+          ],
+          [
+            null,
+            "Lực hãm/kéo của đoàn tàu trên MỘT tuyến tác dụng lên mố trụ",
+            "T₄",
+            0,
+            "kN",
+            "Tính theo quy phạm cầu hoặc Phụ lục F (F.0.5); dùng cho tổ hợp bảng 5.4.3"
+          ],
+          [
+            "6.2 Lực của một thanh ray lên đỉnh mố trụ (tra bảng F.0.6)"
+          ],
+          [
+            null,
+            "Điều kiện áp dụng bảng F.0.6",
+            null,
+            "Áp dụng được",
+            null,
+            "Điều kiện F.0.6(1): dầm BT giản đơn các nhịp bằng nhau, gối cố định cùng phía, ray 60 kg/m, không phải CRTS II. Cầu trong vùng co giãn dùng T₁ = r·L (5.2.1)."
+          ],
+          [
+            null,
+            "Mã bảng lực co giãn",
+            null,
+            1,
+            "F.0.6-"
+          ],
+          [
+            null,
+            "Mã bảng lực uốn",
+            null,
+            3,
+            "F.0.6-"
+          ],
+          [
+            null,
+            "Số dòng khớp – lực co giãn",
+            null,
+            1,
+            null,
+            "0 = khẩu độ không có trong bảng"
+          ],
+          [
+            null,
+            "Số dòng khớp – lực uốn",
+            null,
+            1,
+            null,
+            "1 = xác định duy nhất; 2 = cần nhập chiều cao dầm"
+          ],
+          [
+            null,
+            "Lực co giãn một ray (tra bảng)",
+            "T₁",
+            35,
+            "kN",
+            "F.0.6-1 / F.0.6-2"
+          ],
+          [
+            null,
+            "Lực uốn một ray (tra bảng)",
+            "T₂",
+            40,
+            "kN",
+            "F.0.6-3…6 (lực uốn tại mố trụ phía trước đoàn tàu)"
+          ],
+          [
+            "6.3 Lực co giãn trong vùng co giãn, lực đứt ray (5.2.1, 5.2.3)"
+          ],
+          [
+            null,
+            "Chiều dài vùng co giãn",
+            "l_s",
+            50.14785823713551,
+            "m",
+            "Sheet 5"
+          ],
+          [
+            null,
+            "Lực co giãn khi cầu nằm trong vùng co giãn",
+            "T₁",
+            480,
+            "kN",
+            "5.2.1-(2): T₁ = r·L, L ≤ l_s"
+          ],
+          [
+            null,
+            "Lực đứt ray (cầu trong vùng cố định)",
+            "T₃",
+            480,
+            "kN",
+            "5.2.3-(2): T₃ = r·L, không vượt lực nhiệt ray vùng cố định"
+          ],
+          [
+            "6.4 Lực dọc tổ hợp tác dụng lên mố trụ (bảng 5.4.3 – chỉ lực dọc, chưa gồm tĩnh tải/hoạt tải đứng)"
+          ],
+          [
+            null,
+            "T₁ dùng",
+            "T₁",
+            35,
+            "kN"
+          ],
+          [
+            null,
+            "T₂ dùng",
+            "T₂",
+            40,
+            "kN",
+            "5.4.2: vùng co giãn không tính lực uốn"
+          ],
+          [
+            null,
+            "T₃ dùng",
+            "T₃",
+            480,
+            "kN",
+            "5.4.2: vùng co giãn không tính lực đứt ray"
+          ],
+          [
+            null,
+            "T₄ dùng",
+            "T₄",
+            0,
+            "kN",
+            "5.4.2: vùng co giãn không tính lực hãm"
+          ],
+          [
+            null,
+            "Số tuyến",
+            "n",
+            2
+          ],
+          [
+            null,
+            "Tổ hợp 1 (lực chính, không có tàu)",
+            null,
+            160,
+            "kN",
+            "max(① co giãn 2n ray; ② uốn 2n ray)"
+          ],
+          [
+            null,
+            "Tổ hợp 2",
+            null,
+            80,
+            "kN",
+            "1 tuyến: T₁ + T₃ (co giãn một ray + đứt ray ray còn lại). 2 tuyến: lực hãm một tuyến + max(co giãn, uốn) 2 ray tuyến còn lại. ≥3 tuyến: lực hãm hai tuyến + lực co giãn 2 ray của các tuyến còn lại."
+          ],
+          [
+            null,
+            "Tổ hợp 3 (lực chính + tải trọng đặc biệt)",
+            null,
+            595,
+            "kN",
+            "2 tuyến (mục 3): T₃ + T₁ + max(2T₁, 2T₂). ≥3 tuyến (mục 3): lực hãm 2 tuyến + đứt ray một ray mỗi tuyến còn lại + co giãn ray còn lại."
+          ],
+          [
+            null,
+            "Tổ hợp 4 (2 tuyến: một tuyến không tàu, một tuyến có tàu)",
+            null,
+            515,
+            "kN",
+            "T₃ + T₁ + lực hãm tuyến còn lại"
+          ],
+          [
+            null,
+            "Lực dọc tổ hợp lớn nhất",
+            null,
+            595,
+            "kN",
+            "So với sức chịu lực dọc của mố trụ (kiểm toán riêng)"
+          ],
+          [
+            "6.5 Độ cứng ngang–dọc đỉnh mố trụ (5.4.5)"
+          ],
+          [
+            null,
+            "Chỉ số khẩu độ trong bảng 5.4.5",
+            null,
+            5,
+            null,
+            "Lấy khẩu độ bảng ≥ khẩu độ thực (thiên an toàn)"
+          ],
+          [
+            null,
+            "Độ cứng tối thiểu theo bảng",
+            "K_min",
+            350,
+            "kN/cm",
+            "Hai tuyến trở lên: cột hai tuyến; 1 tuyến: cột một tuyến"
+          ],
+          [
+            null,
+            "Kết luận độ cứng mố trụ",
+            null,
+            "ĐẠT",
+            null,
+            "Điều 5.4.5: nếu không đạt (điều kiện khó khăn) phải kiểm toán độ bền cầu, mố trụ, ray, ổn định đường ray hàn liền và khe đứt ray. Hai tuyến trong phạm vi đường phát/đến ga cao giá: lấy 2 lần giá trị một tuyến."
+          ],
+          [
+            "6.6 Dự trữ co giãn của bộ điều chỉnh co giãn ray (5.5.2)"
+          ],
+          [
+            null,
+            "Nhiệt độ khóa ray của CWR nối với ray cơ bản",
+            "T_s",
+            27.636018632502243,
+            "°C"
+          ],
+          [
+            null,
+            "Nhiệt độ ray khi rải bộ điều chỉnh",
+            "T",
+            25,
+            "°C"
+          ],
+          [
+            null,
+            "Độ rộng khe dầm khi rải",
+            "W_B",
+            80,
+            "mm"
+          ],
+          [
+            null,
+            "Độ rộng khe dầm lớn nhất (mùa đông)",
+            "W_B max",
+            120,
+            "mm"
+          ],
+          [
+            null,
+            "Độ rộng khe dầm nhỏ nhất (mùa hè)",
+            "W_B min",
+            40,
+            "mm"
+          ],
+          [
+            null,
+            "Dịch chuyển ray cơ bản do vùng co giãn",
+            "Δ₁",
+            0.7799250632897046,
+            "mm",
+            "5.5.2-2: Δ₁ = ½·α·l_s·(T_s − T)"
+          ],
+          [
+            null,
+            "Dịch chuyển do thay đổi khe dầm",
+            "Δ₂",
+            0,
+            "mm",
+            "5.5.2-3"
+          ],
+          [
+            null,
+            "Lượng dự trữ co giãn khi rải",
+            "Δl",
+            0.7799250632897046,
+            "mm",
+            "5.5.2-1: dương = kéo ra; âm = co vào"
+          ],
+          [
+            null,
+            "Các giá trị mẫu (đánh dấu nhập) chỉ để minh họa; thay bằng số liệu thực tế. Δ₁ chỉ dùng khi ray cơ bản đặt trên nền đường hoặc dầm giản đơn hàn liền với vùng co giãn."
+          ]
+        ]
+      },
+      {
+        "name": "7_Ghi",
+        "rows": 33,
+        "cols": 6,
+        "headers": [
+          "7. Ghi hàn liền – Điều 7.2, 7.3"
+        ],
+        "columns": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F"
+        ],
+        "data": [
+          [
+            "7. Ghi hàn liền – Điều 7.2, 7.3"
+          ],
+          [
+            "Độ bền ray và ổn định dùng lực phụ thêm P_f nhập ở mục E sheet Nhập liệu (ΔP_max, ΔP′_max của ray cơ bản). Các kiểm toán bộ phận do bu lông và dịch chuyển lưỡi ghi/mũi tâm nhập ở đây."
+          ],
+          [
+            "STT",
+            "Đại lượng",
+            "Ký hiệu",
+            "Giá trị",
+            "Đơn vị",
+            "Công thức / điều khoản"
+          ],
+          [
+            "7.1 Độ bền ray và ổn định (7.2.2, 7.2.3)"
+          ],
+          [
+            null,
+            "Lực phụ thêm lớn nhất của ray cơ bản (kéo)",
+            "ΔP_max",
+            0,
+            "kN",
+            "Nhập ở sheet Nhập liệu"
+          ],
+          [
+            null,
+            "Ứng suất phụ thêm lớn nhất",
+            "σ_f",
+            0,
+            "MPa",
+            "7.2.2-1: σ_f = ΔP_max/F (đã đưa vào độ bền ở sheet 1 nếu vị trí = Ghi hàn liền)"
+          ],
+          [
+            null,
+            "Lực nén phụ thêm dọc lớn nhất của ray cơ bản",
+            "ΔP′_max",
+            0,
+            "kN"
+          ],
+          [
+            null,
+            "Lực nén nhiệt lớn nhất của ray",
+            "P_t max",
+            753.5586494429674,
+            "kN",
+            "E·α·F·ΔT_max"
+          ],
+          [
+            null,
+            "Vế trái 2(P_t max + ΔP′_max)",
+            null,
+            1507.1172988859348,
+            "kN",
+            "7.2.3"
+          ],
+          [
+            null,
+            "Lực nén nhiệt cho phép [P]",
+            "[P]",
+            3213.0141142347825,
+            "kN",
+            "Suy ra từ [ΔT_u] đã chọn (phương pháp ổn định chọn ở Nhập liệu), tương đương 2(EαFΔT_u + ΔP′)"
+          ],
+          [
+            null,
+            "Kết luận ổn định ghi",
+            null,
+            "ĐẠT"
+          ],
+          [
+            "7.2 Bu lông liên kết (7.2.4)"
+          ],
+          [
+            null,
+            "Lực cắt lớn nhất của bu lông bộ hạn vị/thanh đệm (gót lưỡi ghi)",
+            "T",
+            0,
+            "N"
+          ],
+          [
+            null,
+            "Đường kính bu lông",
+            "d",
+            24,
+            "mm"
+          ],
+          [
+            null,
+            "Lực cắt lớn nhất bu lông gót mũi tâm",
+            "T′",
+            0,
+            "N"
+          ],
+          [
+            null,
+            "Đường kính bu lông",
+            "d",
+            24,
+            "mm"
+          ],
+          [
+            null,
+            "Ứng suất cắt cho phép bu lông cường độ cao cấp 10.9",
+            "[τ]",
+            415,
+            "MPa",
+            "7.2.4"
+          ],
+          [
+            null,
+            "Ứng suất cắt – gót lưỡi ghi",
+            "τ",
+            0,
+            "MPa",
+            "7.2.4-1: τ = 4T/(πd²)"
+          ],
+          [
+            null,
+            "Ứng suất cắt – gót mũi tâm",
+            "τ",
+            0,
+            "MPa",
+            "7.2.4-2"
+          ],
+          [
+            null,
+            "Kết luận bu lông",
+            null,
+            "ĐẠT"
+          ],
+          [
+            "7.3 Dịch chuyển lưỡi ghi và mũi tâm (7.2.5)"
+          ],
+          [
+            null,
+            "Dịch chuyển gót lưỡi ghi",
+            "f₀",
+            0,
+            "mm"
+          ],
+          [
+            null,
+            "Chiều dài co giãn tự do của lưỡi ghi",
+            "l₀",
+            10000,
+            "mm"
+          ],
+          [
+            null,
+            "Dịch chuyển ray cơ bản tại mũi lưỡi ghi",
+            "f_j",
+            0,
+            "mm"
+          ],
+          [
+            null,
+            "Chênh nhiệt độ ray lớn nhất",
+            "ΔT_max",
+            60.03601863250224,
+            "°C"
+          ],
+          [
+            null,
+            "Dịch chuyển tương đối cho phép của mũi lưỡi ghi",
+            "[Δl′]",
+            40,
+            "mm",
+            "Bảng thuyết minh 15 (tuyến chuyên chở hành khách ±40)"
+          ],
+          [
+            null,
+            "Dịch chuyển mũi lưỡi ghi so với ray cơ bản",
+            "Δl_max",
+            7.084250198635265,
+            "mm",
+            "7.2.5-1"
+          ],
+          [
+            null,
+            "Dịch chuyển gót mũi tâm di động",
+            "f_T",
+            0,
+            "mm"
+          ],
+          [
+            null,
+            "Chiều dài co giãn tự do của mũi tâm di động",
+            "l₁",
+            5000,
+            "mm"
+          ],
+          [
+            null,
+            "Dịch chuyển tương đối cho phép của mũi mũi tâm",
+            "[Δl″]",
+            20,
+            "mm",
+            "Bảng thuyết minh 15 (±20)"
+          ],
+          [
+            null,
+            "Dịch chuyển mũi tâm so với ray cánh",
+            "Δl₀max",
+            3.5421250993176323,
+            "mm",
+            "7.2.5-2"
+          ],
+          [
+            null,
+            "Kết luận dịch chuyển",
+            null,
+            "ĐẠT",
+            null,
+            "So sánh trị tuyệt đối với giới hạn ±"
+          ],
+          [
+            null,
+            "Ghi hàn liền trên cầu (7.3): ngoài các kiểm toán trên phải phân tích tương tác ghi–cầu bằng phần tử hữu hạn phi tuyến (7.3.1); khoảng cách từ đầu/cuối ghi tuyến chính đến khe dầm ≥ 18 m (7.3.3); nhịp lớn nhất ≤ 48 m."
+          ]
+        ]
+      },
+      {
+        "name": "Tra cứu",
+        "rows": 361,
+        "cols": 7,
+        "headers": [
+          "Tra cứu – các bảng số liệu trích từ TB 10015—2012"
+        ],
+        "columns": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F",
+          "G"
+        ],
+        "data": [
+          [
+            "Tra cứu – các bảng số liệu trích từ TB 10015—2012"
+          ],
+          [
+            "Các ô trong sheet này là số liệu của tiêu chuẩn (chữ xanh). Có thể bổ sung dòng mới ở cuối bảng nhưng phải mở rộng vùng tham chiếu."
+          ],
+          [
+            "Bảng C – Thông số mặt cắt ray (F và I_y chỉ được cho ở trạng thái chưa mòn, các dòng mòn lặp lại giá trị đó)"
+          ],
+          [
+            "Loại ray (kg/m)",
+            "Độ mòn đứng (mm)",
+            "F (mm²)",
+            "W_đầu (mm³)",
+            "W_đáy (mm³)",
+            "I_x (mm⁴)",
+            "I_y (mm⁴)"
+          ],
+          [
+            50,
+            0,
+            6580,
+            250000,
+            289000,
+            20370000,
+            3770000
+          ],
+          [
+            50,
+            3,
+            6580,
+            242000,
+            283000,
+            19460000,
+            3770000
+          ],
+          [
+            50,
+            6,
+            6580,
+            230000,
+            275000,
+            18270000,
+            3770000
+          ],
+          [
+            50,
+            9,
+            6580,
+            216000,
+            264000,
+            17020000,
+            3770000
+          ],
+          [
+            60,
+            0,
+            7745,
+            339400,
+            396000,
+            32170000,
+            5240000
+          ],
+          [
+            60,
+            3,
+            7745,
+            318000,
+            385000,
+            30690000,
+            5240000
+          ],
+          [
+            60,
+            6,
+            7745,
+            291000,
+            375000,
+            28790000,
+            5240000
+          ],
+          [
+            60,
+            9,
+            7745,
+            264000,
+            363000,
+            26900000,
+            5240000
+          ],
+          [
+            75,
+            0,
+            9504,
+            432000,
+            509000,
+            44890000,
+            6610000
+          ],
+          [
+            75,
+            3,
+            9504,
+            420000,
+            496000,
+            43280000,
+            6610000
+          ],
+          [
+            75,
+            6,
+            9504,
+            405000,
+            482000,
+            40890000,
+            6610000
+          ],
+          [
+            75,
+            9,
+            9504,
+            390000,
+            480000,
+            38980000,
+            6610000
+          ],
+          [
+            "Bảng 3.2.4 – Giới hạn chảy σ_s của thép ray"
+          ],
+          [
+            "Mác thép",
+            "σ_s (MPa)"
+          ],
+          [
+            "U71Mn / U71MnG",
+            457
+          ],
+          [
+            "U75V / U75VG / U76CrRE / U77MnCr / U78CrV",
+            472
+          ],
+          [
+            "Bảng A.0.2-2 – Hệ số lực ngang f theo bán kính đường cong (đường thẳng: 1,25; R giữa hai mốc lấy mốc nhỏ hơn – thiên an toàn)"
+          ],
+          [
+            "R từ (m)",
+            "f"
+          ],
+          [
+            300,
+            2
+          ],
+          [
+            400,
+            1.8
+          ],
+          [
+            500,
+            1.7
+          ],
+          [
+            600,
+            1.6
+          ],
+          [
+            800,
+            1.45
+          ],
+          [
+            2000,
+            1.3
+          ],
+          [
+            "Điều 3.2.2, 3.2.3 – Lực cản dọc r (kN/m·ray; giá trị cao nguyên) và lực cản ngang tương đương Q (kN/m)"
+          ],
+          [
+            "Kết cấu đường / phụ kiện",
+            "Loại đường",
+            "r không tải",
+            "r có tải dưới đầu máy",
+            "Q nền đá (kN/m)",
+            "Loại tà vẹt (B.0.4-1)",
+            "Cự ly nút a (m)"
+          ],
+          [
+            "Có ba lát – tà vẹt BT loại III (1 667 thanh/km)",
+            "Có ba lát",
+            15,
+            23.2,
+            11.5,
+            "III",
+            0.6
+          ],
+          [
+            "Có ba lát – tà vẹt BT loại II mới (1 760 thanh/km)",
+            "Có ba lát",
+            8.8,
+            13.6,
+            8.5,
+            "II",
+            0.568
+          ],
+          [
+            "Có ba lát – tà vẹt BT loại II mới (1 840 thanh/km)",
+            "Có ba lát",
+            8.8,
+            13.6,
+            8.9,
+            "II",
+            0.543
+          ],
+          [
+            "Không ba lát – phụ kiện WJ-7 / WJ-8 (nút cách 625 mm)",
+            "Không ba lát",
+            24,
+            37.2,
+            0,
+            "—",
+            0.625
+          ],
+          [
+            null,
+            "Ghi chú: r (không tải) = giá trị cao nguyên của hình 3.2.2-1…3.2.2-4 (đường có ba lát loại II mới 1 840 thanh/km: tiêu chuẩn chỉ cho 1 760 thanh/km nên tạm lấy 8,8, có thể quy đổi theo cự ly tà vẹt – điều 3.2.2(4) – bằng ô ghi đè ở sheet Nhập liệu). Cự ly nút a = 1 000/(số tà vẹt/km) cho đường có ba lát; 0,625 m cho WJ-7/WJ-8. Phụ kiện lực cản nhỏ lò xo V (r = 8,0 kN/m·ray, nút 600 mm): nhập tay ở ô ghi đè r."
+          ],
+          [
+            "Bảng A.0.3-1, A.0.3-2 – Độ cứng điểm tựa ray D (giá trị danh định)"
+          ],
+          [
+            "Phương án",
+            "D (kN/mm)"
+          ],
+          [
+            "Có ba lát – tà vẹt II, đệm dưới ray 110 kN/mm",
+            30
+          ],
+          [
+            "Có ba lát – tà vẹt II, đệm dưới ray 80 kN/mm",
+            27.2
+          ],
+          [
+            "Có ba lát – tà vẹt III, đệm dưới ray 80 kN/mm",
+            33
+          ],
+          [
+            "Không ba lát – WJ-7A / WJ-8A (đệm 35±5 kN/mm)",
+            35
+          ],
+          [
+            "Không ba lát – WJ-7B / WJ-8B / WJ-8C (đệm 23±3 kN/mm)",
+            23
+          ],
+          [
+            "Bảng B.0.4-1 – Tham số lực cản ngang nền đá (tà vẹt bê tông) cho công thức bước sóng không đều"
+          ],
+          [
+            "Loại tà vẹt",
+            "q0 (N/cm)",
+            "B",
+            "Z",
+            "C",
+            "N"
+          ],
+          [
+            "II",
+            23,
+            63,
+            1.2,
+            106,
+            2.5
+          ],
+          [
+            "III",
+            27.4,
+            92,
+            1.2,
+            179,
+            2.5
+          ],
+          [
+            null,
+            "Ghi chú: bản gốc ghi loại II – 1 840 thanh/km và loại III – 1 760 thanh/km; ở điều 3.2.2/3.2.3 loại III là 1 667 thanh/km. Bảng tính gắn tham số theo loại tà vẹt (II/III), không theo số thanh/km."
+          ],
+          [
+            "Bảng B.0.4-3 và bảng B.0.4 – Độ cong ban đầu bất lợi và áp lực nhiệt dọc phân bố không đều (đoạn nền đường)"
+          ],
+          [
+            "Loại ray (kg/m)",
+            "l0 (cm)",
+            "i0 (‰)",
+            "ΔP (kN)"
+          ],
+          [
+            50,
+            700,
+            1.13,
+            130
+          ],
+          [
+            60,
+            720,
+            1,
+            154
+          ],
+          [
+            75,
+            740,
+            0.76,
+            188
+          ],
+          [
+            "Bảng 5.4.5 – Giới hạn dưới độ cứng ngang–dọc đỉnh mố trụ cầu dầm giản đơn bê tông (kN/cm)"
+          ],
+          [
+            "Khẩu độ (m) (≤12 ghi 12)",
+            "Hai tuyến",
+            "Một tuyến"
+          ],
+          [
+            12,
+            100,
+            60
+          ],
+          [
+            16,
+            160,
+            100
+          ],
+          [
+            20,
+            190,
+            120
+          ],
+          [
+            24,
+            270,
+            170
+          ],
+          [
+            32,
+            350,
+            220
+          ],
+          [
+            40,
+            550,
+            340
+          ],
+          [
+            48,
+            720,
+            450
+          ],
+          [
+            null,
+            "Mố cầu: hai tuyến 3 000, một tuyến 1 500 kN/cm (xem Điều 5.4.5; tính trong sheet 6_Cầu)."
+          ],
+          [
+            "Bảng F.0.6-1…F.0.6-6 – Lực co giãn (1: có ba lát, 2: không ba lát) và lực uốn (3: có ba lát/Trung; 4: có ba lát/ZK; 5: không ba lát/Trung; 6: không ba lát/ZK) của MỘT thanh ray lên đỉnh mố trụ (kN)"
+          ],
+          [
+            "Bảng F.0.6-",
+            "Loại dầm",
+            "Khẩu độ (m)",
+            "Chiều cao dầm (m)",
+            "Độ cứng trụ (kN/cm·đường)",
+            "Mố (gối cố định) (kN)",
+            "Trụ cầu (kN)"
+          ],
+          [
+            1,
+            "Dầm giản đơn BT",
+            12,
+            0,
+            150,
+            50,
+            10
+          ],
+          [
+            1,
+            "Dầm giản đơn BT",
+            16,
+            0,
+            200,
+            75,
+            10
+          ],
+          [
+            1,
+            "Dầm giản đơn BT",
+            20,
+            0,
+            250,
+            95,
+            15
+          ],
+          [
+            1,
+            "Dầm giản đơn BT",
+            24,
+            0,
+            400,
+            120,
+            25
+          ],
+          [
+            1,
+            "Dầm giản đơn BT",
+            32,
+            0,
+            500,
+            170,
+            35
+          ],
+          [
+            1,
+            "Dầm giản đơn BT",
+            40,
+            0,
+            750,
+            210,
+            50
+          ],
+          [
+            2,
+            "Dầm giản đơn BT",
+            12,
+            0,
+            150,
+            65,
+            10
+          ],
+          [
+            2,
+            "Dầm giản đơn BT",
+            16,
+            0,
+            200,
+            95,
+            15
+          ],
+          [
+            2,
+            "Dầm giản đơn BT",
+            20,
+            0,
+            250,
+            130,
+            25
+          ],
+          [
+            2,
+            "Dầm giản đơn BT",
+            24,
+            0,
+            400,
+            160,
+            40
+          ],
+          [
+            2,
+            "Dầm giản đơn BT",
+            32,
+            0,
+            500,
+            220,
+            60
+          ],
+          [
+            2,
+            "Dầm giản đơn BT",
+            40,
+            0,
+            750,
+            270,
+            95
+          ],
+          [
+            3,
+            "Dầm chữ T",
+            12,
+            1.3,
+            150,
+            40,
+            5
+          ],
+          [
+            3,
+            "Dầm chữ T",
+            16,
+            1.6,
+            200,
+            60,
+            10
+          ],
+          [
+            3,
+            "Dầm chữ T",
+            20,
+            1.8,
+            250,
+            90,
+            15
+          ],
+          [
+            3,
+            "Dầm chữ T",
+            24,
+            2.1,
+            400,
+            115,
+            25
+          ],
+          [
+            3,
+            "Dầm chữ T",
+            32,
+            2.5,
+            500,
+            185,
+            45
+          ],
+          [
+            3,
+            "Dầm hộp",
+            20,
+            2.491,
+            250,
+            50,
+            15
+          ],
+          [
+            3,
+            "Dầm hộp",
+            24,
+            2.491,
+            400,
+            75,
+            25
+          ],
+          [
+            3,
+            "Dầm hộp",
+            32,
+            3.091,
+            500,
+            115,
+            40
+          ],
+          [
+            4,
+            "Dầm hộp",
+            20,
+            2.491,
+            250,
+            35,
+            10
+          ],
+          [
+            4,
+            "Dầm hộp",
+            24,
+            2.491,
+            400,
+            55,
+            20
+          ],
+          [
+            4,
+            "Dầm hộp",
+            32,
+            3.091,
+            500,
+            80,
+            35
+          ],
+          [
+            5,
+            "Dầm hộp",
+            20,
+            2.45,
+            250,
+            65,
+            10
+          ],
+          [
+            5,
+            "Dầm hộp",
+            24,
+            2.45,
+            400,
+            105,
+            20
+          ],
+          [
+            5,
+            "Dầm hộp",
+            24,
+            3.05,
+            400,
+            100,
+            15
+          ],
+          [
+            5,
+            "Dầm hộp",
+            32,
+            3.05,
+            500,
+            165,
+            35
+          ],
+          [
+            6,
+            "Dầm hộp",
+            20,
+            2.45,
+            250,
+            50,
+            10
+          ],
+          [
+            6,
+            "Dầm hộp",
+            24,
+            2.45,
+            400,
+            80,
+            20
+          ],
+          [
+            6,
+            "Dầm hộp",
+            24,
+            3.05,
+            400,
+            70,
+            15
+          ],
+          [
+            6,
+            "Dầm hộp",
+            32,
+            3.05,
+            500,
+            120,
+            25
+          ],
+          [
+            null,
+            "Điều kiện áp dụng (F.0.6, khoản 1): dầm giản đơn BT cốt thép các nhịp bằng nhau, gối cố định cùng một hướng, trên cầu là vùng cố định, ray 60 kg/m; có ba lát dùng tà vẹt BT loại III; không ba lát dùng WJ-7/WJ-8 nút 625 mm. Không áp dụng: đường không ba lát tấm bản CRTS II; độ cứng mố trụ liền kề chênh > 50%; dầm giản đơn trong phạm vi ảnh hưởng hai bên cầu khẩu độ lớn."
+          ],
+          [
+            "Điều 3.2.5 – Chênh nhiệt độ dầm (°C)"
+          ],
+          [
+            "Loại dầm",
+            "Chênh nhiệt ngày (có ba lát)",
+            "Chênh nhiệt năm (không ba lát)"
+          ],
+          [
+            "Dầm bê tông",
+            15,
+            30
+          ],
+          [
+            "Dầm thép",
+            25,
+            "riêng"
+          ],
+          [
+            "Bảng thuyết minh 15 – Dịch chuyển co giãn cho phép của lưỡi ghi / mũi tâm di động (mm)"
+          ],
+          [
+            "Loại ghi",
+            "[Δl'] lưỡi ghi",
+            "[Δl''] mũi tâm"
+          ],
+          [
+            "Tuyến chuyên chở hành khách",
+            40,
+            20
+          ],
+          [
+            "Dòng CZ (bản gốc \"+45\" chưa chắc chắn)",
+            45,
+            30
+          ],
+          [
+            "Dòng CN",
+            40,
+            20
+          ],
+          [
+            "Bảng D – Nhiệt độ không khí và nhiệt độ ray cao nhất, thấp nhất các vùng (°C); nhiệt độ ray cao nhất = nhiệt độ không khí cao nhất + 20 °C; nhiệt độ ray thấp nhất = nhiệt độ không khí thấp nhất"
+          ],
+          [
+            "Tỉnh – Địa danh",
+            "Không khí cao nhất",
+            "Không khí thấp nhất",
+            "Ray cao nhất",
+            "Ray thấp nhất"
+          ],
+          [
+            "Bắc Kinh (Beijing) – Bắc Kinh (Beijing)",
+            41.9,
+            -27.4,
+            61.9,
+            -27.4
+          ],
+          [
+            "Thiên Tân (Tianjin) – Thiên Tân (Tianjin)",
+            40.5,
+            -22.9,
+            60.5,
+            -22.9
+          ],
+          [
+            "Thượng Hải (Shanghai) – Thượng Hải (Shanghai)",
+            39.6,
+            -10.1,
+            59.6,
+            -10.1
+          ],
+          [
+            "Trùng Khánh (Chongqing) – Trùng Khánh (Chongqing)",
+            43,
+            -1.8,
+            63,
+            -1.8
+          ],
+          [
+            "Trùng Khánh (Chongqing) – Vạn Châu (Wanzhou)",
+            42.3,
+            -3.7,
+            62.3,
+            -3.7
+          ],
+          [
+            "Trùng Khánh (Chongqing) – Phù Lăng (Fuling)",
+            43.5,
+            -2.2,
+            63.5,
+            -2.2
+          ],
+          [
+            "Hắc Long Giang (Heilongjiang) – Cáp Nhĩ Tân (Harbin)",
+            39.2,
+            -38.1,
+            59.2,
+            -38.1
+          ],
+          [
+            "Hắc Long Giang (Heilongjiang) – Mạc Hà (Mohe)",
+            39.3,
+            -52.3,
+            59.3,
+            -52.3
+          ],
+          [
+            "Hắc Long Giang (Heilongjiang) – Tháp Hà (Tahe)",
+            38,
+            -46.8,
+            58,
+            -46.8
+          ],
+          [
+            "Hắc Long Giang (Heilongjiang) – Gia Cách Đạt Kỳ (Jiagedaqi)",
+            39.7,
+            -45.4,
+            59.7,
+            -45.4
+          ],
+          [
+            "Hắc Long Giang (Heilongjiang) – Nộn Giang (Nenjiang)",
+            40,
+            -47.3,
+            60,
+            -47.3
+          ],
+          [
+            "Hắc Long Giang (Heilongjiang) – Bắc An (Bei'an)",
+            39.1,
+            -42.2,
+            59.1,
+            -42.2
+          ],
+          [
+            "Hắc Long Giang (Heilongjiang) – Phú Dụ (Fuyu)",
+            40.7,
+            -40.3,
+            60.7,
+            -40.3
+          ],
+          [
+            "Hắc Long Giang (Heilongjiang) – Tề Tề Cáp Nhĩ (Qiqihar)",
+            40.8,
+            -39.5,
+            60.8,
+            -39.5
+          ],
+          [
+            "Hắc Long Giang (Heilongjiang) – Minh Thủy (Mingshui)",
+            39,
+            -40.1,
+            59,
+            -40.1
+          ],
+          [
+            "Hắc Long Giang (Heilongjiang) – Y Xuân (Yichun)",
+            38.2,
+            -43.1,
+            58.2,
+            -43.1
+          ],
+          [
+            "Hắc Long Giang (Heilongjiang) – Hạc Cương (Hegang)",
+            37.7,
+            -34.5,
+            57.7,
+            -34.5
+          ],
+          [
+            "Hắc Long Giang (Heilongjiang) – Giai Mộc Tư (Jiamusi)",
+            38.1,
+            -41.1,
+            58.1,
+            -41.1
+          ],
+          [
+            "Hắc Long Giang (Heilongjiang) – Bảo Thanh (Baoqing)",
+            38.3,
+            -37.2,
+            58.3,
+            -37.2
+          ],
+          [
+            "Hắc Long Giang (Heilongjiang) – Kê Tây (Jixi)",
+            37.6,
+            -35.1,
+            57.6,
+            -35.1
+          ],
+          [
+            "Hắc Long Giang – Hổ Lâm (Hulin)",
+            38.2,
+            -36.1,
+            58.2,
+            -36.1
+          ],
+          [
+            "Hắc Long Giang – Mẫu Đơn Giang (Mudanjiang)",
+            38.4,
+            -38.3,
+            58.4,
+            -38.3
+          ],
+          [
+            "Hắc Long Giang – Tuy Phân Hà (Suifenhe)",
+            35.3,
+            -37.5,
+            55.3,
+            -37.5
+          ],
+          [
+            "Cát Lâm (Jilin) – Trường Xuân (Changchun)",
+            38,
+            -36.5,
+            58,
+            -36.5
+          ],
+          [
+            "Cát Lâm (Jilin) – Bạch Thành (Baicheng)",
+            40.7,
+            -38.1,
+            60.7,
+            -38.1
+          ],
+          [
+            "Cát Lâm (Jilin) – Tứ Bình (Siping)",
+            37.3,
+            -34.6,
+            57.3,
+            -34.6
+          ],
+          [
+            "Cát Lâm (Jilin) – Yên Đồng Sơn (Yantongshan)",
+            35.7,
+            -41.7,
+            55.7,
+            -41.7
+          ],
+          [
+            "Cát Lâm (Jilin) – Cát Lâm (Jilin)",
+            36.6,
+            -40.3,
+            56.6,
+            -40.3
+          ],
+          [
+            "Cát Lâm (Jilin) – Mai Hà Khẩu (Meihekou)",
+            36.1,
+            -38.4,
+            56.1,
+            -38.4
+          ],
+          [
+            "Cát Lâm (Jilin) – Tịnh Vũ (Jingyu)",
+            34.3,
+            -42.2,
+            54.3,
+            -42.2
+          ],
+          [
+            "Cát Lâm (Jilin) – Thông Hóa (Tonghua)",
+            35.6,
+            -36.3,
+            55.6,
+            -36.3
+          ],
+          [
+            "Cát Lâm (Jilin) – Diên Cát (Yanji)",
+            37.7,
+            -32.7,
+            57.7,
+            -32.7
+          ],
+          [
+            "Cát Lâm (Jilin) – Tập An (Ji'an)",
+            37.7,
+            -36.2,
+            57.7,
+            -36.2
+          ],
+          [
+            "Liêu Ninh (Liaoning) – Thẩm Dương (Shenyang)",
+            38.3,
+            -32.9,
+            58.3,
+            -32.9
+          ],
+          [
+            "Liêu Ninh (Liaoning) – Phụ Tân (Fuxin)",
+            40.9,
+            -30.9,
+            60.9,
+            -30.9
+          ],
+          [
+            "Liêu Ninh (Liaoning) – Triều Dương (Chaoyang)",
+            43.3,
+            -34.4,
+            63.3,
+            -34.4
+          ],
+          [
+            "Liêu Ninh (Liaoning) – Cẩm Châu (Jinzhou)",
+            41.8,
+            -24.8,
+            61.8,
+            -24.8
+          ],
+          [
+            "Liêu Ninh (Liaoning) – An Sơn (Anshan)",
+            36.9,
+            -30.4,
+            56.9,
+            -30.4
+          ],
+          [
+            "Liêu Ninh (Liaoning) – Bản Khê (Benxi)",
+            37.5,
+            -34.5,
+            57.5,
+            -34.5
+          ],
+          [
+            "Liêu Ninh (Liaoning) – Phủ Thuận (Fushun)",
+            37.7,
+            -37.3,
+            57.7,
+            -37.3
+          ],
+          [
+            "Liêu Ninh (Liaoning) – Tụ Nham (Xiuyan)",
+            37.7,
+            -31.6,
+            57.7,
+            -31.6
+          ],
+          [
+            "Liêu Ninh (Liaoning) – Đan Đông (Dandong)",
+            35.5,
+            -28,
+            55.5,
+            -28
+          ],
+          [
+            "Liêu Ninh (Liaoning) – Trang Hà (Zhuanghe)",
+            36,
+            -28.1,
+            56,
+            -28.1
+          ],
+          [
+            "Liêu Ninh (Liaoning) – Đại Liên (Dalian)",
+            35.6,
+            -21.1,
+            55.6,
+            -21.1
+          ],
+          [
+            "Nội Mông Cổ (Nei Mongol) – Hô Hòa Hạo Đặc (Hohhot)",
+            38.9,
+            -32.8,
+            58.9,
+            -32.8
+          ],
+          [
+            "Nội Mông Cổ (Nei Mongol) – Đồ Lý Hà (Tulihe)",
+            37.9,
+            -50.2,
+            57.9,
+            -50.2
+          ],
+          [
+            "Nội Mông Cổ – Mãn Châu Lý (Manzhouli)",
+            40.5,
+            -43.8,
+            60.5,
+            -43.8
+          ],
+          [
+            "Nội Mông Cổ – Hải Lạp Nhĩ (Hailar)",
+            39.5,
+            -48.5,
+            59.5,
+            -48.5
+          ],
+          [
+            "Nội Mông Cổ – Tân Ba Nhĩ Hổ Hữu Kỳ (Xin Barag Youqi)",
+            42.5,
+            -40.1,
+            62.5,
+            -40.1
+          ],
+          [
+            "Nội Mông Cổ – Tân Ba Nhĩ Hổ Tả Kỳ (Xin Barag Zuoqi)",
+            40.9,
+            -40.8,
+            60.9,
+            -40.8
+          ],
+          [
+            "Nội Mông Cổ – Trát Lan Đồn (Zhalantun)",
+            40.2,
+            -35.5,
+            60.2,
+            -35.5
+          ],
+          [
+            "Nội Mông Cổ – Ô Lan Hạo Đặc (Ulanhot)",
+            40.3,
+            -34,
+            60.3,
+            -34
+          ],
+          [
+            "Nội Mông Cổ – Ngạch Tế Nạp Kỳ (Ejin Qi)",
+            43.7,
+            -35.3,
+            63.7,
+            -35.3
+          ],
+          [
+            "Nội Mông Cổ – A Lạp Thiện Hữu Kỳ (Alxa Youqi)",
+            41.5,
+            -28.2,
+            61.5,
+            -28.2
+          ],
+          [
+            "Nội Mông Cổ – Nhị Liên Hạo Đặc (Erenhot)",
+            42.6,
+            -40.2,
+            62.6,
+            -40.2
+          ],
+          [
+            "Nội Mông Cổ – Mãn Đô Lạp (Mandula)",
+            39.8,
+            -35.6,
+            59.8,
+            -35.6
+          ],
+          [
+            "Nội Mông Cổ – Tô Ni Đặc Tả Kỳ (Sonid Zuoqi)",
+            41.5,
+            -36.9,
+            61.5,
+            -36.9
+          ],
+          [
+            "Nội Mông Cổ – Bao Đầu (Baotou)",
+            40.4,
+            -31.4,
+            60.4,
+            -31.4
+          ],
+          [
+            "Nội Mông Cổ – Tập Ninh (Jining)",
+            35.7,
+            -33.8,
+            55.7,
+            -33.8
+          ],
+          [
+            "Nội Mông Cổ – Lâm Hà (Linhe)",
+            39.4,
+            -35.3,
+            59.4,
+            -35.3
+          ],
+          [
+            "Nội Mông Cổ – Đông Thắng (Dongsheng)",
+            36.7,
+            -29.8,
+            56.7,
+            -29.8
+          ],
+          [
+            "Nội Mông Cổ – Tích Lâm Hạo Đặc (Xilinhot)",
+            39.4,
+            -42.4,
+            59.4,
+            -42.4
+          ],
+          [
+            "Nội Mông Cổ – Thông Liêu (Tongliao)",
+            39.1,
+            -33.9,
+            59.1,
+            -33.9
+          ],
+          [
+            "Nội Mông Cổ – Xích Phong (Chifeng)",
+            42.5,
+            -31.4,
+            62.5,
+            -31.4
+          ],
+          [
+            "Hà Bắc (Hebei) – Thạch Gia Trang (Shijiazhuang)",
+            42.9,
+            -19.8,
+            62.9,
+            -19.8
+          ],
+          [
+            "Hà Bắc (Hebei) – Hình Đài (Xingtai)",
+            42.4,
+            -22.4,
+            62.4,
+            -22.4
+          ],
+          [
+            "Hà Bắc (Hebei) – Trương Gia Khẩu (Zhangjiakou)",
+            41.1,
+            -25.7,
+            61.1,
+            -25.7
+          ],
+          [
+            "Hà Bắc (Hebei) – Thừa Đức (Chengde)",
+            43.3,
+            -27,
+            63.3,
+            -27
+          ],
+          [
+            "Hà Bắc (Hebei) – Tuân Hóa (Zunhua)",
+            40.5,
+            -25.7,
+            60.5,
+            -25.7
+          ],
+          [
+            "Hà Bắc (Hebei) – Tần Hoàng Đảo (Qinhuangdao)",
+            39.9,
+            -26,
+            59.9,
+            -26
+          ],
+          [
+            "Hà Bắc (Hebei) – Bá Châu (Bazhou)",
+            41.3,
+            -28.2,
+            61.3,
+            -28.2
+          ],
+          [
+            "Hà Bắc (Hebei) – Đường Sơn (Tangshan)",
+            40.1,
+            -25.2,
+            60.1,
+            -25.2
+          ],
+          [
+            "Hà Bắc – Bảo Định (Baoding)",
+            43.3,
+            -22,
+            63.3,
+            -22
+          ],
+          [
+            "Hà Bắc – Thương Châu (Cangzhou)",
+            42.9,
+            -20.6,
+            62.9,
+            -20.6
+          ],
+          [
+            "Hà Bắc – Hoàng Hoa (Huanghua)",
+            41.8,
+            -19,
+            61.8,
+            -19
+          ],
+          [
+            "Sơn Tây (Shanxi) – Thái Nguyên (Taiyuan)",
+            39.4,
+            -25.5,
+            59.4,
+            -25.5
+          ],
+          [
+            "Sơn Tây (Shanxi) – Đại Đồng (Datong)",
+            39.2,
+            -29.1,
+            59.2,
+            -29.1
+          ],
+          [
+            "Sơn Tây (Shanxi) – Ngũ Đài Sơn (Wutaishan)",
+            29.6,
+            -44.8,
+            49.6,
+            -44.8
+          ],
+          [
+            "Sơn Tây (Shanxi) – Nguyên Bình (Yuanping)",
+            41.1,
+            -27.2,
+            61.1,
+            -27.2
+          ],
+          [
+            "Sơn Tây (Shanxi) – Giới Hưu (Jiexiu)",
+            40.6,
+            -24.5,
+            60.6,
+            -24.5
+          ],
+          [
+            "Sơn Tây (Shanxi) – Lâm Phần (Linfen)",
+            42.3,
+            -25.6,
+            62.3,
+            -25.6
+          ],
+          [
+            "Sơn Tây (Shanxi) – Vận Thành (Yuncheng)",
+            42.7,
+            -18.9,
+            62.7,
+            -18.9
+          ],
+          [
+            "Tân Cương (Xinjiang) – Ô Lỗ Mộc Tề (Urumqi)",
+            42.1,
+            -41.5,
+            62.1,
+            -41.5
+          ],
+          [
+            "Tân Cương (Xinjiang) – Cát Mộc Nãi (Jimunai)",
+            39,
+            -38.8,
+            59,
+            -38.8
+          ],
+          [
+            "Tân Cương (Xinjiang) – A Lặc Thái (Aletai)",
+            37.6,
+            -43.5,
+            57.6,
+            -43.5
+          ],
+          [
+            "Tân Cương (Xinjiang) – Phú Uẩn (Fuyun)",
+            42.2,
+            -49.8,
+            62.2,
+            -49.8
+          ],
+          [
+            "Tân Cương (Xinjiang) – Tháp Thành (Tacheng)",
+            41.6,
+            -39.2,
+            61.6,
+            -39.2
+          ],
+          [
+            "Tân Cương (Xinjiang) – A Lạp Sơn Khẩu (Alashankou)",
+            44.2,
+            -33,
+            64.2,
+            -33
+          ],
+          [
+            "Tân Cương (Xinjiang) – Khắc Lạp Mã Y (Kelamayi)",
+            44,
+            -35.9,
+            64,
+            -35.9
+          ],
+          [
+            "Tân Cương (Xinjiang) – Tinh Hà (Jinghe)",
+            42.3,
+            -36.4,
+            62.3,
+            -36.4
+          ],
+          [
+            "Tân Cương (Xinjiang) – Y Ninh (Yining)",
+            39.2,
+            -40.4,
+            59.2,
+            -40.4
+          ],
+          [
+            "Tân Cương (Xinjiang) – Ba Luân Đài (Baluntai)",
+            34.5,
+            -26.4,
+            54.5,
+            -26.4
+          ],
+          [
+            "Tân Cương (Xinjiang) – Đạt Phản Thành (Dabancheng)",
+            40.8,
+            -31.9,
+            60.8,
+            -31.9
+          ],
+          [
+            "Tân Cương (Xinjiang) – Thổ Lỗ Phiên (Tulufan)",
+            47.8,
+            -28,
+            67.8,
+            -28
+          ],
+          [
+            "Tân Cương (Xinjiang) – Bái Thành (Baicheng)",
+            38.3,
+            -32,
+            58.3,
+            -32
+          ],
+          [
+            "Tân Cương (Xinjiang) – Khố Xa (Kuche)",
+            41.5,
+            -27.4,
+            61.5,
+            -27.4
+          ],
+          [
+            "Tân Cương (Xinjiang) – Khố Nhĩ Lặc (Kuerle)",
+            40,
+            -28.1,
+            60,
+            -28.1
+          ],
+          [
+            "Tân Cương (Xinjiang) – Thổ Nhĩ Ca Đặc (Tuergate)",
+            23.8,
+            -36.6,
+            43.8,
+            -36.6
+          ],
+          [
+            "Tân Cương – Khách Thập (Kashi)",
+            40.1,
+            -24.4,
+            60.1,
+            -24.4
+          ],
+          [
+            "Tân Cương – Ba Sở (Bachu)",
+            42.7,
+            -25.1,
+            62.7,
+            -25.1
+          ],
+          [
+            "Tân Cương – A Lạp Nhĩ (Alaer)",
+            40.6,
+            -28.4,
+            60.6,
+            -28.4
+          ],
+          [
+            "Tân Cương – Nhược Khương (Ruoqiang)",
+            43.8,
+            -27.2,
+            63.8,
+            -27.2
+          ],
+          [
+            "Tân Cương – Hòa Điền (Hetian)",
+            41.1,
+            -21.6,
+            61.1,
+            -21.6
+          ],
+          [
+            "Tân Cương – Cáp Mật (Hami)",
+            43.9,
+            -32,
+            63.9,
+            -32
+          ],
+          [
+            "Thanh Hải (Qinghai) – Tây Ninh (Xining)",
+            36.5,
+            -26.6,
+            56.5,
+            -26.6
+          ],
+          [
+            "Thanh Hải (Qinghai) – Cách Nhĩ Mộc (Geermu)",
+            35.5,
+            -33.6,
+            55.5,
+            -33.6
+          ],
+          [
+            "Thanh Hải (Qinghai) – Đô Lan (Dulan)",
+            32.2,
+            -29.8,
+            52.2,
+            -29.8
+          ],
+          [
+            "Thanh Hải (Qinghai) – Trà Tạp (Chaka)",
+            31.6,
+            -31.3,
+            51.6,
+            -31.3
+          ],
+          [
+            "Cam Túc (Gansu) – Lan Châu (Lanzhou)",
+            39.8,
+            -21.7,
+            59.8,
+            -21.7
+          ],
+          [
+            "Cam Túc (Gansu) – Đôn Hoàng (Dunhuang)",
+            43.6,
+            -30.5,
+            63.6,
+            -30.5
+          ],
+          [
+            "Cam Túc (Gansu) – Trương Dịch (Zhangye)",
+            39.8,
+            -28.7,
+            59.8,
+            -28.7
+          ],
+          [
+            "Cam Túc (Gansu) – Vũ Uy (Wuwei)",
+            40.8,
+            -32,
+            60.8,
+            -32
+          ],
+          [
+            "Cam Túc (Gansu) – Thiên Thủy (Tianshui)",
+            38.2,
+            -19.2,
+            58.2,
+            -19.2
+          ],
+          [
+            "Ninh Hạ (Ningxia) – Ngân Xuyên (Yinchuan)",
+            39.3,
+            -30.6,
+            59.3,
+            -30.6
+          ],
+          [
+            "Ninh Hạ (Ningxia) – Huệ Nông (Huinong)",
+            38.7,
+            -28.4,
+            58.7,
+            -28.4
+          ],
+          [
+            "Ninh Hạ (Ningxia) – Trung Vệ (Zhongwei)",
+            37.6,
+            -29.2,
+            57.6,
+            -29.2
+          ],
+          [
+            "Ninh Hạ (Ningxia) – Đồng Tâm (Tongxin)",
+            39,
+            -28.3,
+            59,
+            -28.3
+          ],
+          [
+            "Thiểm Tây (Shaanxi) – Tây An (Xi'an)",
+            41.8,
+            -20.6,
+            61.8,
+            -20.6
+          ],
+          [
+            "Thiểm Tây (Shaanxi) – Du Lâm (Yulin)",
+            39,
+            -32.7,
+            59,
+            -32.7
+          ],
+          [
+            "Thiểm Tây (Shaanxi) – Tuy Đức (Suide)",
+            40.5,
+            -25.4,
+            60.5,
+            -25.4
+          ],
+          [
+            "Thiểm Tây (Shaanxi) – Diên An (Yan'an)",
+            39.7,
+            -25.4,
+            59.7,
+            -25.4
+          ],
+          [
+            "Thiểm Tây (Shaanxi) – Bảo Kê (Baoji)",
+            41.6,
+            -16.7,
+            61.6,
+            -16.7
+          ],
+          [
+            "Thiểm Tây (Shaanxi) – Hoa Sơn (Huashan)",
+            29,
+            -25.3,
+            49,
+            -25.3
+          ],
+          [
+            "Thiểm Tây (Shaanxi) – Hán Trung (Hanzhong)",
+            38.4,
+            -10.1,
+            58.4,
+            -10.1
+          ],
+          [
+            "Thiểm Tây (Shaanxi) – An Khang (Ankang)",
+            41.7,
+            -9.7,
+            61.7,
+            -9.7
+          ],
+          [
+            "Hà Nam (Henan) – Trịnh Châu (Zhengzhou)",
+            43,
+            -17.9,
+            63,
+            -17.9
+          ],
+          [
+            "Hà Nam (Henan) – An Dương (Anyang)",
+            43.2,
+            -18.1,
+            63.2,
+            -18.1
+          ],
+          [
+            "Hà Nam (Henan) – Tân Hương (Xinxiang)",
+            42.7,
+            -21.3,
+            62.7,
+            -21.3
+          ],
+          [
+            "Hà Nam (Henan) – Tam Môn Hiệp (Sanmenxia)",
+            43.2,
+            -16.5,
+            63.2,
+            -16.5
+          ],
+          [
+            "Hà Nam (Henan) – Lạc Dương (Luoyang)",
+            44.2,
+            -18.2,
+            64.2,
+            -18.2
+          ],
+          [
+            "Hà Nam (Henan) – Hử Xương (Xuchang)",
+            41.9,
+            -19.6,
+            61.9,
+            -19.6
+          ],
+          [
+            "Hà Nam (Henan) – Khai Phong (Kaifeng)",
+            42.9,
+            -16,
+            62.9,
+            -16
+          ],
+          [
+            "Hà Nam (Henan) – Nam Dương (Nanyang)",
+            41.4,
+            -21.2,
+            61.4,
+            -21.2
+          ],
+          [
+            "Hà Nam (Henan) – Trú Mã Điếm (Zhumadian)",
+            41.9,
+            -18.1,
+            61.9,
+            -18.1
+          ],
+          [
+            "Hà Nam (Henan) – Tín Dương (Xinyang)",
+            40.9,
+            -20,
+            60.9,
+            -20
+          ],
+          [
+            "Hà Nam (Henan) – Thương Khâu (Shangqiu)",
+            43,
+            -18.9,
+            63,
+            -18.9
+          ],
+          [
+            "Sơn Đông (Shandong) – Tế Nam (Jinan)",
+            42.5,
+            -19.7,
+            62.5,
+            -19.7
+          ],
+          [
+            "Sơn Đông (Shandong) – Đức Châu (Dezhou)",
+            43.4,
+            -27,
+            63.4,
+            -27
+          ],
+          [
+            "Sơn Đông (Shandong) – Đông Doanh (Dongying)",
+            41.3,
+            -20.8,
+            61.3,
+            -20.8
+          ],
+          [
+            "Sơn Đông (Shandong) – Long Khẩu (Longkou)",
+            39.2,
+            -21.3,
+            59.2,
+            -21.3
+          ],
+          [
+            "Sơn Đông (Shandong) – Yên Đài (Yantai)",
+            38,
+            -13.1,
+            58,
+            -13.1
+          ],
+          [
+            "Sơn Đông (Shandong) – Uy Hải (Weihai)",
+            38.4,
+            -13.8,
+            58.4,
+            -13.8
+          ],
+          [
+            "Sơn Đông (Shandong) – Thái Sơn (Taishan)",
+            29.7,
+            -27.5,
+            49.7,
+            -27.5
+          ],
+          [
+            "Sơn Đông (Shandong) – Thái An (Tai'an)",
+            40.7,
+            -22.4,
+            60.7,
+            -22.4
+          ],
+          [
+            "Sơn Đông (Shandong) – Truy Bác (Zibo)",
+            42.1,
+            -23,
+            62.1,
+            -23
+          ],
+          [
+            "Sơn Đông (Shandong) – Thanh Đảo (Qingdao)",
+            38.9,
+            -14.3,
+            58.9,
+            -14.3
+          ],
+          [
+            "Sơn Đông (Shandong) – Thạch Đảo (Shidao)",
+            36.8,
+            -14.6,
+            56.8,
+            -14.6
+          ],
+          [
+            "Sơn Đông (Shandong) – Hà Trạch (Heze)",
+            42,
+            -20.4,
+            62,
+            -20.4
+          ],
+          [
+            "Sơn Đông (Shandong) – Yên Châu (Yanzhou)",
+            41.1,
+            -19.3,
+            61.1,
+            -19.3
+          ],
+          [
+            "Sơn Đông (Shandong) – Lâm Nghi (Linyi)",
+            40,
+            -16.5,
+            60,
+            -16.5
+          ],
+          [
+            "Sơn Đông (Shandong) – Nhật Chiếu (Rizhao)",
+            41.4,
+            -14.5,
+            61.4,
+            -14.5
+          ],
+          [
+            "Giang Tô (Jiangsu) – Nam Kinh (Nanjing)",
+            40.7,
+            -14,
+            60.7,
+            -14
+          ],
+          [
+            "Giang Tô (Jiangsu) – Từ Châu (Xuzhou)",
+            40.6,
+            -22.6,
+            60.6,
+            -22.6
+          ],
+          [
+            "Giang Tô (Jiangsu) – Nam Thông (Nantong)",
+            39.5,
+            -10.8,
+            59.5,
+            -10.8
+          ],
+          [
+            "Giang Tô (Jiangsu) – Thường Châu (Changzhou)",
+            39.4,
+            -15.5,
+            59.4,
+            -15.5
+          ],
+          [
+            "Chiết Giang (Zhejiang) – Hàng Châu (Hangzhou)",
+            40.3,
+            -9.6,
+            60.3,
+            -9.6
+          ],
+          [
+            "Chiết Giang (Zhejiang) – Kim Hoa (Jinhua)",
+            41.2,
+            -9.6,
+            61.2,
+            -9.6
+          ],
+          [
+            "Chiết Giang (Zhejiang) – Cừ Châu (Quzhou)",
+            40.9,
+            -10.4,
+            60.9,
+            -10.4
+          ],
+          [
+            "Chiết Giang (Zhejiang) – Ôn Châu (Wenzhou)",
+            39.6,
+            -4.5,
+            59.6,
+            -4.5
+          ],
+          [
+            "An Huy (Anhui) – Hợp Phì (Hefei)",
+            41,
+            -20.6,
+            61,
+            -20.6
+          ],
+          [
+            "An Huy (Anhui) – Phụ Dương (Fuyang)",
+            41.4,
+            -20.4,
+            61.4,
+            -20.4
+          ],
+          [
+            "An Huy (Anhui) – Bạng Phụ (Bengbu)",
+            41.3,
+            -19.4,
+            61.3,
+            -19.4
+          ],
+          [
+            "An Huy (Anhui) – Lục An (Lu'an)",
+            41,
+            -18.9,
+            61,
+            -18.9
+          ],
+          [
+            "An Huy (Anhui) – Vu Hồ (Wuhu)",
+            39.5,
+            -13.1,
+            59.5,
+            -13.1
+          ],
+          [
+            "An Huy (Anhui) – An Khánh (Anqing)",
+            40.9,
+            -12.5,
+            60.9,
+            -12.5
+          ],
+          [
+            "An Huy (Anhui) – Hoàng Sơn (Huangshan)",
+            28,
+            -22.7,
+            48,
+            -22.7
+          ],
+          [
+            "Giang Tây (Jiangxi) – Nam Xương (Nanchang)",
+            40.6,
+            -9.7,
+            60.6,
+            -9.7
+          ],
+          [
+            "Giang Tây (Jiangxi) – Cát An (Ji'an)",
+            40.9,
+            -8,
+            60.9,
+            -8
+          ],
+          [
+            "Giang Tây (Jiangxi) – Cám Châu (Ganzhou)",
+            41.2,
+            -6,
+            61.2,
+            -6
+          ],
+          [
+            "Giang Tây (Jiangxi) – Cửu Giang (Jiujiang)",
+            40.3,
+            -9.7,
+            60.3,
+            -9.7
+          ],
+          [
+            "Giang Tây (Jiangxi) – Cảnh Đức Trấn (Jingdezhen)",
+            41.8,
+            -10.9,
+            61.8,
+            -10.9
+          ],
+          [
+            "Hồ Bắc (Hubei) – Vũ Hán (Wuhan)",
+            39.6,
+            -18.1,
+            59.6,
+            -18.1
+          ],
+          [
+            "Hồ Bắc (Hubei) – Ma Thành (Macheng)",
+            41.5,
+            -15.3,
+            61.5,
+            -15.3
+          ],
+          [
+            "Hồ Bắc (Hubei) – Ân Thi (Enshi)",
+            41.2,
+            -12.3,
+            61.2,
+            -12.3
+          ],
+          [
+            "Hồ Bắc (Hubei) – Lão Hà Khẩu (Laohekou)",
+            41,
+            -17.2,
+            61,
+            -17.2
+          ],
+          [
+            "Hồ Bắc (Hubei) – Kinh Châu (Jingzhou)",
+            38.7,
+            -14.9,
+            58.7,
+            -14.9
+          ],
+          [
+            "Hồ Bắc (Hubei) – Nghi Xương (Yichang)",
+            41.4,
+            -9.8,
+            61.4,
+            -9.8
+          ],
+          [
+            "Hồ Nam (Hunan) – Trường Sa (Changsha)",
+            40.6,
+            -10.3,
+            60.6,
+            -10.3
+          ],
+          [
+            "Hồ Nam (Hunan) – Thạch Môn (Shimen)",
+            40.9,
+            -13,
+            60.9,
+            -13
+          ],
+          [
+            "Hồ Nam (Hunan) – Nhạc Dương (Yueyang)",
+            39.3,
+            -11.8,
+            59.3,
+            -11.8
+          ],
+          [
+            "Hồ Nam (Hunan) – Thường Đức (Changde)",
+            40.4,
+            -13.2,
+            60.4,
+            -13.2
+          ],
+          [
+            "Hồ Nam (Hunan) – Thiệu Dương (Shaoyang)",
+            40.2,
+            -10.5,
+            60.2,
+            -10.5
+          ],
+          [
+            "Hồ Nam (Hunan) – Vĩnh Châu (Yongzhou)",
+            43.7,
+            -7,
+            63.7,
+            -7
+          ],
+          [
+            "Hồ Nam (Hunan) – Hành Dương (Hengyang)",
+            41.3,
+            -7.9,
+            61.3,
+            -7.9
+          ],
+          [
+            "Hồ Nam (Hunan) – Sâm Châu (Chenzhou)",
+            41.2,
+            -9,
+            61.2,
+            -9
+          ],
+          [
+            "Phúc Kiến (Fujian) – Phúc Châu (Fuzhou)",
+            41.7,
+            -1.7,
+            61.7,
+            -1.7
+          ],
+          [
+            "Phúc Kiến (Fujian) – Nam Bình (Nanping)",
+            41.8,
+            -5.8,
+            61.8,
+            -5.8
+          ],
+          [
+            "Phúc Kiến (Fujian) – Trường Đinh (Changting)",
+            39.5,
+            -8,
+            59.5,
+            -8
+          ],
+          [
+            "Phúc Kiến (Fujian) – Vĩnh An (Yong'an)",
+            40.5,
+            -7.6,
+            60.5,
+            -7.6
+          ],
+          [
+            "Phúc Kiến (Fujian) – Long Nham (Longyan)",
+            39,
+            -5.6,
+            59,
+            -5.6
+          ],
+          [
+            "Phúc Kiến (Fujian) – Hạ Môn (Xiamen)",
+            39.2,
+            1.5,
+            59.2,
+            1.5
+          ],
+          [
+            "Quảng Đông (Guangdong) – Quảng Châu (Guangzhou)",
+            39.1,
+            0,
+            59.1,
+            0
+          ],
+          [
+            "Quảng Đông (Guangdong) – Thiều Quan (Shaoguan)",
+            42,
+            -4.3,
+            62,
+            -4.3
+          ],
+          [
+            "Quảng Đông (Guangdong) – Mai Châu (Meizhou)",
+            39.5,
+            -7.3,
+            59.5,
+            -7.3
+          ],
+          [
+            "Quảng Đông (Guangdong) – Sán Đầu (Shantou)",
+            38.8,
+            0.3,
+            58.8,
+            0.3
+          ],
+          [
+            "Quảng Đông (Guangdong) – La Định (Luoding)",
+            39.3,
+            -1.3,
+            59.3,
+            -1.3
+          ],
+          [
+            "Quảng Đông (Guangdong) – Thâm Quyến (Shenzhen)",
+            38.7,
+            0.2,
+            58.7,
+            0.2
+          ],
+          [
+            "Quảng Đông (Guangdong) – Sán Vĩ (Shanwei)",
+            38.5,
+            1.6,
+            58.5,
+            1.6
+          ],
+          [
+            "Quảng Đông (Guangdong) – Trạm Giang (Zhanjiang)",
+            38.1,
+            2.8,
+            58.1,
+            2.8
+          ],
+          [
+            "Quảng Đông (Guangdong) – Châu Hải (Zhuhai)",
+            38.5,
+            2.5,
+            58.5,
+            2.5
+          ],
+          [
+            "Quảng Đông (Guangdong) – Dương Giang (Yangjiang)",
+            38.3,
+            -1.4,
+            58.3,
+            -1.4
+          ],
+          [
+            "Quảng Tây (Guangxi) – Nam Ninh (Nanning)",
+            40.4,
+            -2.1,
+            60.4,
+            -2.1
+          ],
+          [
+            "Quảng Tây (Guangxi) – Quế Lâm (Guilin)",
+            39.5,
+            -4.9,
+            59.5,
+            -4.9
+          ],
+          [
+            "Quảng Tây – Hà Trì (Hechi)",
+            39.7,
+            -2,
+            59.7,
+            -2
+          ],
+          [
+            "Quảng Tây – Liễu Châu (Liuzhou)",
+            39.2,
+            -3.8,
+            59.2,
+            -3.8
+          ],
+          [
+            "Quảng Tây – Bách Sắc (Baise)",
+            42.5,
+            -2,
+            62.5,
+            -2
+          ],
+          [
+            "Quảng Tây – Ngô Châu (Wuzhou)",
+            39.7,
+            -3,
+            59.7,
+            -3
+          ],
+          [
+            "Quảng Tây – Ngọc Lâm (Yulin)",
+            38.4,
+            -2.1,
+            58.4,
+            -2.1
+          ],
+          [
+            "Quảng Tây – Khâm Châu (Qinzhou)",
+            37.9,
+            -1.8,
+            57.9,
+            -1.8
+          ],
+          [
+            "Quảng Tây – Bắc Hải (Beihai)",
+            37.1,
+            2,
+            57.1,
+            2
+          ],
+          [
+            "Tứ Xuyên (Sichuan) – Thành Đô (Chengdu)",
+            37.3,
+            -5.9,
+            57.3,
+            -5.9
+          ],
+          [
+            "Tứ Xuyên (Sichuan) – A Bá (Aba)",
+            28,
+            -33.9,
+            48,
+            -33.9
+          ],
+          [
+            "Tứ Xuyên (Sichuan) – Đô Giang Yển (Dujiangyan)",
+            35.5,
+            -7.1,
+            55.5,
+            -7.1
+          ],
+          [
+            "Tứ Xuyên (Sichuan) – Miên Dương (Mianyang)",
+            38.8,
+            -7.3,
+            58.8,
+            -7.3
+          ],
+          [
+            "Tứ Xuyên (Sichuan) – Nga Mi Sơn (Emeishan)",
+            23.9,
+            -20.9,
+            43.9,
+            -20.9
+          ],
+          [
+            "Tứ Xuyên (Sichuan) – Nghi Tân (Yibin)",
+            40.7,
+            -3,
+            60.7,
+            -3
+          ],
+          [
+            "Tứ Xuyên (Sichuan) – Tây Xương (Xichang)",
+            36.6,
+            -3.8,
+            56.6,
+            -3.8
+          ],
+          [
+            "Tứ Xuyên (Sichuan) – Quảng Nguyên (Guangyuan)",
+            40.5,
+            -8.2,
+            60.5,
+            -8.2
+          ],
+          [
+            "Tứ Xuyên (Sichuan) – Ba Trung (Bazhong)",
+            40.6,
+            -5.3,
+            60.6,
+            -5.3
+          ],
+          [
+            "Tứ Xuyên (Sichuan) – Đạt Châu (Dazhou)",
+            42.3,
+            -4.7,
+            62.3,
+            -4.7
+          ],
+          [
+            "Tứ Xuyên (Sichuan) – Toại Ninh (Suining)",
+            40.3,
+            -3.8,
+            60.3,
+            -3.8
+          ],
+          [
+            "Tứ Xuyên (Sichuan) – Nội Giang (Neijiang)",
+            41.1,
+            -3,
+            61.1,
+            -3
+          ],
+          [
+            "Tứ Xuyên (Sichuan) – Lô Châu (Luzhou)",
+            40.3,
+            -1.9,
+            60.3,
+            -1.9
+          ],
+          [
+            "Tứ Xuyên (Sichuan) – Tự Vĩnh (Xuyong)",
+            43.5,
+            -1.5,
+            63.5,
+            -1.5
+          ],
+          [
+            "Vân Nam (Yunnan) – Côn Minh (Kunming)",
+            31.5,
+            -7.8,
+            51.5,
+            -7.8
+          ],
+          [
+            "Vân Nam (Yunnan) – Hương Cách Lý Lạp (Xianggelila)",
+            26,
+            -27.4,
+            46,
+            -27.4
+          ],
+          [
+            "Vân Nam (Yunnan) – Chiêu Thông (Zhaotong)",
+            33.5,
+            -13.3,
+            53.5,
+            -13.3
+          ],
+          [
+            "Vân Nam (Yunnan) – Lệ Giang (Lijiang)",
+            32.3,
+            -10.3,
+            52.3,
+            -10.3
+          ],
+          [
+            "Vân Nam (Yunnan) – Bảo Sơn (Baoshan)",
+            32.4,
+            -3.8,
+            52.4,
+            -3.8
+          ],
+          [
+            "Vân Nam (Yunnan) – Đại Lý (Dali)",
+            34,
+            -4.2,
+            54,
+            -4.2
+          ],
+          [
+            "Vân Nam – Triêm Ích (Zhanyi)",
+            33.2,
+            -9.2,
+            53.2,
+            -9.2
+          ],
+          [
+            "Vân Nam – Thụy Lệ (Ruili)",
+            36.6,
+            1.2,
+            56.6,
+            1.2
+          ],
+          [
+            "Vân Nam – Ngọc Khê (Yuxi)",
+            34.4,
+            -5.5,
+            54.4,
+            -5.5
+          ],
+          [
+            "Vân Nam – Lâm Thương (Lincang)",
+            34.6,
+            -1.3,
+            54.6,
+            -1.3
+          ],
+          [
+            "Vân Nam – Cảnh Hồng (Jinghong)",
+            41.1,
+            1.9,
+            61.1,
+            1.9
+          ],
+          [
+            "Vân Nam – Nguyên Giang (Yuanjiang)",
+            42.5,
+            -0.1,
+            62.5,
+            -0.1
+          ],
+          [
+            "Quý Châu (Guizhou) – Quý Dương (Guiyang)",
+            37.5,
+            -7.8,
+            57.5,
+            -7.8
+          ],
+          [
+            "Quý Châu (Guizhou) – Tất Tiết (Bijie)",
+            36.2,
+            -10.9,
+            56.2,
+            -10.9
+          ],
+          [
+            "Quý Châu (Guizhou) – Tuân Nghĩa (Zunyi)",
+            38.7,
+            -7.1,
+            58.7,
+            -7.1
+          ],
+          [
+            "Tây Tạng (Xizang) – Lạp Tát (Lasa)",
+            30.4,
+            -16.5,
+            50.4,
+            -16.5
+          ],
+          [
+            "Tây Tạng (Xizang) – Sư Tuyền Hà (Shiquanhe)",
+            32.1,
+            -36.6,
+            52.1,
+            -36.6
+          ],
+          [
+            "Tây Tạng (Xizang) – An Đa (Anduo)",
+            23.5,
+            -36.7,
+            43.5,
+            -36.7
+          ],
+          [
+            "Tây Tạng (Xizang) – Na Khúc (Naqu)",
+            24.2,
+            -41.2,
+            44.2,
+            -41.2
+          ],
+          [
+            "Tây Tạng (Xizang) – Nhật Khách Tắc (Rikaze)",
+            29,
+            -25.1,
+            49,
+            -25.1
+          ],
+          [
+            "Tây Tạng (Xizang) – Nhiếp Lạp Mộc (Nielamu)",
+            22.4,
+            -20.6,
+            42.4,
+            -20.6
+          ],
+          [
+            "Tây Tạng (Xizang) – Giang Tư (Jiangzi)",
+            28.7,
+            -23.9,
+            48.7,
+            -23.9
+          ],
+          [
+            "Tây Tạng (Xizang) – Ba Mật (Bomi)",
+            31.2,
+            -20.3,
+            51.2,
+            -20.3
+          ],
+          [
+            "Tây Tạng (Xizang) – Lâm Chi (Linzhi)",
+            31.4,
+            -15.3,
+            51.4,
+            -15.3
+          ],
+          [
+            "Hải Nam (Hainan) – Hải Khẩu (Haikou)",
+            39.6,
+            2.8,
+            59.6,
+            2.8
+          ],
+          [
+            "Hải Nam (Hainan) – Đam Châu (Danzhou)",
+            40.2,
+            0.4,
+            60.2,
+            0.4
+          ],
+          [
+            "Hải Nam (Hainan) – Tam Á (Sanya)",
+            35.9,
+            5.1,
+            55.9,
+            5.1
+          ],
+          [
+            "Đài Loan (Taiwan) – Đài Bắc (Taipei)",
+            38.6,
+            -2,
+            58.6,
+            -2
+          ],
+          [
+            "Đài Loan (Taiwan) – Đài Nam (Tainan)",
+            39,
+            2,
+            59,
+            2
+          ],
+          [
+            "Hương Cảng (Hong Kong, Xianggang) – Hương Cảng (Xianggang)",
+            36.1,
+            0,
+            56.1,
+            0
+          ]
+        ]
+      }
+    ]
+  }
+}

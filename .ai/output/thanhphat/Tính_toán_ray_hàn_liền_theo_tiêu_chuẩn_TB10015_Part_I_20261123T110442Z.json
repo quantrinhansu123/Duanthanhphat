@@ -1,0 +1,225 @@
+{
+  "saved_at": "2026-11-23T11:04:42.510482+00:00",
+  "source": {
+    "path": "C:\\Users\\Admin\\Desktop\\ThanhPhat\\Tính toán ray hàn liền theo tiêu chuẩn TB10015_Part I.pptx",
+    "name": "Tính toán ray hàn liền theo tiêu chuẩn TB10015_Part I.pptx",
+    "suffix": ".pptx",
+    "size_bytes": 7149965
+  },
+  "result": {
+    "format": "pptx",
+    "metadata": {
+      "slide_count": 15,
+      "slide_width": 12192000,
+      "slide_height": 6858000
+    },
+    "stats": {
+      "slide_count": 15,
+      "table_count": 0,
+      "char_count": 5002,
+      "word_count": 1112
+    },
+    "slides": [
+      {
+        "slide": 1,
+        "texts": [
+          "TÍNH TOÁN\nRAY HÀN LIỀN THEO TIÊU CHUẨN TB 10015",
+          "01"
+        ],
+        "table_count": 0,
+        "tables": []
+      },
+      {
+        "slide": 2,
+        "texts": [
+          "02",
+          "01      CÁC THÔNG SỐ ĐẦU VÀO",
+          "MỤC LỤC",
+          "03      KIỂM TRA ỔN ĐỊNH ĐƯỜNG RAY",
+          "02       KIỂM TRA CƯỜNG ĐỘ RAY",
+          "A. Thông số về nhiệt độ và tính toán nhiệt độ khoá đường theo từng vùng của Việt Nam",
+          "B. Thông số về ray, phụ kiện, tà vẹt",
+          "A. Kiểm tra cường độ ray",
+          "B. Phạm vi giảm nhiệt độ cho phép",
+          "06      RAY KHÔNG MỐI NỐI TRÊN CẦU",
+          "C. Thông số về tải trọng",
+          "D. Thông số tuyến và tốc độ",
+          "A. Phạm vi tăng nhiệt độ cho phép",
+          "04      KIỂM TRA KHE HỞ RAY",
+          "A. Kiểm tra khe hở ray",
+          "A. Tính toán lực dọc",
+          "B. Kiểm tra kết cấu đường ray",
+          "C. Kiểm tra trụ cầu",
+          "07      RAY KHÔNG MỐI TRONG GHI",
+          "05      TÍNH TOÁN CO GIÃN VÙNG ĐỆM",
+          "A. Tính toán co giãn vùng ray đệm"
+        ],
+        "table_count": 0,
+        "tables": []
+      },
+      {
+        "slide": 3,
+        "texts": [
+          "02",
+          "MỤC LỤC (giải thích)",
+          "03      KIỂM TRA ỔN ĐỊNH ĐƯỜNG RAY",
+          "02       KIỂM TRA CƯỜNG ĐỘ RAY",
+          "Kiểm tra ứng suất trong thanh ray nhỏ hơn ứng suất cho phép của thép làm ray.\nKiểm tra biên giảm nhiệt độ lớn nhất mà ray không bị đứt",
+          "05      RAY KHÔNG MỐI TRÊN CẦU",
+          "Kiểm tra biên tăng nhiệt độ lớn nhất mà đường ray không mất ổn đinh",
+          "04      KIỂM TRA KHE HỞ RAY",
+          "Kiểm tra khe hở ray trong trường hợp ray bị đứt so sánh với khe hở quy định (Đã có)",
+          "Kiểm toán mố, trụ cầu",
+          "06      RAY KHÔNG MỐI TRONG GHI",
+          "(tính toán sau)",
+          "04      TÍNH TOÁN CO GIÃN VÙNG ĐỆM",
+          "Tính toán lượng co giãn ray vùng đệm gồm ray dài và ray đệm (Đã có)"
+        ],
+        "table_count": 0,
+        "tables": []
+      },
+      {
+        "slide": 4,
+        "texts": [
+          "03",
+          "01 CÁC THÔNG SỐ ĐẦU VÀO",
+          "A. Thông số về nhiệt độ và tính toán nhiệt độ khoá đường theo từng vùng của Việt Nam",
+          "1. Lập bảng dữ liệu nhiệt độ không khí thấp nhất và cao nhất tuyệt đối của từng vùng theo QCVN 02:2022/BXD",
+          "2. Nhiệt độ ray thấp nhất = nhiệt độ không khí thấp nhất, cao nhất = nhiệt độ không khí cao nhất + 20 độ C",
+          "3. Tính toán nhiệt độ khoá ray (là 1 phần của bảng tính ray hàn dài)"
+        ],
+        "table_count": 0,
+        "tables": []
+      },
+      {
+        "slide": 5,
+        "texts": [
+          "04",
+          "01 CÁC THÔNG SỐ ĐẦU VÀO",
+          "B. Thông số ray và tà vẹt",
+          "Lập bảng dữ liệu về ray bao gồm:\nLoại ray (theo kích thước ray), mỗi loại ray gồm đầy đủ thông tin về hình học và cơ lý như sau:\n- Diện tích (mm2), trọng lượng mét (kg/m), độ mòn (để tính trường hợp nâng cấp ray cũ), giới hạn chảy của thép ray (Mpa), hệ số an toàn (K) tự chọn (1.3), ứng suất cho phép của ray (Mpa), module đàn hồi thép làm ray, hệ số giãn nở nhiệt, lực cản mối nối,\nGiá trị cho phép khe hở ray",
+          "2. Lập bảng dữ liệu về tà vẹt bao gồm:\nLoại đường Ballast hay không ballast và tra ra\ncác thông số lực cản sau đây:\nCó ballast thì bao nhiêu thanh tà vẹt /km\nLưu ý với phụ kiện sức cản nhỏ (trên cầu)\nCó dữ liệu nhập khoảng cách tà vẹt"
+        ],
+        "table_count": 0,
+        "tables": []
+      },
+      {
+        "slide": 6,
+        "texts": [
+          "04",
+          "01 CÁC THÔNG SỐ ĐẦU VÀO",
+          "B. Thông số ray và tà vẹt",
+          "3. Lập bảng dữ liệu độ cứng gối ray",
+          "Lập bảng để tra độ cứng gối ray D tương ứng với từng loại kết cấu để tính ra module đàn hồi của nền ray và độ cứng tương đối giữa nền và ray"
+        ],
+        "table_count": 0,
+        "tables": []
+      },
+      {
+        "slide": 7,
+        "texts": [
+          "04",
+          "01 CÁC THÔNG SỐ ĐẦU VÀO",
+          "B. Thông số ray và tà vẹt",
+          "4. Sức cản ngang của nền tà vẹt bê tông"
+        ],
+        "table_count": 0,
+        "tables": []
+      },
+      {
+        "slide": 8,
+        "texts": [
+          "04",
+          "01 CÁC THÔNG SỐ ĐẦU VÀO",
+          "C. Thông số về tải trọng và tốc độ",
+          "Lập bảng dữ liệu như sau:\nTải trọng tĩnh của bánh xe (KN), hệ số tốc độ, tốc độ thiết kế, loại sức khéo\nHệ số lực ngang và hệ số lệch tải\nNên vẽ sơ đồ tải trọng trục, khoảng cách trục\nGhi chú: Làm rõ phương pháp tính tại từng mặt cắt bánh xe ở phần sau",
+          "D. Thông số về tuyến và tốc độ",
+          "Nhập thông số đường cong R (=0 khi là đường thẳng)\nNhập giá trị siêu cao\nNhập giá trị H (Chiều cao trọng tâm của đầu máy hoặc toa xe (2300) khoảng cách ray trong và ray ngoài (1435 là 1500mm, 1000 có ô nhập)\nTính hệ số lệch tải f\nCó ô chọn đoạn tính trên cầu, hay trên đường"
+        ],
+        "table_count": 0,
+        "tables": []
+      },
+      {
+        "slide": 9,
+        "texts": [
+          "04",
+          "02 KIỂM TRA CƯỜNG ĐỘ RAY",
+          "A. Kiểm tra cường độ ray",
+          "1. Theo công thức (A.0.4-7), lần lượt lấy các vị trí bánh xe khác nhau làm mặt cắt tính toán, tính toán theo từng bánh xe, lấy giá trị lớn nhất để kiểm tra cường độ ray không mối nối. Ghi chú: làm rõ chi tiết về phần này"
+        ],
+        "table_count": 0,
+        "tables": []
+      },
+      {
+        "slide": 10,
+        "texts": [
+          "04",
+          "02 KIỂM TRA CƯỜNG ĐỘ RAY",
+          "B. Phạm vi giảm nhiệt độ cho phép (giảm nhiệt độ thấp nhất mà ray không bị đứt)",
+          "1. Theo công thức (4.1.2)",
+          "Giá trị này không so sánh mà tính ra biên độ nhiệt giảm thấp nhất mà ray không bị đứt"
+        ],
+        "table_count": 0,
+        "tables": []
+      },
+      {
+        "slide": 11,
+        "texts": [
+          "04",
+          "03 KIỂM TRA ỔN ĐỊNH ĐƯỜNG RAY",
+          "Phạm vi tăng nhiệt độ cho phép (tăng nhiệt độ cao nhất mà ray không mất ổn định - buckling)\nPhương pháp: “Ổn định đường ray mối nối thống nhất”",
+          "Tính toán lực nhiệt Pw (В. 0.3-4)",
+          "l (В. 0.3-5)",
+          "Phạm vi tăng nhiệt độ cho phép (В. 0.3-7)",
+          "K=1.3"
+        ],
+        "table_count": 0,
+        "tables": []
+      },
+      {
+        "slide": 12,
+        "texts": [
+          "04",
+          "03 KIỂM TRA ỔN ĐỊNH ĐƯỜNG RAY",
+          "B. Phạm vi tăng nhiệt độ cho phép (tăng nhiệt độ cao nhất mà ray không mất ổn định - buckling)\nPhương pháp: “Ổn định bước sóng không đều”",
+          "NGHIÊN CỨU SAU VÌ KHÁ PHỨC TẠP"
+        ],
+        "table_count": 0,
+        "tables": []
+      },
+      {
+        "slide": 13,
+        "texts": [
+          "04",
+          "04 KIỂM TRA KHE HỞ RAY",
+          "ĐÃ TÍNH TOÁN TRONG APP, TÍCH HỢP ĐỒNG BỘ SAU"
+        ],
+        "table_count": 0,
+        "tables": []
+      },
+      {
+        "slide": 14,
+        "texts": [
+          "04",
+          "05 TÍNH TOÁN KHE HỞ RAY VÙNG ĐỆM",
+          "ĐÃ TÍNH TOÁN TRONG APP, TÍCH HỢP ĐỒNG BỘ SAU"
+        ],
+        "table_count": 0,
+        "tables": []
+      },
+      {
+        "slide": 15,
+        "texts": [
+          "04",
+          "06 TÍNH TOÁN RAY KHÔNG MỐI NỐI TRÊN CẦU",
+          "NỘI DUNG TÀI LIỆU TÍNH TOÁN BAO GỒM\nBẢNG NHẬP LIỆU (TOÀN BỘ DỮ LIỆU ĐẦU VÀO)\nBẢNG TỔNG HỢP KẾT QUẢ TÍNH\nBẢNG TÍNH CƯỜNG ĐỘ RAY\n- BẢNG TÍNH CƯỜNG ĐỘ RAY\n- BẢNG TÍNH PHẠM VI GIẢM NHIỆT ĐỘ CHO PHÉP\n4.   BẢNG TÍNH ỔN ĐỊNH RAY\n- BẢNG TÍNH PHẠM VI TĂNG NHIỆT ĐỘ CHO PHÉP",
+          "GHI CHÚ: VỚI MỖI BẢNG TÍNH, CẦN CÓ THÔNG SỐ ĐẦU VÀO LIÊN QUAN BẢNG TÍNH ĐÓ\n(GIỐNG NHƯ CÁC BẢNG TÍNH KHÁC ĐÃ LẬP TRONG APP)\nBẢNG TÍNH MẪU EXCEL ĐÍNH KÈM"
+        ],
+        "table_count": 0,
+        "tables": []
+      }
+    ],
+    "tables": [],
+    "text": "TÍNH TOÁN\nRAY HÀN LIỀN THEO TIÊU CHUẨN TB 10015\n\n01\n\n02\n\n01      CÁC THÔNG SỐ ĐẦU VÀO\n\nMỤC LỤC\n\n03      KIỂM TRA ỔN ĐỊNH ĐƯỜNG RAY\n\n02       KIỂM TRA CƯỜNG ĐỘ RAY\n\nA. Thông số về nhiệt độ và tính toán nhiệt độ khoá đường theo từng vùng của Việt Nam\n\nB. Thông số về ray, phụ kiện, tà vẹt\n\nA. Kiểm tra cường độ ray\n\nB. Phạm vi giảm nhiệt độ cho phép\n\n06      RAY KHÔNG MỐI NỐI TRÊN CẦU\n\nC. Thông số về tải trọng\n\nD. Thông số tuyến và tốc độ\n\nA. Phạm vi tăng nhiệt độ cho phép\n\n04      KIỂM TRA KHE HỞ RAY\n\nA. Kiểm tra khe hở ray\n\nA. Tính toán lực dọc\n\nB. Kiểm tra kết cấu đường ray\n\nC. Kiểm tra trụ cầu\n\n07      RAY KHÔNG MỐI TRONG GHI\n\n05      TÍNH TOÁN CO GIÃN VÙNG ĐỆM\n\nA. Tính toán co giãn vùng ray đệm\n\n02\n\nMỤC LỤC (giải thích)\n\n03      KIỂM TRA ỔN ĐỊNH ĐƯỜNG RAY\n\n02       KIỂM TRA CƯỜNG ĐỘ RAY\n\nKiểm tra ứng suất trong thanh ray nhỏ hơn ứng suất cho phép của thép làm ray.\nKiểm tra biên giảm nhiệt độ lớn nhất mà ray không bị đứt\n\n05      RAY KHÔNG MỐI TRÊN CẦU\n\nKiểm tra biên tăng nhiệt độ lớn nhất mà đường ray không mất ổn đinh\n\n04      KIỂM TRA KHE HỞ RAY\n\nKiểm tra khe hở ray trong trường hợp ray bị đứt so sánh với khe hở quy định (Đã có)\n\nKiểm toán mố, trụ cầu\n\n06      RAY KHÔNG MỐI TRONG GHI\n\n(tính toán sau)\n\n04      TÍNH TOÁN CO GIÃN VÙNG ĐỆM\n\nTính toán lượng co giãn ray vùng đệm gồm ray dài và ray đệm (Đã có)\n\n03\n\n01 CÁC THÔNG SỐ ĐẦU VÀO\n\nA. Thông số về nhiệt độ và tính toán nhiệt độ khoá đường theo từng vùng của Việt Nam\n\n1. Lập bảng dữ liệu nhiệt độ không khí thấp nhất và cao nhất tuyệt đối của từng vùng theo QCVN 02:2022/BXD\n\n2. Nhiệt độ ray thấp nhất = nhiệt độ không khí thấp nhất, cao nhất = nhiệt độ không khí cao nhất + 20 độ C\n\n3. Tính toán nhiệt độ khoá ray (là 1 phần của bảng tính ray hàn dài)\n\n04\n\n01 CÁC THÔNG SỐ ĐẦU VÀO\n\nB. Thông số ray và tà vẹt\n\nLập bảng dữ liệu về ray bao gồm:\nLoại ray (theo kích thước ray), mỗi loại ray gồm đầy đủ thông tin về hình học và cơ lý như sau:\n- Diện tích (mm2), trọng lượng mét (kg/m), độ mòn (để tính trường hợp nâng cấp ray cũ), giới hạn chảy của thép ray (Mpa), hệ số an toàn (K) tự chọn (1.3), ứng suất cho phép của ray (Mpa), module đàn hồi thép làm ray, hệ số giãn nở nhiệt, lực cản mối nối,\nGiá trị cho phép khe hở ray\n\n2. Lập bảng dữ liệu về tà vẹt bao gồm:\nLoại đường Ballast hay không ballast và tra ra\ncác thông số lực cản sau đây:\nCó ballast thì bao nhiêu thanh tà vẹt /km\nLưu ý với phụ kiện sức cản nhỏ (trên cầu)\nCó dữ liệu nhập khoảng cách tà vẹt\n\n04\n\n01 CÁC THÔNG SỐ ĐẦU VÀO\n\nB. Thông số ray và tà vẹt\n\n3. Lập bảng dữ liệu độ cứng gối ray\n\nLập bảng để tra độ cứng gối ray D tương ứng với từng loại kết cấu để tính ra module đàn hồi của nền ray và độ cứng tương đối giữa nền và ray\n\n04\n\n01 CÁC THÔNG SỐ ĐẦU VÀO\n\nB. Thông số ray và tà vẹt\n\n4. Sức cản ngang của nền tà vẹt bê tông\n\n04\n\n01 CÁC THÔNG SỐ ĐẦU VÀO\n\nC. Thông số về tải trọng và tốc độ\n\nLập bảng dữ liệu như sau:\nTải trọng tĩnh của bánh xe (KN), hệ số tốc độ, tốc độ thiết kế, loại sức khéo\nHệ số lực ngang và hệ số lệch tải\nNên vẽ sơ đồ tải trọng trục, khoảng cách trục\nGhi chú: Làm rõ phương pháp tính tại từng mặt cắt bánh xe ở phần sau\n\nD. Thông số về tuyến và tốc độ\n\nNhập thông số đường cong R (=0 khi là đường thẳng)\nNhập giá trị siêu cao\nNhập giá trị H (Chiều cao trọng tâm của đầu máy hoặc toa xe (2300) khoảng cách ray trong và ray ngoài (1435 là 1500mm, 1000 có ô nhập)\nTính hệ số lệch tải f\nCó ô chọn đoạn tính trên cầu, hay trên đường\n\n04\n\n02 KIỂM TRA CƯỜNG ĐỘ RAY\n\nA. Kiểm tra cường độ ray\n\n1. Theo công thức (A.0.4-7), lần lượt lấy các vị trí bánh xe khác nhau làm mặt cắt tính toán, tính toán theo từng bánh xe, lấy giá trị lớn nhất để kiểm tra cường độ ray không mối nối. Ghi chú: làm rõ chi tiết về phần này\n\n04\n\n02 KIỂM TRA CƯỜNG ĐỘ RAY\n\nB. Phạm vi giảm nhiệt độ cho phép (giảm nhiệt độ thấp nhất mà ray không bị đứt)\n\n1. Theo công thức (4.1.2)\n\nGiá trị này không so sánh mà tính ra biên độ nhiệt giảm thấp nhất mà ray không bị đứt\n\n04\n\n03 KIỂM TRA ỔN ĐỊNH ĐƯỜNG RAY\n\nPhạm vi tăng nhiệt độ cho phép (tăng nhiệt độ cao nhất mà ray không mất ổn định - buckling)\nPhương pháp: “Ổn định đường ray mối nối thống nhất”\n\nTính toán lực nhiệt Pw (В. 0.3-4)\n\nl (В. 0.3-5)\n\nPhạm vi tăng nhiệt độ cho phép (В. 0.3-7)\n\nK=1.3\n\n04\n\n03 KIỂM TRA ỔN ĐỊNH ĐƯỜNG RAY\n\nB. Phạm vi tăng nhiệt độ cho phép (tăng nhiệt độ cao nhất mà ray không mất ổn định - buckling)\nPhương pháp: “Ổn định bước sóng không đều”\n\nNGHIÊN CỨU SAU VÌ KHÁ PHỨC TẠP\n\n04\n\n04 KIỂM TRA KHE HỞ RAY\n\nĐÃ TÍNH TOÁN TRONG APP, TÍCH HỢP ĐỒNG BỘ SAU\n\n04\n\n05 TÍNH TOÁN KHE HỞ RAY VÙNG ĐỆM\n\nĐÃ TÍNH TOÁN TRONG APP, TÍCH HỢP ĐỒNG BỘ SAU\n\n04\n\n06 TÍNH TOÁN RAY KHÔNG MỐI NỐI TRÊN CẦU\n\nNỘI DUNG TÀI LIỆU TÍNH TOÁN BAO GỒM\nBẢNG NHẬP LIỆU (TOÀN BỘ DỮ LIỆU ĐẦU VÀO)\nBẢNG TỔNG HỢP KẾT QUẢ TÍNH\nBẢNG TÍNH CƯỜNG ĐỘ RAY\n- BẢNG TÍNH CƯỜNG ĐỘ RAY\n- BẢNG TÍNH PHẠM VI GIẢM NHIỆT ĐỘ CHO PHÉP\n4.   BẢNG TÍNH ỔN ĐỊNH RAY\n- BẢNG TÍNH PHẠM VI TĂNG NHIỆT ĐỘ CHO PHÉP\n\nGHI CHÚ: VỚI MỖI BẢNG TÍNH, CẦN CÓ THÔNG SỐ ĐẦU VÀO LIÊN QUAN BẢNG TÍNH ĐÓ\n(GIỐNG NHƯ CÁC BẢNG TÍNH KHÁC ĐÃ LẬP TRONG APP)\nBẢNG TÍNH MẪU EXCEL ĐÍNH KÈM"
+  }
+}

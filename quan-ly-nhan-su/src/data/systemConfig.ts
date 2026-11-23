@@ -174,9 +174,22 @@ export const initialAccounts: InitialAccount[] = [
   },
 ];
 
+/** Đang test: chỉ các SĐT này được thấy / thao tác menu Kiểm toán CWR. */
+export const KIEM_TOAN_CWR_TEST_PHONES = ["0965310233"] as const;
+
+export function isKiemToanCwrTab(tabId: string): boolean {
+  return tabId === "kiem-toan-cwr" || tabId.startsWith("kiem-toan-cwr-");
+}
+
+export function canAccessKiemToanCwrTest(phone: unknown): boolean {
+  const digits = normalizePhone(phone);
+  return (KIEM_TOAN_CWR_TEST_PHONES as readonly string[]).includes(digits);
+}
+
 /**
  * Quyền của email trên một chức năng — dùng chung cho giao diện và máy chủ.
  * Email chưa có trong danh sách tài khoản → không hạn chế; tài khoản Khóa → không có quyền nào.
+ * Tab Kiểm toán CWR (đang test) → chỉ SĐT trong KIEM_TOAN_CWR_TEST_PHONES.
  */
 export function checkPermission(
   config: Pick<StoredSystemConfiguration, "accounts" | "permissions">,
@@ -185,6 +198,9 @@ export function checkPermission(
   action: PermissionAction,
 ): boolean {
   const account = email ? config.accounts.find((a) => a.email.toLowerCase() === email.toLowerCase()) : undefined;
+  if (isKiemToanCwrTab(tabId)) {
+    if (!account || account.status === "Khóa" || !canAccessKiemToanCwrTest(account.phone)) return false;
+  }
   if (!account) return true;
   if (account.status === "Khóa") return false;
   const stored = config.permissions?.[account.role]?.[tabId];

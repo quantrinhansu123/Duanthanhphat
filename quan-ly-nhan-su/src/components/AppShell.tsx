@@ -80,6 +80,7 @@ const SystemConfiguration = dynamic(
   () => import("@/components/SystemConfiguration"), { loading: TabLoading, ssr: false });
 const LwrModuleEmbed = dynamic(() => import("@/components/LwrModuleEmbed"), { loading: TabLoading, ssr: false });
 const CwrFormulaReference = dynamic(() => import("@lwr/components/CwrFormulaReference"), { loading: TabLoading, ssr: false });
+const Tb15CatalogPage = dynamic(() => import("@/components/Tb15CatalogPage"), { loading: TabLoading, ssr: false });
 
 /** Trang chủ `/` — menu nhập liệu nhanh (không nằm trong navigation). */
 const HOME_TAB = "home";
@@ -124,6 +125,14 @@ const viewRenderers: Record<string, () => React.ReactNode> = {
   ),
   "lwr-track-map": () => <LwrModuleEmbed path="/" title="Tổng quan (Track Map)" />,
   "lwr-cong-thuc-tb10015": () => <CwrFormulaReference />,
+  "kiem-toan-cwr-nhiet-do-vung": () => <Tb15CatalogPage tabId="kiem-toan-cwr-nhiet-do-vung" />,
+  "kiem-toan-cwr-loai-ray": () => <Tb15CatalogPage tabId="kiem-toan-cwr-loai-ray" />,
+  "kiem-toan-cwr-mac-thep": () => <Tb15CatalogPage tabId="kiem-toan-cwr-mac-thep" />,
+  "kiem-toan-cwr-ket-cau-duong": () => <Tb15CatalogPage tabId="kiem-toan-cwr-ket-cau-duong" />,
+  "kiem-toan-cwr-do-cung-goi-ray": () => <Tb15CatalogPage tabId="kiem-toan-cwr-do-cung-goi-ray" />,
+  "kiem-toan-cwr-on-dinh-nen-da": () => <Tb15CatalogPage tabId="kiem-toan-cwr-on-dinh-nen-da" />,
+  "kiem-toan-cwr-he-so-van-toc-luc-ngang": () => <Tb15CatalogPage tabId="kiem-toan-cwr-he-so-van-toc-luc-ngang" />,
+  "kiem-toan-cwr-so-do-tai-banh-xe": () => <Tb15CatalogPage tabId="kiem-toan-cwr-so-do-tai-banh-xe" />,
   "lwr-cong-trinh": () => <LwrModuleEmbed path="/cong-trinh" title="Ký hiệu công trình" />,
   "lwr-nhap-bao-cao": () => <RailReportEntry />,
   "thu-vien-loi-moi-han": () => <ErrorLibrary mode="ndt" />,

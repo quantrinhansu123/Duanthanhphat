@@ -1,0 +1,31 @@
+{
+  "updated_at": "2026-11-23T11:04:42.510482+00:00",
+  "count": 2,
+  "files": [
+    {
+      "saved_at": "2026-11-23T11:03:55.905964+00:00",
+      "source": "C:\\Users\\Admin\\Desktop\\ThanhPhat\\TB 10015-2012 - Bảng tính thiết kế kiểm toán CWR.xlsx",
+      "name": "TB 10015-2012 - Bảng tính thiết kế kiểm toán CWR.xlsx",
+      "format": "xlsx",
+      "output": "C:\\Users\\Admin\\Desktop\\project\\Duanthanhphat\\.ai\\output\\thanhphat\\TB_10015-2012_-_Bảng_tính_thiết_kế_kiểm_toán_CWR_20261123T110355Z.json",
+      "stats": {
+        "sheet_count": 11,
+        "total_rows": 1007,
+        "filled_cells": 4794
+      }
+    },
+    {
+      "saved_at": "2026-11-23T11:04:42.510482+00:00",
+      "source": "C:\\Users\\Admin\\Desktop\\ThanhPhat\\Tính toán ray hàn liền theo tiêu chuẩn TB10015_Part I.pptx",
+      "name": "Tính toán ray hàn liền theo tiêu chuẩn TB10015_Part I.pptx",
+      "format": "pptx",
+      "output": "C:\\Users\\Admin\\Desktop\\project\\Duanthanhphat\\.ai\\output\\thanhphat\\Tính_toán_ray_hàn_liền_theo_tiêu_chuẩn_TB10015_Part_I_20261123T110442Z.json",
+      "stats": {
+        "slide_count": 15,
+        "table_count": 0,
+        "char_count": 5002,
+        "word_count": 1112
+      }
+    }
+  ]
+}

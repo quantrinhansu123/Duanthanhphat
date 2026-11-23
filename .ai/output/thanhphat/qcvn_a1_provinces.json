@@ -1,0 +1,2610 @@
+{
+  "a1": [
+    {
+      "tinh": "Lai Châu",
+      "huyen": "Mường Tè",
+      "ten_tram": "Mường Tè",
+      "kinh_do": "102.83",
+      "vi_do": "22.37",
+      "cao_do": "310",
+      "page": 112
+    },
+    {
+      "tinh": "Lai Châu",
+      "huyen": "Sìn Hồ",
+      "ten_tram": "Sìn Hồ",
+      "kinh_do": "103.23",
+      "vi_do": "22.37",
+      "cao_do": "1529",
+      "page": 112
+    },
+    {
+      "tinh": "Lai Châu",
+      "huyen": "TP. Lai Châu",
+      "ten_tram": "Tam Đường",
+      "kinh_do": "103.48",
+      "vi_do": "22.42",
+      "cao_do": "900",
+      "page": 112
+    },
+    {
+      "tinh": "Lai Châu",
+      "huyen": "Than Uyên",
+      "ten_tram": "Than Uyên",
+      "kinh_do": "103.88",
+      "vi_do": "21.95",
+      "cao_do": "556",
+      "page": 112
+    },
+    {
+      "tinh": "Lai Châu",
+      "huyen": "Mường Lay",
+      "ten_tram": "Lai Châu",
+      "kinh_do": "103.15",
+      "vi_do": "22.07",
+      "cao_do": "244",
+      "page": 112
+    },
+    {
+      "tinh": "Điện Biên",
+      "huyen": "Tuần Giáo",
+      "ten_tram": "Tuần Giáo",
+      "kinh_do": "103.42",
+      "vi_do": "21.58",
+      "cao_do": "570",
+      "page": 112
+    },
+    {
+      "tinh": "Điện Biên",
+      "huyen": "Tuần Giáo",
+      "ten_tram": "Pha Đin",
+      "kinh_do": "103.52",
+      "vi_do": "21.57",
+      "cao_do": "1347",
+      "page": 112
+    },
+    {
+      "tinh": "Điện Biên",
+      "huyen": "Điện Biên Đông",
+      "ten_tram": "Điện Biên",
+      "kinh_do": "103.00",
+      "vi_do": "21.37",
+      "cao_do": "479",
+      "page": 112
+    },
+    {
+      "tinh": "Sơn La",
+      "huyen": "Quỳnh Nhai",
+      "ten_tram": "Quỳnh Nhai",
+      "kinh_do": "103.57",
+      "vi_do": "21.85",
+      "cao_do": "802",
+      "page": 112
+    },
+    {
+      "tinh": "Sơn La",
+      "huyen": "Sông Mã",
+      "ten_tram": "Sông Mã",
+      "kinh_do": "103.73",
+      "vi_do": "21.07",
+      "cao_do": "302",
+      "page": 112
+    },
+    {
+      "tinh": "Sơn La",
+      "huyen": "Mai Sơn",
+      "ten_tram": "Cò Nòi",
+      "kinh_do": "104.15",
+      "vi_do": "21.13",
+      "cao_do": "704",
+      "page": 112
+    },
+    {
+      "tinh": "Sơn La",
+      "huyen": "Yên Châu",
+      "ten_tram": "Yên Châu",
+      "kinh_do": "104.30",
+      "vi_do": "21.05",
+      "cao_do": "59",
+      "page": 112
+    },
+    {
+      "tinh": "Sơn La",
+      "huyen": "Bắc Yên",
+      "ten_tram": "Bắc Yên",
+      "kinh_do": "104.42",
+      "vi_do": "21.25",
+      "cao_do": "65",
+      "page": 112
+    },
+    {
+      "tinh": "Sơn La",
+      "huyen": "Phù Yên",
+      "ten_tram": "Phù Yên",
+      "kinh_do": "104.63",
+      "vi_do": "21.27",
+      "cao_do": "182",
+      "page": 112
+    },
+    {
+      "tinh": "Sơn La",
+      "huyen": "Mộc Châu",
+      "ten_tram": "Mộc Châu",
+      "kinh_do": "104.68",
+      "vi_do": "20.83",
+      "cao_do": "958",
+      "page": 112
+    },
+    {
+      "tinh": "Sơn La",
+      "huyen": "Sơn La",
+      "ten_tram": "Sơn La",
+      "kinh_do": "103.90",
+      "vi_do": "21.33",
+      "cao_do": "676",
+      "page": 112
+    },
+    {
+      "tinh": "Hoà Bình",
+      "huyen": "Kim Bôi",
+      "ten_tram": "Kim Bôi",
+      "kinh_do": "105.53",
+      "vi_do": "20.67",
+      "cao_do": "100",
+      "page": 112
+    },
+    {
+      "tinh": "Hoà Bình",
+      "huyen": "Mai Châu",
+      "ten_tram": "Mai Châu",
+      "kinh_do": "105.05",
+      "vi_do": "20.65",
+      "cao_do": "160",
+      "page": 112
+    },
+    {
+      "tinh": "Hoà Bình",
+      "huyen": "Lạc Thuỷ",
+      "ten_tram": "Chi Nê",
+      "kinh_do": "105.78",
+      "vi_do": "20.48",
+      "cao_do": "25",
+      "page": 112
+    },
+    {
+      "tinh": "Hoà Bình",
+      "huyen": "Lạc Sơn",
+      "ten_tram": "Lạc Sơn",
+      "kinh_do": "105.45",
+      "vi_do": "20.45",
+      "cao_do": "40",
+      "page": 112
+    },
+    {
+      "tinh": "Hoà Bình",
+      "huyen": "TP. Hoà Bình",
+      "ten_tram": "Hoà Bình",
+      "kinh_do": "105.33",
+      "vi_do": "20.82",
+      "cao_do": "23",
+      "page": 112
+    },
+    {
+      "tinh": "Hà Giang",
+      "huyen": "Hoàng Su Phì",
+      "ten_tram": "Hoàng Su Phì",
+      "kinh_do": "104.68",
+      "vi_do": "22.75",
+      "cao_do": "553",
+      "page": 112
+    },
+    {
+      "tinh": "Hà Giang",
+      "huyen": "Bắc Mê",
+      "ten_tram": "Bắc Mê",
+      "kinh_do": "105.37",
+      "vi_do": "22.73",
+      "cao_do": "74",
+      "page": 112
+    },
+    {
+      "tinh": "Hà Giang",
+      "huyen": "Bắc Quang",
+      "ten_tram": "Bắc Quang",
+      "kinh_do": "104.87",
+      "vi_do": "22.50",
+      "cao_do": "73",
+      "page": 112
+    },
+    {
+      "tinh": "Hà Giang",
+      "huyen": "TP. Hà Giang",
+      "ten_tram": "Hà Giang",
+      "kinh_do": "104.97",
+      "vi_do": "22.82",
+      "cao_do": "118",
+      "page": 112
+    },
+    {
+      "tinh": "Lào Cai",
+      "huyen": "Bảo Yên",
+      "ten_tram": "Phố Ràng",
+      "kinh_do": "104.47",
+      "vi_do": "22.23",
+      "cao_do": "150",
+      "page": 112
+    },
+    {
+      "tinh": "Lào Cai",
+      "huyen": "Bắc Hà",
+      "ten_tram": "Bắc Hà",
+      "kinh_do": "104.28",
+      "vi_do": "22.53",
+      "cao_do": "957",
+      "page": 112
+    },
+    {
+      "tinh": "Lào Cai",
+      "huyen": "Sa Pa",
+      "ten_tram": "Sa Pa",
+      "kinh_do": "103.82",
+      "vi_do": "22.35",
+      "cao_do": "1570",
+      "page": 112
+    },
+    {
+      "tinh": "Yên Bái",
+      "huyen": "Mù Căng Chải",
+      "ten_tram": "Mù Căng Chải",
+      "kinh_do": "104.05",
+      "vi_do": "21.87",
+      "cao_do": "975",
+      "page": 113
+    },
+    {
+      "tinh": "Yên Bái",
+      "huyen": "Văn Chấn",
+      "ten_tram": "Văn Chấn",
+      "kinh_do": "104.52",
+      "vi_do": "21.58",
+      "cao_do": "257",
+      "page": 113
+    },
+    {
+      "tinh": "Yên Bái",
+      "huyen": "Lục Yên",
+      "ten_tram": "Lục Yên",
+      "kinh_do": "104.72",
+      "vi_do": "22.10",
+      "cao_do": "84",
+      "page": 113
+    },
+    {
+      "tinh": "Yên Bái",
+      "huyen": "TP. Yên Bái",
+      "ten_tram": "Yên Bái",
+      "kinh_do": "104.87",
+      "vi_do": "21.70",
+      "cao_do": "56",
+      "page": 113
+    },
+    {
+      "tinh": "Tuyên Quang",
+      "huyen": "Hàm Yên",
+      "ten_tram": "Hàm Yên",
+      "kinh_do": "105.03",
+      "vi_do": "22.07",
+      "cao_do": "47",
+      "page": 113
+    },
+    {
+      "tinh": "Tuyên Quang",
+      "huyen": "TP. Tuyên Quang",
+      "ten_tram": "Tuyên Quang",
+      "kinh_do": "105.22",
+      "vi_do": "21.82",
+      "cao_do": "42",
+      "page": 113
+    },
+    {
+      "tinh": "Tuyên Quang",
+      "huyen": "Chiêm Hoá",
+      "ten_tram": "Chiêm Hoá",
+      "kinh_do": "105.27",
+      "vi_do": "22.15",
+      "cao_do": "50",
+      "page": 113
+    },
+    {
+      "tinh": "Bắc Cạn",
+      "huyen": "Chợ Rã",
+      "ten_tram": "Chợ Rã",
+      "kinh_do": "105.72",
+      "vi_do": "22.45",
+      "cao_do": "210",
+      "page": 113
+    },
+    {
+      "tinh": "Bắc Cạn",
+      "huyen": "Ngân Sơn",
+      "ten_tram": "Ngân Sơn",
+      "kinh_do": "105.98",
+      "vi_do": "22.43",
+      "cao_do": "566",
+      "page": 113
+    },
+    {
+      "tinh": "Bắc Cạn",
+      "huyen": "TP. Bắc Cạn",
+      "ten_tram": "Bắc Cạn",
+      "kinh_do": "105.83",
+      "vi_do": "22.15",
+      "cao_do": "174",
+      "page": 113
+    },
+    {
+      "tinh": "Thái Nguyên",
+      "huyen": "Định Hoá",
+      "ten_tram": "Định Hoá",
+      "kinh_do": "105.63",
+      "vi_do": "21.92",
+      "cao_do": "220",
+      "page": 113
+    },
+    {
+      "tinh": "Thái Nguyên",
+      "huyen": "TP. Thái Nguyên",
+      "ten_tram": "Thái Nguyên",
+      "kinh_do": "105.83",
+      "vi_do": "21.60",
+      "cao_do": "36",
+      "page": 113
+    },
+    {
+      "tinh": "Phú Thọ",
+      "huyen": "Thanh Sơn",
+      "ten_tram": "Minh Đài",
+      "kinh_do": "105.05",
+      "vi_do": "21.17",
+      "cao_do": "100",
+      "page": 113
+    },
+    {
+      "tinh": "Phú Thọ",
+      "huyen": "Phong Châu",
+      "ten_tram": "Phú Hộ",
+      "kinh_do": "105.23",
+      "vi_do": "21.45",
+      "cao_do": "36",
+      "page": 113
+    },
+    {
+      "tinh": "Phú Thọ",
+      "huyen": "TP. Việt Trì",
+      "ten_tram": "Việt Trì",
+      "kinh_do": "105.42",
+      "vi_do": "21.30",
+      "cao_do": "17",
+      "page": 113
+    },
+    {
+      "tinh": "Vĩnh Phúc",
+      "huyen": "TP. Vĩnh Yên",
+      "ten_tram": "Tam Đảo",
+      "kinh_do": "105.65",
+      "vi_do": "21.47",
+      "cao_do": "897",
+      "page": 113
+    },
+    {
+      "tinh": "Vĩnh Phúc",
+      "huyen": "Vĩnh Yên",
+      "ten_tram": "Vĩnh Yên",
+      "kinh_do": "105.60",
+      "vi_do": "21.32",
+      "cao_do": "10",
+      "page": 113
+    },
+    {
+      "tinh": "Cao Bằng",
+      "huyen": "Bảo Lạc",
+      "ten_tram": "Bảo Lạc",
+      "kinh_do": "105.67",
+      "vi_do": "22.95",
+      "cao_do": "258",
+      "page": 113
+    },
+    {
+      "tinh": "Cao Bằng",
+      "huyen": "Nguyên Bình",
+      "ten_tram": "Nguyên Bình",
+      "kinh_do": "105.95",
+      "vi_do": "22.65",
+      "cao_do": "208",
+      "page": 113
+    },
+    {
+      "tinh": "Cao Bằng",
+      "huyen": "Trùng Khánh",
+      "ten_tram": "Trùng Khánh",
+      "kinh_do": "106.52",
+      "vi_do": "22.83",
+      "cao_do": "520",
+      "page": 113
+    },
+    {
+      "tinh": "Cao Bằng",
+      "huyen": "TP. Cao Bằng",
+      "ten_tram": "Cao Bằng",
+      "kinh_do": "106.25",
+      "vi_do": "22.67",
+      "cao_do": "258",
+      "page": 113
+    },
+    {
+      "tinh": "Lạng Sơn",
+      "huyen": "Bắc Sơn",
+      "ten_tram": "Bắc Sơn",
+      "kinh_do": "106.32",
+      "vi_do": "21.90",
+      "cao_do": "400",
+      "page": 113
+    },
+    {
+      "tinh": "Lạng Sơn",
+      "huyen": "Hữu Lũng",
+      "ten_tram": "Hữu Lũng",
+      "kinh_do": "106.35",
+      "vi_do": "21.50",
+      "cao_do": "40",
+      "page": 113
+    },
+    {
+      "tinh": "Lạng Sơn",
+      "huyen": "Đình Lập",
+      "ten_tram": "Đình Lập",
+      "kinh_do": "107.10",
+      "vi_do": "21.53",
+      "cao_do": "174",
+      "page": 113
+    },
+    {
+      "tinh": "Lạng Sơn",
+      "huyen": "Tràng Định",
+      "ten_tram": "Thất Khê",
+      "kinh_do": "106.47",
+      "vi_do": "22.25",
+      "cao_do": "275",
+      "page": 113
+    },
+    {
+      "tinh": "Lạng Sơn",
+      "huyen": "TP. Lạng Sơn",
+      "ten_tram": "Lạng Sơn",
+      "kinh_do": "106.77",
+      "vi_do": "21.83",
+      "cao_do": "258",
+      "page": 113
+    },
+    {
+      "tinh": "Bắc Giang",
+      "huyen": "Lục Ngạn",
+      "ten_tram": "Lục Ngạn",
+      "kinh_do": "106.55",
+      "vi_do": "21.38",
+      "cao_do": "15",
+      "page": 113
+    },
+    {
+      "tinh": "Bắc Giang",
+      "huyen": "Sơn Động",
+      "ten_tram": "Sơn Động",
+      "kinh_do": "106.85",
+      "vi_do": "21.33",
+      "cao_do": "59",
+      "page": 113
+    },
+    {
+      "tinh": "Bắc Giang",
+      "huyen": "TP. Bắc Giang",
+      "ten_tram": "Bắc Giang",
+      "kinh_do": "106.22",
+      "vi_do": "21.30",
+      "cao_do": "7",
+      "page": 113
+    },
+    {
+      "tinh": "Bắc Giang",
+      "huyen": "Hiệp Hoà",
+      "ten_tram": "Hiệp Hoà",
+      "kinh_do": "105.97",
+      "vi_do": "21.35",
+      "cao_do": "5",
+      "page": 113
+    },
+    {
+      "tinh": "Quảng Ninh",
+      "huyen": "Uông Bí",
+      "ten_tram": "Uông Bí",
+      "kinh_do": "106.75",
+      "vi_do": "21.03",
+      "cao_do": "4",
+      "page": 114
+    },
+    {
+      "tinh": "Quảng Ninh",
+      "huyen": "Cô Tô",
+      "ten_tram": "Cô Tô",
+      "kinh_do": "107.77",
+      "vi_do": "20.98",
+      "cao_do": "70",
+      "page": 114
+    },
+    {
+      "tinh": "Quảng Ninh",
+      "huyen": "TP. Hạ Long",
+      "ten_tram": "Bãi Cháy",
+      "kinh_do": "107.07",
+      "vi_do": "20.97",
+      "cao_do": "87",
+      "page": 114
+    },
+    {
+      "tinh": "Quảng Ninh",
+      "huyen": "Cẩm Phả",
+      "ten_tram": "Cửa Ông",
+      "kinh_do": "107.35",
+      "vi_do": "21.02",
+      "cao_do": "60",
+      "page": 114
+    },
+    {
+      "tinh": "Quảng Ninh",
+      "huyen": "Tiên Yên",
+      "ten_tram": "Tiên Yên",
+      "kinh_do": "107.40",
+      "vi_do": "21.33",
+      "cao_do": "14",
+      "page": 114
+    },
+    {
+      "tinh": "Quảng Ninh",
+      "huyen": "Hải Ninh",
+      "ten_tram": "Móng Cái",
+      "kinh_do": "107.97",
+      "vi_do": "21.52",
+      "cao_do": "7",
+      "page": 114
+    },
+    {
+      "tinh": "Quảng Ninh",
+      "huyen": "Quảng Hà",
+      "ten_tram": "Quảng Hà",
+      "kinh_do": "107.75",
+      "vi_do": "21.45",
+      "cao_do": "6",
+      "page": 114
+    },
+    {
+      "tinh": "Hải Phòng",
+      "huyen": "Kiến An",
+      "ten_tram": "Phù Liễn",
+      "kinh_do": "106.63",
+      "vi_do": "20.80",
+      "cao_do": "113",
+      "page": 114
+    },
+    {
+      "tinh": "Hải Phòng",
+      "huyen": "Đồ Sơn",
+      "ten_tram": "Hòn Dấu",
+      "kinh_do": "106.80",
+      "vi_do": "20.67",
+      "cao_do": "38",
+      "page": 114
+    },
+    {
+      "tinh": "Hải Phòng",
+      "huyen": "Bạch Long Vĩ",
+      "ten_tram": "Bạch Long Vĩ",
+      "kinh_do": "107.72",
+      "vi_do": "20.13",
+      "cao_do": "63",
+      "page": 114
+    },
+    {
+      "tinh": "Hà Nội",
+      "huyen": "Ba Vì",
+      "ten_tram": "Ba Vì",
+      "kinh_do": "105.42",
+      "vi_do": "21.15",
+      "cao_do": "20",
+      "page": 114
+    },
+    {
+      "tinh": "Hà Nội",
+      "huyen": "Hà Đông",
+      "ten_tram": "Hà Đông",
+      "kinh_do": "105.75",
+      "vi_do": "20.97",
+      "cao_do": "5",
+      "page": 114
+    },
+    {
+      "tinh": "Hà Nội",
+      "huyen": "TX. Sơn Tây",
+      "ten_tram": "Sơn Tây",
+      "kinh_do": "105.50",
+      "vi_do": "21.13",
+      "cao_do": "7",
+      "page": 114
+    },
+    {
+      "tinh": "Hà Nội",
+      "huyen": "Đống Đa",
+      "ten_tram": "Láng",
+      "kinh_do": "105.80",
+      "vi_do": "21.03",
+      "cao_do": "5",
+      "page": 114
+    },
+    {
+      "tinh": "Hải Dương",
+      "huyen": "Chí Linh",
+      "ten_tram": "Chí Linh",
+      "kinh_do": "106.38",
+      "vi_do": "21.08",
+      "cao_do": "30",
+      "page": 114
+    },
+    {
+      "tinh": "Hải Dương",
+      "huyen": "TP. Hải Dương",
+      "ten_tram": "Hải Dương",
+      "kinh_do": "106.30",
+      "vi_do": "20.93",
+      "cao_do": "2",
+      "page": 114
+    },
+    {
+      "tinh": "Hưng Yên",
+      "huyen": "TP. Hưng Yên",
+      "ten_tram": "Hưng Yên",
+      "kinh_do": "106.05",
+      "vi_do": "20.65",
+      "cao_do": "4",
+      "page": 114
+    },
+    {
+      "tinh": "Nam Định",
+      "huyen": "TP. Nam Định",
+      "ten_tram": "Nam Định",
+      "kinh_do": "106.15",
+      "vi_do": "20.40",
+      "cao_do": "3",
+      "page": 114
+    },
+    {
+      "tinh": "Nam Định",
+      "huyen": "Hải Hậu",
+      "ten_tram": "Văn Lý",
+      "kinh_do": "106.30",
+      "vi_do": "20.12",
+      "cao_do": "3",
+      "page": 114
+    },
+    {
+      "tinh": "Thái Bình",
+      "huyen": "Kiến Xương",
+      "ten_tram": "Thái Bình",
+      "kinh_do": "106.35",
+      "vi_do": "20.45",
+      "cao_do": "3",
+      "page": 114
+    },
+    {
+      "tinh": "Hà Nam",
+      "huyen": "TP. Phủ Lý",
+      "ten_tram": "Hà Nam",
+      "kinh_do": "105.92",
+      "vi_do": "20.55",
+      "cao_do": "3",
+      "page": 114
+    },
+    {
+      "tinh": "Ninh Bình",
+      "huyen": "TP. Ninh Bình",
+      "ten_tram": "Ninh Bình",
+      "kinh_do": "105.97",
+      "vi_do": "20.23",
+      "cao_do": "2",
+      "page": 114
+    },
+    {
+      "tinh": "Ninh Bình",
+      "huyen": "Hoàng Long",
+      "ten_tram": "Nho Quan",
+      "kinh_do": "105.73",
+      "vi_do": "20.33",
+      "cao_do": "12",
+      "page": 114
+    },
+    {
+      "tinh": "Thanh Hoá",
+      "huyen": "Yên Định",
+      "ten_tram": "Yên Định",
+      "kinh_do": "105.67",
+      "vi_do": "19.98",
+      "cao_do": "9",
+      "page": 114
+    },
+    {
+      "tinh": "Thanh Hoá",
+      "huyen": "Thọ Xuân",
+      "ten_tram": "Bái Thượng",
+      "kinh_do": "105.38",
+      "vi_do": "19.90",
+      "cao_do": "21",
+      "page": 114
+    },
+    {
+      "tinh": "Thanh Hoá",
+      "huyen": "Như Thanh",
+      "ten_tram": "Như Xuân",
+      "kinh_do": "105.57",
+      "vi_do": "19.63",
+      "cao_do": "10",
+      "page": 114
+    },
+    {
+      "tinh": "Thanh Hoá",
+      "huyen": "TX. Nghi Sơn",
+      "ten_tram": "Tĩnh Gia",
+      "kinh_do": "105.78",
+      "vi_do": "19.45",
+      "cao_do": "5",
+      "page": 114
+    },
+    {
+      "tinh": "Thanh Hoá",
+      "huyen": "Quảng Xương",
+      "ten_tram": "Thanh Hoá",
+      "kinh_do": "105.78",
+      "vi_do": "19.75",
+      "cao_do": "5",
+      "page": 114
+    },
+    {
+      "tinh": "Thanh Hoá",
+      "huyen": "Quan Hoá",
+      "ten_tram": "Hồi Xuân",
+      "kinh_do": "105.12",
+      "vi_do": "20.37",
+      "cao_do": "87",
+      "page": 114
+    },
+    {
+      "tinh": "Nghệ An",
+      "huyen": "Quỳ Châu",
+      "ten_tram": "Quỳ Châu",
+      "kinh_do": "105.12",
+      "vi_do": "19.57",
+      "cao_do": "87",
+      "page": 115
+    },
+    {
+      "tinh": "Nghệ An",
+      "huyen": "Quỳ Hợp",
+      "ten_tram": "Quỳ Hợp",
+      "kinh_do": "105.15",
+      "vi_do": "19.32",
+      "cao_do": "88",
+      "page": 115
+    },
+    {
+      "tinh": "Nghệ An",
+      "huyen": "Nghĩa Đàn",
+      "ten_tram": "Tây Hiếu",
+      "kinh_do": "105.40",
+      "vi_do": "19.32",
+      "cao_do": "72",
+      "page": 115
+    },
+    {
+      "tinh": "Nghệ An",
+      "huyen": "Quỳnh Lưu",
+      "ten_tram": "Quỳnh Lưu",
+      "kinh_do": "105.63",
+      "vi_do": "19.17",
+      "cao_do": "3",
+      "page": 115
+    },
+    {
+      "tinh": "Nghệ An",
+      "huyen": "Con Cuông",
+      "ten_tram": "Con Cuông",
+      "kinh_do": "104.88",
+      "vi_do": "19.05",
+      "cao_do": "27",
+      "page": 115
+    },
+    {
+      "tinh": "Nghệ An",
+      "huyen": "Đô Lương",
+      "ten_tram": "Đô Lương",
+      "kinh_do": "105.30",
+      "vi_do": "18.90",
+      "cao_do": "4",
+      "page": 115
+    },
+    {
+      "tinh": "Nghệ An",
+      "huyen": "Tương Dương",
+      "ten_tram": "Tương Dương",
+      "kinh_do": "104.43",
+      "vi_do": "18.90",
+      "cao_do": "97",
+      "page": 115
+    },
+    {
+      "tinh": "Nghệ An",
+      "huyen": "TP. Vinh",
+      "ten_tram": "Vinh",
+      "kinh_do": "105.70",
+      "vi_do": "18.67",
+      "cao_do": "6",
+      "page": 115
+    },
+    {
+      "tinh": "Hà Tĩnh",
+      "huyen": "Hương Khê",
+      "ten_tram": "Hương Khê",
+      "kinh_do": "105.72",
+      "vi_do": "18.18",
+      "cao_do": "10",
+      "page": 115
+    },
+    {
+      "tinh": "Hà Tĩnh",
+      "huyen": "Kỳ Anh",
+      "ten_tram": "Kỳ Anh",
+      "kinh_do": "106.28",
+      "vi_do": "18.08",
+      "cao_do": "3",
+      "page": 115
+    },
+    {
+      "tinh": "Hà Tĩnh",
+      "huyen": "TP. Hà Tĩnh",
+      "ten_tram": "Hà Tĩnh",
+      "kinh_do": "105.90",
+      "vi_do": "18.35",
+      "cao_do": "3",
+      "page": 115
+    },
+    {
+      "tinh": "Quảng Bình",
+      "huyen": "Tuyên Hoá",
+      "ten_tram": "Tuyên Hoá",
+      "kinh_do": "106.02",
+      "vi_do": "17.88",
+      "cao_do": "25",
+      "page": 115
+    },
+    {
+      "tinh": "Quảng Bình",
+      "huyen": "Quảng Trạch",
+      "ten_tram": "Ba Đồn",
+      "kinh_do": "106.42",
+      "vi_do": "17.75",
+      "cao_do": "8",
+      "page": 115
+    },
+    {
+      "tinh": "Quảng Bình",
+      "huyen": "TP. Đồng Hới",
+      "ten_tram": "Đồng Hới",
+      "kinh_do": "106.60",
+      "vi_do": "17.48",
+      "cao_do": "7",
+      "page": 115
+    },
+    {
+      "tinh": "Quảng Trị",
+      "huyen": "Vĩnh Linh",
+      "ten_tram": "Cồn Cỏ",
+      "kinh_do": "107.33",
+      "vi_do": "17.17",
+      "cao_do": "6",
+      "page": 115
+    },
+    {
+      "tinh": "Quảng Trị",
+      "huyen": "TP. Đông Hà",
+      "ten_tram": "Đông Hà",
+      "kinh_do": "107.08",
+      "vi_do": "16.85",
+      "cao_do": "4",
+      "page": 115
+    },
+    {
+      "tinh": "Quảng Trị",
+      "huyen": "Hướng Hoá",
+      "ten_tram": "Khe Sanh",
+      "kinh_do": "106.73",
+      "vi_do": "16.63",
+      "cao_do": "367",
+      "page": 115
+    },
+    {
+      "tinh": "Thừa Thiên Huế",
+      "huyen": "A Lưới",
+      "ten_tram": "A Lưới",
+      "kinh_do": "107.28",
+      "vi_do": "16.22",
+      "cao_do": "600",
+      "page": 115
+    },
+    {
+      "tinh": "Thừa Thiên Huế",
+      "huyen": "Nam Đông",
+      "ten_tram": "Nam Đông",
+      "kinh_do": "107.72",
+      "vi_do": "16.17",
+      "cao_do": "15",
+      "page": 115
+    },
+    {
+      "tinh": "Thừa Thiên Huế",
+      "huyen": "Huế",
+      "ten_tram": "Huế",
+      "kinh_do": "107.58",
+      "vi_do": "16.43",
+      "cao_do": "17",
+      "page": 115
+    },
+    {
+      "tinh": "Đà Nẵng",
+      "huyen": "TP. Đà Nẵng",
+      "ten_tram": "Đà Nẵng",
+      "kinh_do": "108.20",
+      "vi_do": "16.03",
+      "cao_do": "6",
+      "page": 115
+    },
+    {
+      "tinh": "Quảng Nam",
+      "huyen": "TP. Tam Kỳ",
+      "ten_tram": "Tam Kỳ",
+      "kinh_do": "108.47",
+      "vi_do": "15.57",
+      "cao_do": "5",
+      "page": 115
+    },
+    {
+      "tinh": "Quảng Nam",
+      "huyen": "Trà My",
+      "ten_tram": "Trà My",
+      "kinh_do": "108.25",
+      "vi_do": "15.33",
+      "cao_do": "3",
+      "page": 115
+    },
+    {
+      "tinh": "Quảng Ngãi",
+      "huyen": "Ba Tơ",
+      "ten_tram": "Ba Tơ",
+      "kinh_do": "108.73",
+      "vi_do": "14.77",
+      "cao_do": "5",
+      "page": 115
+    },
+    {
+      "tinh": "Quảng Ngãi",
+      "huyen": "TP. Quảng Ngãi",
+      "ten_tram": "Quảng Ngãi",
+      "kinh_do": "108.80",
+      "vi_do": "15.12",
+      "cao_do": "8",
+      "page": 115
+    },
+    {
+      "tinh": "Quảng Ngãi",
+      "huyen": "Lý Sơn",
+      "ten_tram": "Lý Sơn",
+      "kinh_do": "109.15",
+      "vi_do": "15.38",
+      "cao_do": "12",
+      "page": 115
+    },
+    {
+      "tinh": "Bình Định",
+      "huyen": "Hoài Nhơn",
+      "ten_tram": "Hoài Nhơn",
+      "kinh_do": "109.03",
+      "vi_do": "14.52",
+      "cao_do": "6",
+      "page": 115
+    },
+    {
+      "tinh": "Bình Định",
+      "huyen": "TP. Quy Nhơn",
+      "ten_tram": "Quy Nhơn",
+      "kinh_do": "109.22",
+      "vi_do": "13.77",
+      "cao_do": "5",
+      "page": 115
+    },
+    {
+      "tinh": "Phú Yên",
+      "huyen": "Tây Sơn",
+      "ten_tram": "Sơn Hoà",
+      "kinh_do": "108.98",
+      "vi_do": "13.05",
+      "cao_do": "5",
+      "page": 115
+    },
+    {
+      "tinh": "Phú Yên",
+      "huyen": "TP. Tuy Hoà",
+      "ten_tram": "Tuy Hoà",
+      "kinh_do": "109.28",
+      "vi_do": "13.08",
+      "cao_do": "12",
+      "page": 115
+    },
+    {
+      "tinh": "Khánh Hoà",
+      "huyen": "TP. Nha Trang",
+      "ten_tram": "Nha Trang",
+      "kinh_do": "109.20",
+      "vi_do": "12.22",
+      "cao_do": "5",
+      "page": 116
+    },
+    {
+      "tinh": "Khánh Hoà",
+      "huyen": "Cam Ranh",
+      "ten_tram": "Cam Ranh",
+      "kinh_do": "109.15",
+      "vi_do": "11.92",
+      "cao_do": "7",
+      "page": 116
+    },
+    {
+      "tinh": "Khánh Hoà",
+      "huyen": "Trường Sa",
+      "ten_tram": "Trường Sa",
+      "kinh_do": "111.92",
+      "vi_do": "8.65",
+      "cao_do": "2",
+      "page": 116
+    },
+    {
+      "tinh": "Ninh Thuận",
+      "huyen": "TP. Phan Rang",
+      "ten_tram": "Phan Rang",
+      "kinh_do": "108.98",
+      "vi_do": "11.58",
+      "cao_do": "6",
+      "page": 116
+    },
+    {
+      "tinh": "Bình Thuận",
+      "huyen": "TP. Phan Thiết",
+      "ten_tram": "Phan Thiết",
+      "kinh_do": "108.10",
+      "vi_do": "10.93",
+      "cao_do": "9",
+      "page": 116
+    },
+    {
+      "tinh": "Bình Thuận",
+      "huyen": "Hàm Tân",
+      "ten_tram": "La Gi",
+      "kinh_do": "107.77",
+      "vi_do": "10.68",
+      "cao_do": "5",
+      "page": 116
+    },
+    {
+      "tinh": "Bình Thuận",
+      "huyen": "Phú Quý",
+      "ten_tram": "Phú Quý",
+      "kinh_do": "108.93",
+      "vi_do": "10.52",
+      "cao_do": "5",
+      "page": 116
+    },
+    {
+      "tinh": "Kon Tum",
+      "huyen": "Đắc Tô",
+      "ten_tram": "Đắc Tô",
+      "kinh_do": "107.83",
+      "vi_do": "14.65",
+      "cao_do": "500",
+      "page": 116
+    },
+    {
+      "tinh": "Kon Tum",
+      "huyen": "Kon Tum",
+      "ten_tram": "Kon Tum",
+      "kinh_do": "108.00",
+      "vi_do": "14.33",
+      "cao_do": "536",
+      "page": 116
+    },
+    {
+      "tinh": "Gia Lai",
+      "huyen": "TP. PlêiKu",
+      "ten_tram": "PlêiKu",
+      "kinh_do": "108.02",
+      "vi_do": "13.97",
+      "cao_do": "800",
+      "page": 116
+    },
+    {
+      "tinh": "Gia Lai",
+      "huyen": "An Khê",
+      "ten_tram": "An Khê",
+      "kinh_do": "108.65",
+      "vi_do": "13.95",
+      "cao_do": "150",
+      "page": 116
+    },
+    {
+      "tinh": "Gia Lai",
+      "huyen": "Ayunpa",
+      "ten_tram": "Ayunpa",
+      "kinh_do": "108.45",
+      "vi_do": "13.38",
+      "cao_do": "27",
+      "page": 116
+    },
+    {
+      "tinh": "Đắc Lắc",
+      "huyen": "M' Đrak",
+      "ten_tram": "M' Đrak",
+      "kinh_do": "108.77",
+      "vi_do": "12.73",
+      "cao_do": "478",
+      "page": 116
+    },
+    {
+      "tinh": "Đắc Lắc",
+      "huyen": "TP. Buôn Ma Thuột",
+      "ten_tram": "Buôn Ma Thuột",
+      "kinh_do": "108.05",
+      "vi_do": "12.67",
+      "cao_do": "490",
+      "page": 116
+    },
+    {
+      "tinh": "Đắc Lắc",
+      "huyen": "Krông Buk",
+      "ten_tram": "Buôn Hồ",
+      "kinh_do": "108.27",
+      "vi_do": "12.92",
+      "cao_do": "700",
+      "page": 116
+    },
+    {
+      "tinh": "Đắc Nông",
+      "huyen": "Đắc Nông",
+      "ten_tram": "Đắc Nông",
+      "kinh_do": "107.68",
+      "vi_do": "12.00",
+      "cao_do": "660",
+      "page": 116
+    },
+    {
+      "tinh": "Lâm Đồng",
+      "huyen": "Đức Trọng",
+      "ten_tram": "Liên Khương",
+      "kinh_do": "108.38",
+      "vi_do": "11.75",
+      "cao_do": "961",
+      "page": 116
+    },
+    {
+      "tinh": "Lâm Đồng",
+      "huyen": "TP. Đà Lạt",
+      "ten_tram": "Đà Lạt",
+      "kinh_do": "108.45",
+      "vi_do": "11.95",
+      "cao_do": "1513",
+      "page": 116
+    },
+    {
+      "tinh": "Lâm Đồng",
+      "huyen": "Bảo Lộc",
+      "ten_tram": "Bảo Lộc",
+      "kinh_do": "107.82",
+      "vi_do": "11.53",
+      "cao_do": "850",
+      "page": 116
+    },
+    {
+      "tinh": "Bình Phước",
+      "huyen": "Đồng Phú",
+      "ten_tram": "Đồng Xoài",
+      "kinh_do": "106.90",
+      "vi_do": "11.53",
+      "cao_do": "82",
+      "page": 116
+    },
+    {
+      "tinh": "Bình Phước",
+      "huyen": "Phước Long",
+      "ten_tram": "Phước Long",
+      "kinh_do": "106.98",
+      "vi_do": "11.83",
+      "cao_do": "245",
+      "page": 116
+    },
+    {
+      "tinh": "Tây Ninh",
+      "huyen": "TP. Tây Ninh",
+      "ten_tram": "Tây Ninh",
+      "kinh_do": "106.12",
+      "vi_do": "11.33",
+      "cao_do": "10",
+      "page": 116
+    },
+    {
+      "tinh": "Bà Rịa Vũng Tàu",
+      "huyen": "TP. Vũng Tàu",
+      "ten_tram": "Vũng Tàu",
+      "kinh_do": "107.08",
+      "vi_do": "10.37",
+      "cao_do": "4",
+      "page": 116
+    },
+    {
+      "tinh": "Bà Rịa Vũng Tàu",
+      "huyen": "Côn Đảo",
+      "ten_tram": "Côn Đảo",
+      "kinh_do": "106.60",
+      "vi_do": "8.68",
+      "cao_do": "7",
+      "page": 116
+    },
+    {
+      "tinh": "TP. Hồ Chí Minh",
+      "huyen": "Tân Bình",
+      "ten_tram": "Tân Sơn Hoà",
+      "kinh_do": "106.67",
+      "vi_do": "10.80",
+      "cao_do": "5",
+      "page": 116
+    },
+    {
+      "tinh": "Long An",
+      "huyen": "Mộc Hoá",
+      "ten_tram": "Mộc Hoá",
+      "kinh_do": "105.93",
+      "vi_do": "10.78",
+      "cao_do": "3",
+      "page": 116
+    },
+    {
+      "tinh": "Tiền Giang",
+      "huyen": "TP. Mỹ Tho",
+      "ten_tram": "Mỹ Tho",
+      "kinh_do": "106.40",
+      "vi_do": "10.35",
+      "cao_do": "2",
+      "page": 116
+    },
+    {
+      "tinh": "Đồng Tháp",
+      "huyen": "TP. Cao Lãnh",
+      "ten_tram": "Cao Lãnh",
+      "kinh_do": "105.63",
+      "vi_do": "10.47",
+      "cao_do": "2",
+      "page": 116
+    },
+    {
+      "tinh": "Bến Tre",
+      "huyen": "Ba Tri",
+      "ten_tram": "Ba Tri",
+      "kinh_do": "106.60",
+      "vi_do": "10.05",
+      "cao_do": "12",
+      "page": 116
+    },
+    {
+      "tinh": "Trà Vinh",
+      "huyen": "Càng Long",
+      "ten_tram": "Càng Long",
+      "kinh_do": "106.20",
+      "vi_do": "9.98",
+      "cao_do": "2",
+      "page": 117
+    },
+    {
+      "tinh": "An Giang",
+      "huyen": "TP. Châu Đốc",
+      "ten_tram": "Châu Đốc",
+      "kinh_do": "105.13",
+      "vi_do": "10.70",
+      "cao_do": "5",
+      "page": 117
+    },
+    {
+      "tinh": "Cần Thơ",
+      "huyen": "TP. Cần Thơ",
+      "ten_tram": "Cần Thơ",
+      "kinh_do": "105.77",
+      "vi_do": "10.03",
+      "cao_do": "3",
+      "page": 117
+    },
+    {
+      "tinh": "Sóc Trăng",
+      "huyen": "TP. Sóc Trăng",
+      "ten_tram": "Sóc Trăng",
+      "kinh_do": "105.97",
+      "vi_do": "9.60",
+      "cao_do": "3",
+      "page": 117
+    },
+    {
+      "tinh": "Kiên Giang",
+      "huyen": "TP. Rạch Giá",
+      "ten_tram": "Rạch Giá",
+      "kinh_do": "105.07",
+      "vi_do": "10.00",
+      "cao_do": "2",
+      "page": 117
+    },
+    {
+      "tinh": "Kiên Giang",
+      "huyen": "TP. Phú Quốc",
+      "ten_tram": "Phú Quốc",
+      "kinh_do": "103.97",
+      "vi_do": "10.22",
+      "cao_do": "2",
+      "page": 117
+    },
+    {
+      "tinh": "Bạc Liêu",
+      "huyen": "TP. Bạc Liêu",
+      "ten_tram": "Bạc Liêu",
+      "kinh_do": "105.72",
+      "vi_do": "9.28",
+      "cao_do": "2",
+      "page": 117
+    },
+    {
+      "tinh": "Cà Mau",
+      "huyen": "TP. Cà Mau",
+      "ten_tram": "Cà Mau",
+      "kinh_do": "105.15",
+      "vi_do": "9.18",
+      "cao_do": "3",
+      "page": 117
+    },
+    {
+      "tinh": "Vĩnh Long",
+      "huyen": "TP. Vĩnh Long",
+      "ten_tram": "Vĩnh Long",
+      "kinh_do": "105.58",
+      "vi_do": "10.25",
+      "cao_do": "3",
+      "page": 117
+    }
+  ],
+  "merged": [
+    {
+      "ten_tram": "Mường Tè",
+      "stt": 1,
+      "t_kk_max": 41.3,
+      "t_kk_min": 0.8,
+      "tinh": "Lai Châu",
+      "huyen": "Mường"
+    },
+    {
+      "ten_tram": "Sìn Hồ",
+      "stt": 2,
+      "t_kk_max": 30.8,
+      "t_kk_min": -4.5,
+      "tinh": "Lai Châu",
+      "huyen": "Sìn"
+    },
+    {
+      "ten_tram": "Tam Đường",
+      "stt": 3,
+      "t_kk_max": 34.7,
+      "t_kk_min": -0.4,
+      "tinh": "Lai Châu",
+      "huyen": "TP. Lai"
+    },
+    {
+      "ten_tram": "Than Uyên",
+      "stt": 4,
+      "t_kk_max": 37.5,
+      "t_kk_min": -2.8,
+      "tinh": "Lai Châu",
+      "huyen": "Than"
+    },
+    {
+      "ten_tram": "Lai Châu",
+      "stt": 5,
+      "t_kk_max": 42.2,
+      "t_kk_min": 3.4,
+      "tinh": "Lai Châu",
+      "huyen": "Mường"
+    },
+    {
+      "ten_tram": "Tuần Giáo",
+      "stt": 6,
+      "t_kk_max": 37.4,
+      "t_kk_min": -0.6,
+      "tinh": "Điện Biên",
+      "huyen": "Tuần"
+    },
+    {
+      "ten_tram": "Pha Đin",
+      "stt": 7,
+      "t_kk_max": 36.6,
+      "t_kk_min": -1.2,
+      "tinh": "Điện Biên",
+      "huyen": "2."
+    },
+    {
+      "ten_tram": "Điện Biên",
+      "stt": 8,
+      "t_kk_max": 37.9,
+      "t_kk_min": -1.3,
+      "tinh": "Điện Biên",
+      "huyen": "2."
+    },
+    {
+      "ten_tram": "Quỳnh Nhai",
+      "stt": 9,
+      "t_kk_max": 41.0,
+      "t_kk_min": 0.9,
+      "tinh": "Sơn La",
+      "huyen": "Quỳnh"
+    },
+    {
+      "ten_tram": "Sông Mã",
+      "stt": 10,
+      "t_kk_max": 41.7,
+      "t_kk_min": -0.8,
+      "tinh": "Sơn La",
+      "huyen": "Sông"
+    },
+    {
+      "ten_tram": "Cò Nòi",
+      "stt": 11,
+      "t_kk_max": 38.0,
+      "t_kk_min": -4.7,
+      "tinh": "Sơn La",
+      "huyen": "Mai"
+    },
+    {
+      "ten_tram": "Yên Châu",
+      "stt": 12,
+      "t_kk_max": 41.1,
+      "t_kk_min": -1.5,
+      "tinh": "Sơn La",
+      "huyen": "Yên"
+    },
+    {
+      "ten_tram": "Bắc Yên",
+      "stt": 13,
+      "t_kk_max": 37.5,
+      "t_kk_min": 1.7,
+      "tinh": "Sơn La",
+      "huyen": "Bắc"
+    },
+    {
+      "ten_tram": "Phù Yên",
+      "stt": 14,
+      "t_kk_max": 41.0,
+      "t_kk_min": -0.9,
+      "tinh": "Sơn La",
+      "huyen": "Phù"
+    },
+    {
+      "ten_tram": "Mộc Châu",
+      "stt": 15,
+      "t_kk_max": 35.0,
+      "t_kk_min": -1.5,
+      "tinh": "Sơn La",
+      "huyen": "Mộc"
+    },
+    {
+      "ten_tram": "Sơn La",
+      "stt": 16,
+      "t_kk_max": 39.2,
+      "t_kk_min": -0.5,
+      "tinh": "Sơn La",
+      "huyen": "Sơn"
+    },
+    {
+      "ten_tram": "Kim Bôi",
+      "stt": 17,
+      "t_kk_max": 40.9,
+      "t_kk_min": 1.4,
+      "tinh": "Hoà Bình",
+      "huyen": "Kim"
+    },
+    {
+      "ten_tram": "Mai Châu",
+      "stt": 18,
+      "t_kk_max": 41.8,
+      "t_kk_min": 1.7,
+      "tinh": "Hoà Bình",
+      "huyen": "Mai"
+    },
+    {
+      "ten_tram": "Chi Nê",
+      "stt": 19,
+      "t_kk_max": 41.7,
+      "t_kk_min": 2.3,
+      "tinh": "Hoà Bình",
+      "huyen": "4."
+    },
+    {
+      "ten_tram": "Lạc Sơn",
+      "stt": 20,
+      "t_kk_max": 41.8,
+      "t_kk_min": 0.1,
+      "tinh": "Hoà Bình",
+      "huyen": "Lạc"
+    },
+    {
+      "ten_tram": "Hoà Bình",
+      "stt": 21,
+      "t_kk_max": 41.8,
+      "t_kk_min": 1.9,
+      "tinh": "Hoà Bình",
+      "huyen": "4."
+    },
+    {
+      "ten_tram": "Hoàng Su Phì",
+      "stt": 22,
+      "t_kk_max": 39.9,
+      "t_kk_min": -0.1,
+      "tinh": "Hà Giang",
+      "huyen": "Hoàng"
+    },
+    {
+      "ten_tram": "Bắc Mê",
+      "stt": 23,
+      "t_kk_max": 41.0,
+      "t_kk_min": -0.1,
+      "tinh": "Hà Giang",
+      "huyen": "Bắc"
+    },
+    {
+      "ten_tram": "Bắc Quang",
+      "stt": 24,
+      "t_kk_max": 40.6,
+      "t_kk_min": 0.3,
+      "tinh": "Hà Giang",
+      "huyen": "Bắc"
+    },
+    {
+      "ten_tram": "Hà Giang",
+      "stt": 25,
+      "t_kk_max": 40.7,
+      "t_kk_min": 1.5,
+      "tinh": "Hà Giang",
+      "huyen": "TP. Hà"
+    },
+    {
+      "ten_tram": "Phố Ràng",
+      "stt": 26,
+      "t_kk_max": 40.6,
+      "t_kk_min": 1.3,
+      "tinh": "Lào Cai",
+      "huyen": "Bảo"
+    },
+    {
+      "ten_tram": "Bắc Hà",
+      "stt": 27,
+      "t_kk_max": 35.0,
+      "t_kk_min": -3.6,
+      "tinh": "Lào Cai",
+      "huyen": "6."
+    },
+    {
+      "ten_tram": "Sa Pa",
+      "stt": 28,
+      "t_kk_max": 29.6,
+      "t_kk_min": -4.2,
+      "tinh": "Lào Cai",
+      "huyen": "Sa"
+    },
+    {
+      "ten_tram": "Mù Căng Chải",
+      "stt": 29,
+      "t_kk_max": 34.2,
+      "t_kk_min": -3.6,
+      "tinh": "Yên Bái",
+      "huyen": "Mù"
+    },
+    {
+      "ten_tram": "Văn Chấn",
+      "stt": 30,
+      "t_kk_max": 41.2,
+      "t_kk_min": 0.8,
+      "tinh": "Yên Bái",
+      "huyen": "Văn"
+    },
+    {
+      "ten_tram": "Lục Yên",
+      "stt": 31,
+      "t_kk_max": 41.3,
+      "t_kk_min": 0.9,
+      "tinh": "Yên Bái",
+      "huyen": "Lục"
+    },
+    {
+      "ten_tram": "Yên Bái",
+      "stt": 32,
+      "t_kk_max": 40.4,
+      "t_kk_min": 2.9,
+      "tinh": "Yên Bái",
+      "huyen": "TP. Yên"
+    },
+    {
+      "ten_tram": "Hàm Yên",
+      "stt": 33,
+      "t_kk_max": 41.5,
+      "t_kk_min": -0.6,
+      "tinh": "Tuyên Quang",
+      "huyen": "Hàm"
+    },
+    {
+      "ten_tram": "Tuyên Quang",
+      "stt": 34,
+      "t_kk_max": 41.0,
+      "t_kk_min": 1.8,
+      "tinh": "Tuyên Quang",
+      "huyen": "8."
+    },
+    {
+      "ten_tram": "Chiêm Hóa",
+      "stt": 35,
+      "t_kk_max": 41.5,
+      "t_kk_min": 0.5,
+      "tinh": "Tuyên Quang",
+      "huyen": ""
+    },
+    {
+      "ten_tram": "Chợ Rã",
+      "stt": 36,
+      "t_kk_max": 41.5,
+      "t_kk_min": -0.6,
+      "tinh": "Bắc Cạn",
+      "huyen": "Chợ"
+    },
+    {
+      "ten_tram": "Ngân Sơn",
+      "stt": 37,
+      "t_kk_max": 36.9,
+      "t_kk_min": -2.0,
+      "tinh": "Bắc Cạn",
+      "huyen": "9."
+    },
+    {
+      "ten_tram": "Bắc Kạn",
+      "stt": 38,
+      "t_kk_max": 40.5,
+      "t_kk_min": -1.0,
+      "tinh": "Bắc Cạn",
+      "huyen": ""
+    },
+    {
+      "ten_tram": "Định Hoá",
+      "stt": 39,
+      "t_kk_max": 41.6,
+      "t_kk_min": -0.4,
+      "tinh": "Thái Nguyên",
+      "huyen": "Định"
+    },
+    {
+      "ten_tram": "Thái Nguyên",
+      "stt": 40,
+      "t_kk_max": 40.8,
+      "t_kk_min": 3.0,
+      "tinh": "Thái Nguyên",
+      "huyen": "Thái"
+    },
+    {
+      "ten_tram": "Minh Đài",
+      "stt": 41,
+      "t_kk_max": 41.2,
+      "t_kk_min": 0.5,
+      "tinh": "Phú Thọ",
+      "huyen": "Thanh"
+    },
+    {
+      "ten_tram": "Phú Hộ",
+      "stt": 42,
+      "t_kk_max": 41.2,
+      "t_kk_min": 3.6,
+      "tinh": "Phú Thọ",
+      "huyen": "11."
+    },
+    {
+      "ten_tram": "Việt Trì",
+      "stt": 43,
+      "t_kk_max": 41.4,
+      "t_kk_min": 5.0,
+      "tinh": "Phú Thọ",
+      "huyen": "TP. Việt"
+    },
+    {
+      "ten_tram": "Tam Đảo",
+      "stt": 44,
+      "t_kk_max": 33.4,
+      "t_kk_min": 0.0,
+      "tinh": "Vĩnh Phúc",
+      "huyen": "TP. Vĩnh"
+    },
+    {
+      "ten_tram": "Vĩnh Yên",
+      "stt": 45,
+      "t_kk_max": 41.4,
+      "t_kk_min": 3.7,
+      "tinh": "Vĩnh Phúc",
+      "huyen": "Vĩnh"
+    },
+    {
+      "ten_tram": "Bảo Lạc",
+      "stt": 46,
+      "t_kk_max": 41.6,
+      "t_kk_min": -0.1,
+      "tinh": "Cao Bằng",
+      "huyen": "Bảo"
+    },
+    {
+      "ten_tram": "Nguyên Bình",
+      "stt": 47,
+      "t_kk_max": 37.2,
+      "t_kk_min": -1.2,
+      "tinh": "Cao Bằng",
+      "huyen": "Thái"
+    },
+    {
+      "ten_tram": "Trùng Khánh",
+      "stt": 48,
+      "t_kk_max": 37.1,
+      "t_kk_min": -3.4,
+      "tinh": "Cao Bằng",
+      "huyen": "Trùng"
+    },
+    {
+      "ten_tram": "Cao Bằng",
+      "stt": 49,
+      "t_kk_max": 40.4,
+      "t_kk_min": -1.3,
+      "tinh": "Cao Bằng",
+      "huyen": "TP. Cao"
+    },
+    {
+      "ten_tram": "Bắc Sơn",
+      "stt": 50,
+      "t_kk_max": 37.8,
+      "t_kk_min": -1.4,
+      "tinh": "Lạng Sơn",
+      "huyen": "Bắc"
+    },
+    {
+      "ten_tram": "Hữu Lũng",
+      "stt": 51,
+      "t_kk_max": 41.3,
+      "t_kk_min": -1.1,
+      "tinh": "Lạng Sơn",
+      "huyen": "Hữu"
+    },
+    {
+      "ten_tram": "Đình Lập",
+      "stt": 52,
+      "t_kk_max": 39.9,
+      "t_kk_min": -2.8,
+      "tinh": "Lạng Sơn",
+      "huyen": "14."
+    },
+    {
+      "ten_tram": "Thất Khê",
+      "stt": 53,
+      "t_kk_max": 39.6,
+      "t_kk_min": -1.8,
+      "tinh": "Lạng Sơn",
+      "huyen": "Tràng"
+    },
+    {
+      "ten_tram": "Lạng Sơn",
+      "stt": 54,
+      "t_kk_max": 38.8,
+      "t_kk_min": -2.1,
+      "tinh": "Lạng Sơn",
+      "huyen": "14."
+    },
+    {
+      "ten_tram": "Lục Ngạn",
+      "stt": 55,
+      "t_kk_max": 40.8,
+      "t_kk_min": -1.0,
+      "tinh": "Bắc Giang",
+      "huyen": "Lục"
+    },
+    {
+      "ten_tram": "Sơn Động",
+      "stt": 56,
+      "t_kk_max": 41.1,
+      "t_kk_min": -2.8,
+      "tinh": "Bắc Giang",
+      "huyen": "Sơn"
+    },
+    {
+      "ten_tram": "Bắc Giang",
+      "stt": 57,
+      "t_kk_max": 40.8,
+      "t_kk_min": 2.8,
+      "tinh": "Bắc Giang",
+      "huyen": "TP. Bắc"
+    },
+    {
+      "ten_tram": "Hiệp Hòa",
+      "stt": 58,
+      "t_kk_max": 40.0,
+      "t_kk_min": 2.4,
+      "tinh": "Bắc Giang",
+      "huyen": ""
+    },
+    {
+      "ten_tram": "Uông Bí",
+      "stt": 59,
+      "t_kk_max": 39.6,
+      "t_kk_min": 1.1,
+      "tinh": "Quảng Ninh",
+      "huyen": "Uông"
+    },
+    {
+      "ten_tram": "Cô Tô",
+      "stt": 60,
+      "t_kk_max": 36.2,
+      "t_kk_min": 2.4,
+      "tinh": "Quảng Ninh",
+      "huyen": "Cô"
+    },
+    {
+      "ten_tram": "Bãi Cháy",
+      "stt": 61,
+      "t_kk_max": 37.9,
+      "t_kk_min": 1.7,
+      "tinh": "Quảng Ninh",
+      "huyen": "TP. Hạ"
+    },
+    {
+      "ten_tram": "Cửa Ông",
+      "stt": 62,
+      "t_kk_max": 38.8,
+      "t_kk_min": 3.8,
+      "tinh": "Quảng Ninh",
+      "huyen": "16."
+    },
+    {
+      "ten_tram": "Tiên Yên",
+      "stt": 63,
+      "t_kk_max": 38.1,
+      "t_kk_min": 0.4,
+      "tinh": "Quảng Ninh",
+      "huyen": "Tiên"
+    },
+    {
+      "ten_tram": "Móng Cái",
+      "stt": 64,
+      "t_kk_max": 38.8,
+      "t_kk_min": 1.1,
+      "tinh": "Quảng Ninh",
+      "huyen": "Hải"
+    },
+    {
+      "ten_tram": "Quảng Hà",
+      "stt": 65,
+      "t_kk_max": 37.3,
+      "t_kk_min": 0.8,
+      "tinh": "Quảng Ninh",
+      "huyen": "Quảng"
+    },
+    {
+      "ten_tram": "Phù Liễn",
+      "stt": 66,
+      "t_kk_max": 39.5,
+      "t_kk_min": 4.5,
+      "tinh": "Hải Phòng",
+      "huyen": "Kiến"
+    },
+    {
+      "ten_tram": "Hòn Dấu",
+      "stt": 67,
+      "t_kk_max": 38.6,
+      "t_kk_min": 6.2,
+      "tinh": "Hải Phòng",
+      "huyen": "17."
+    },
+    {
+      "ten_tram": "Bạch Long Vĩ",
+      "stt": 68,
+      "t_kk_max": 36.0,
+      "t_kk_min": 7.0,
+      "tinh": "Hải Phòng",
+      "huyen": "Bạch"
+    },
+    {
+      "ten_tram": "Ba Vì",
+      "stt": 69,
+      "t_kk_max": 41.6,
+      "t_kk_min": 2.8,
+      "tinh": "Hà Nội",
+      "huyen": "Ba"
+    },
+    {
+      "ten_tram": "Hà Đông",
+      "stt": 70,
+      "t_kk_max": 42.5,
+      "t_kk_min": 3.6,
+      "tinh": "Hà Nội",
+      "huyen": "Hà"
+    },
+    {
+      "ten_tram": "Sơn Tây",
+      "stt": 71,
+      "t_kk_max": 41.6,
+      "t_kk_min": 4.5,
+      "tinh": "Hà Nội",
+      "huyen": "TX. Sơn"
+    },
+    {
+      "ten_tram": "Hà Nội",
+      "stt": 72,
+      "t_kk_max": 41.8,
+      "t_kk_min": 5.0,
+      "tinh": "Hà Nội",
+      "huyen": ""
+    },
+    {
+      "ten_tram": "Chí Linh",
+      "stt": 73,
+      "t_kk_max": 40.0,
+      "t_kk_min": 4.3,
+      "tinh": "Hải Dương",
+      "huyen": "Chí"
+    },
+    {
+      "ten_tram": "Hải Dương",
+      "stt": 74,
+      "t_kk_max": 40.2,
+      "t_kk_min": 3.2,
+      "tinh": "Hải Dương",
+      "huyen": "Hải"
+    },
+    {
+      "ten_tram": "Hưng Yên",
+      "stt": 75,
+      "t_kk_max": 40.5,
+      "t_kk_min": 4.8,
+      "tinh": "Hưng Yên",
+      "huyen": "20."
+    },
+    {
+      "ten_tram": "Nam Định",
+      "stt": 76,
+      "t_kk_max": 40.2,
+      "t_kk_min": 4.6,
+      "tinh": "Nam Định",
+      "huyen": "TP. Nam"
+    },
+    {
+      "ten_tram": "Văn Lý",
+      "stt": 77,
+      "t_kk_max": 39.3,
+      "t_kk_min": 5.6,
+      "tinh": "Nam Định",
+      "huyen": "Hải"
+    },
+    {
+      "ten_tram": "Thái Bình",
+      "stt": 78,
+      "t_kk_max": 39.2,
+      "t_kk_min": 4.1,
+      "tinh": "Thái Bình",
+      "huyen": "22."
+    },
+    {
+      "ten_tram": "Hà Nam",
+      "stt": 79,
+      "t_kk_max": 41.0,
+      "t_kk_min": 5.2,
+      "tinh": "Hà Nam",
+      "huyen": "23."
+    },
+    {
+      "ten_tram": "Ninh Bình",
+      "stt": 80,
+      "t_kk_max": 40.4,
+      "t_kk_min": 5.4,
+      "tinh": "Ninh Bình",
+      "huyen": "TP. Ninh"
+    },
+    {
+      "ten_tram": "Nho Quan",
+      "stt": 81,
+      "t_kk_max": 41.5,
+      "t_kk_min": 1.0,
+      "tinh": "Ninh Bình",
+      "huyen": "Hoàng"
+    },
+    {
+      "ten_tram": "Yên Định",
+      "stt": 82,
+      "t_kk_max": 41.1,
+      "t_kk_min": 2.8,
+      "tinh": "Thanh Hoá",
+      "huyen": "Yên"
+    },
+    {
+      "ten_tram": "Bái Thượng",
+      "stt": 83,
+      "t_kk_max": 41.5,
+      "t_kk_min": 1.0,
+      "tinh": "Thanh Hoá",
+      "huyen": "Thọ"
+    },
+    {
+      "ten_tram": "Như Xuân",
+      "stt": 84,
+      "t_kk_max": 41.9,
+      "t_kk_min": 3.1,
+      "tinh": "Thanh Hoá",
+      "huyen": "Như"
+    },
+    {
+      "ten_tram": "Tĩnh Gia",
+      "stt": 85,
+      "t_kk_max": 42.2,
+      "t_kk_min": 3.0,
+      "tinh": "Thanh Hoá",
+      "huyen": "TX. Nghi"
+    },
+    {
+      "ten_tram": "Thanh Hoá",
+      "stt": 86,
+      "t_kk_max": 40.7,
+      "t_kk_min": 5.6,
+      "tinh": "Thanh Hoá",
+      "huyen": "Quảng"
+    },
+    {
+      "ten_tram": "Hồi Xuân",
+      "stt": 87,
+      "t_kk_max": 41.7,
+      "t_kk_min": 2.1,
+      "tinh": "Thanh Hoá",
+      "huyen": "Quan"
+    },
+    {
+      "ten_tram": "Quỳ Châu",
+      "stt": 88,
+      "t_kk_max": 42.0,
+      "t_kk_min": 0.4,
+      "tinh": "Nghệ An",
+      "huyen": "Quỳ"
+    },
+    {
+      "ten_tram": "Quỳ Hợp",
+      "stt": 89,
+      "t_kk_max": 42.7,
+      "t_kk_min": -0.3,
+      "tinh": "Nghệ An",
+      "huyen": "Quỳ"
+    },
+    {
+      "ten_tram": "Tây Hiếu",
+      "stt": 90,
+      "t_kk_max": 43.0,
+      "t_kk_min": 0.2,
+      "tinh": "Nghệ An",
+      "huyen": "Nghĩa"
+    },
+    {
+      "ten_tram": "Quỳnh Lưu",
+      "stt": 91,
+      "t_kk_max": 40.4,
+      "t_kk_min": 5.5,
+      "tinh": "Nghệ An",
+      "huyen": "Quỳnh"
+    },
+    {
+      "ten_tram": "Con Cuông",
+      "stt": 92,
+      "t_kk_max": 42.5,
+      "t_kk_min": 2.0,
+      "tinh": "Nghệ An",
+      "huyen": "Con"
+    },
+    {
+      "ten_tram": "Đô Lương",
+      "stt": 93,
+      "t_kk_max": 41.0,
+      "t_kk_min": 5.0,
+      "tinh": "Nghệ An",
+      "huyen": "Đô"
+    },
+    {
+      "ten_tram": "Tương Dương",
+      "stt": 94,
+      "t_kk_max": 42.2,
+      "t_kk_min": 1.7,
+      "tinh": "Nghệ An",
+      "huyen": "Hải"
+    },
+    {
+      "ten_tram": "Vinh",
+      "stt": 95,
+      "t_kk_max": 40.9,
+      "t_kk_min": 5.2,
+      "tinh": "Nghệ An",
+      "huyen": "TP. Vinh"
+    },
+    {
+      "ten_tram": "Hương Khê",
+      "stt": 96,
+      "t_kk_max": 42.6,
+      "t_kk_min": 0.0,
+      "tinh": "Hà Tĩnh",
+      "huyen": "Hương"
+    },
+    {
+      "ten_tram": "Kỳ Anh",
+      "stt": 97,
+      "t_kk_max": 40.5,
+      "t_kk_min": 6.0,
+      "tinh": "Hà Tĩnh",
+      "huyen": "27."
+    },
+    {
+      "ten_tram": "Hà Tĩnh",
+      "stt": 98,
+      "t_kk_max": 40.7,
+      "t_kk_min": 5.6,
+      "tinh": "Hà Tĩnh",
+      "huyen": "27."
+    },
+    {
+      "ten_tram": "Tuyên Hoá",
+      "stt": 99,
+      "t_kk_max": 41.6,
+      "t_kk_min": 5.0,
+      "tinh": "Quảng Bình",
+      "huyen": "Tuyên"
+    },
+    {
+      "ten_tram": "Ba Đồn",
+      "stt": 100,
+      "t_kk_max": 40.8,
+      "t_kk_min": 6.1,
+      "tinh": "Quảng Bình",
+      "huyen": "28."
+    },
+    {
+      "ten_tram": "Đồng Hới",
+      "stt": 101,
+      "t_kk_max": 41.0,
+      "t_kk_min": 6.7,
+      "tinh": "Quảng Bình",
+      "huyen": "TP. Đồng"
+    },
+    {
+      "ten_tram": "Cồn Cỏ",
+      "stt": 102,
+      "t_kk_max": 38.6,
+      "t_kk_min": 10.7,
+      "tinh": "Quảng Trị",
+      "huyen": "Vĩnh"
+    },
+    {
+      "ten_tram": "Đông Hà",
+      "stt": 103,
+      "t_kk_max": 42.1,
+      "t_kk_min": 9.4,
+      "tinh": "Quảng Trị",
+      "huyen": "Hà"
+    },
+    {
+      "ten_tram": "Khe Sanh",
+      "stt": 104,
+      "t_kk_max": 39.3,
+      "t_kk_min": 7.7,
+      "tinh": "Quảng Trị",
+      "huyen": "Hướng"
+    },
+    {
+      "ten_tram": "A Lưới",
+      "stt": 105,
+      "t_kk_max": 40.1,
+      "t_kk_min": 5.4,
+      "tinh": "Thừa Thiên Huế",
+      "huyen": "A"
+    },
+    {
+      "ten_tram": "Nam Đông",
+      "stt": 106,
+      "t_kk_max": 41.1,
+      "t_kk_min": 8.7,
+      "tinh": "Thừa Thiên Huế",
+      "huyen": "Nam"
+    },
+    {
+      "ten_tram": "Huế",
+      "stt": 107,
+      "t_kk_max": 41.3,
+      "t_kk_min": 9.5,
+      "tinh": "Thừa Thiên Huế",
+      "huyen": "Huế"
+    },
+    {
+      "ten_tram": "Đà Nẵng",
+      "stt": 108,
+      "t_kk_max": 40.6,
+      "t_kk_min": 9.2,
+      "tinh": "Đà Nẵng",
+      "huyen": "31."
+    },
+    {
+      "ten_tram": "Tam Kỳ",
+      "stt": 109,
+      "t_kk_max": 41.0,
+      "t_kk_min": 12.0,
+      "tinh": "Quảng Nam",
+      "huyen": "TP. Tam"
+    },
+    {
+      "ten_tram": "Trà My",
+      "stt": 110,
+      "t_kk_max": 40.5,
+      "t_kk_min": 10.4,
+      "tinh": "Quảng Nam",
+      "huyen": "Trà"
+    },
+    {
+      "ten_tram": "Ba Tơ",
+      "stt": 111,
+      "t_kk_max": 41.5,
+      "t_kk_min": 11.3,
+      "tinh": "Quảng Ngãi",
+      "huyen": "Ba"
+    },
+    {
+      "ten_tram": "Quảng Ngãi",
+      "stt": 112,
+      "t_kk_max": 40.5,
+      "t_kk_min": 12.4,
+      "tinh": "Quảng Ngãi",
+      "huyen": "33."
+    },
+    {
+      "ten_tram": "Lý Sơn",
+      "stt": 113,
+      "t_kk_max": 36.8,
+      "t_kk_min": 15.4,
+      "tinh": "Quảng Ngãi",
+      "huyen": "Lý"
+    },
+    {
+      "ten_tram": "Hoài Nhơn",
+      "stt": 114,
+      "t_kk_max": 41.6,
+      "t_kk_min": 13.2,
+      "tinh": "Bình Định",
+      "huyen": "Hoài"
+    },
+    {
+      "ten_tram": "Quy Nhơn",
+      "stt": 115,
+      "t_kk_max": 40.7,
+      "t_kk_min": 15.5,
+      "tinh": "Bình Định",
+      "huyen": "TP. Quy"
+    },
+    {
+      "ten_tram": "Sơn Hoà",
+      "stt": 116,
+      "t_kk_max": 42.1,
+      "t_kk_min": 0.0,
+      "tinh": "Phú Yên",
+      "huyen": "Tây"
+    },
+    {
+      "ten_tram": "Tuy Hoà",
+      "stt": 117,
+      "t_kk_max": 40.5,
+      "t_kk_min": 15.2,
+      "tinh": "Phú Yên",
+      "huyen": "TP. Tuy"
+    },
+    {
+      "ten_tram": "Nha Trang",
+      "stt": 118,
+      "t_kk_max": 37.9,
+      "t_kk_min": 15.4,
+      "tinh": "Khánh Hoà",
+      "huyen": "TP. Nha"
+    },
+    {
+      "ten_tram": "Cam Ranh",
+      "stt": 119,
+      "t_kk_max": 39.0,
+      "t_kk_min": 14.4,
+      "tinh": "Khánh Hoà",
+      "huyen": "36."
+    },
+    {
+      "ten_tram": "Trường Sa",
+      "stt": 120,
+      "t_kk_max": 36.9,
+      "t_kk_min": 19.2,
+      "tinh": "Khánh Hoà",
+      "huyen": "Trường"
+    },
+    {
+      "ten_tram": "Phan Thiết",
+      "stt": 121,
+      "t_kk_max": 38.7,
+      "t_kk_min": 15.4,
+      "tinh": "Bình Thuận",
+      "huyen": "TP. Phan"
+    },
+    {
+      "ten_tram": "Hàm Tân",
+      "stt": 122,
+      "t_kk_max": 37.7,
+      "t_kk_min": 13.7,
+      "tinh": "Bình Thuận",
+      "huyen": "38."
+    },
+    {
+      "ten_tram": "Phú Quý",
+      "stt": 123,
+      "t_kk_max": 36.6,
+      "t_kk_min": 19.7,
+      "tinh": "Bình Thuận",
+      "huyen": "Phú"
+    },
+    {
+      "ten_tram": "Đắk Tô",
+      "stt": 124,
+      "t_kk_max": 37.9,
+      "t_kk_min": 3.2,
+      "tinh": "Kon Tum",
+      "huyen": ""
+    },
+    {
+      "ten_tram": "Kon Tum",
+      "stt": 125,
+      "t_kk_max": 39.0,
+      "t_kk_min": 5.5,
+      "tinh": "Kon Tum",
+      "huyen": "Kon"
+    },
+    {
+      "ten_tram": "Pleiku",
+      "stt": 126,
+      "t_kk_max": 36.2,
+      "t_kk_min": 5.6,
+      "tinh": "Gia Lai",
+      "huyen": ""
+    },
+    {
+      "ten_tram": "An Khê",
+      "stt": 127,
+      "t_kk_max": 38.9,
+      "t_kk_min": 9.0,
+      "tinh": "Gia Lai",
+      "huyen": "40."
+    },
+    {
+      "ten_tram": "Ayun Pa",
+      "stt": 128,
+      "t_kk_max": 41.3,
+      "t_kk_min": 10.2,
+      "tinh": "Gia Lai",
+      "huyen": ""
+    },
+    {
+      "ten_tram": "M’Đrắk",
+      "stt": 129,
+      "t_kk_max": 38.7,
+      "t_kk_min": 11.6,
+      "tinh": "Đắc Lắc",
+      "huyen": ""
+    },
+    {
+      "ten_tram": "Buôn Ma Thuột",
+      "stt": 130,
+      "t_kk_max": 38.5,
+      "t_kk_min": 9.1,
+      "tinh": "Đắc Lắc",
+      "huyen": "41."
+    },
+    {
+      "ten_tram": "Buôn Hồ",
+      "stt": 131,
+      "t_kk_max": 36.6,
+      "t_kk_min": 8.5,
+      "tinh": "Đắc Lắc",
+      "huyen": "Krông"
+    },
+    {
+      "ten_tram": "Đắk Nông",
+      "stt": 132,
+      "t_kk_max": 37.1,
+      "t_kk_min": 7.6,
+      "tinh": "Đắc Nông",
+      "huyen": ""
+    },
+    {
+      "ten_tram": "Liên Khương",
+      "stt": 133,
+      "t_kk_max": 34.6,
+      "t_kk_min": 6.4,
+      "tinh": "Lâm Đồng",
+      "huyen": "Đức"
+    },
+    {
+      "ten_tram": "Đà Lạt",
+      "stt": 134,
+      "t_kk_max": 30.5,
+      "t_kk_min": 4.5,
+      "tinh": "Lâm Đồng",
+      "huyen": "43."
+    },
+    {
+      "ten_tram": "Bảo Lộc",
+      "stt": 135,
+      "t_kk_max": 34.0,
+      "t_kk_min": 4.5,
+      "tinh": "Lâm Đồng",
+      "huyen": "Bảo"
+    },
+    {
+      "ten_tram": "Phước Long",
+      "stt": 137,
+      "t_kk_max": 38.5,
+      "t_kk_min": 13.0,
+      "tinh": "Bình Phước",
+      "huyen": "Phước"
+    },
+    {
+      "ten_tram": "Tây Ninh",
+      "stt": 138,
+      "t_kk_max": 39.9,
+      "t_kk_min": 13.9,
+      "tinh": "Tây Ninh",
+      "huyen": "45."
+    },
+    {
+      "ten_tram": "Vũng Tàu",
+      "stt": 139,
+      "t_kk_max": 36.7,
+      "t_kk_min": 17.0,
+      "tinh": "Bà Rịa Vũng Tàu",
+      "huyen": "TP. Vũng"
+    },
+    {
+      "ten_tram": "Côn Đảo",
+      "stt": 140,
+      "t_kk_max": 35.5,
+      "t_kk_min": 17.7,
+      "tinh": "Bà Rịa Vũng Tàu",
+      "huyen": "Côn"
+    },
+    {
+      "ten_tram": "Mộc Hoá",
+      "stt": 141,
+      "t_kk_max": 38.6,
+      "t_kk_min": 15.7,
+      "tinh": "Long An",
+      "huyen": "48.Long"
+    },
+    {
+      "ten_tram": "Mỹ Tho",
+      "stt": 142,
+      "t_kk_max": 38.9,
+      "t_kk_min": 14.9,
+      "tinh": "Tiền Giang",
+      "huyen": "49."
+    },
+    {
+      "ten_tram": "Cao Lãnh",
+      "stt": 143,
+      "t_kk_max": 37.4,
+      "t_kk_min": 15.8,
+      "tinh": "Đồng Tháp",
+      "huyen": "50."
+    },
+    {
+      "ten_tram": "Ba Tri",
+      "stt": 144,
+      "t_kk_max": 38.7,
+      "t_kk_min": 17.2,
+      "tinh": "Bến Tre",
+      "huyen": "51."
+    },
+    {
+      "ten_tram": "Càng Long",
+      "stt": 145,
+      "t_kk_max": 37.7,
+      "t_kk_min": 17.0,
+      "tinh": "Trà Vinh",
+      "huyen": "52."
+    },
+    {
+      "ten_tram": "Châu Đốc",
+      "stt": 146,
+      "t_kk_max": 38.6,
+      "t_kk_min": 16.8,
+      "tinh": "An Giang",
+      "huyen": "53."
+    },
+    {
+      "ten_tram": "Cần Thơ",
+      "stt": 147,
+      "t_kk_max": 40.0,
+      "t_kk_min": 14.8,
+      "tinh": "Cần Thơ",
+      "huyen": "54."
+    },
+    {
+      "ten_tram": "Sóc Trăng",
+      "stt": 148,
+      "t_kk_max": 37.2,
+      "t_kk_min": 13.0,
+      "tinh": "Sóc Trăng",
+      "huyen": "55."
+    },
+    {
+      "ten_tram": "Rạch Giá",
+      "stt": 149,
+      "t_kk_max": 37.9,
+      "t_kk_min": 14.8,
+      "tinh": "Kiên Giang",
+      "huyen": "TP. Rạch"
+    },
+    {
+      "ten_tram": "Phú Quốc",
+      "stt": 150,
+      "t_kk_max": 37.0,
+      "t_kk_min": 16.0,
+      "tinh": "Kiên Giang",
+      "huyen": "TP. Phú"
+    },
+    {
+      "ten_tram": "Bạc Liêu",
+      "stt": 151,
+      "t_kk_max": 36.7,
+      "t_kk_min": 13.1,
+      "tinh": "Bạc Liêu",
+      "huyen": "57."
+    },
+    {
+      "ten_tram": "Cà Mau",
+      "stt": 152,
+      "t_kk_max": 38.2,
+      "t_kk_min": 15.3,
+      "tinh": "Cà Mau",
+      "huyen": "58."
+    }
+  ],
+  "unmatched": []
+}

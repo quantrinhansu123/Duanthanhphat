@@ -1,0 +1,6 @@
+output/*.json
+!output/.gitkeep
+__pycache__/
+*.pyc
+.venv/
+venv/
