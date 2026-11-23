@@ -1135,7 +1135,39 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
               try {
                 // Lắp theo tuyến (Thượng/Hạ): cùng lúc cả 2 ray trái+phải.
                 const placed = placeShortRailSpanOnLine(layout.rows, anchor.line, start, end, temps);
-                if (!commit({ ...layout, rows: placed.rows })) return false;
+                // Mỗi thanh mới lập tức là một đoạn LWR (HT/HP/TT/TP + số) — không còn hiện mã thanh ngắn kiểu HT048.
+                let longRails = layout.longRails;
+                for (const cellId of placed.cellIds) {
+                  const row = placed.rows.find((item) => item.cells.some((c) => c.id === cellId));
+                  const placedCell = row?.cells.find((c) => c.id === cellId);
+                  const cFrom = placedCell ? parseChainage(placedCell.from) : null;
+                  const cTo = placedCell ? parseChainage(placedCell.to) : null;
+                  if (!row || !placedCell || cFrom === null || cTo === null) continue;
+                  const key = railRowKey(row);
+                  const covered = longRails.some((rail) => {
+                    if (rail.rowKey !== key) return false;
+                    const span = getPlacementSpan(placed.rows, rail);
+                    return Boolean(span && span.startMetres < cTo && span.endMetres > cFrom);
+                  });
+                  if (covered) continue;
+                  const draftSpan = { rowKey: key, startCellId: cellId, endCellId: cellId, startMetres: cFrom, endMetres: cTo };
+                  const code = nextLongRailCode(longRails, key);
+                  longRails = [...longRails, {
+                    id: crypto.randomUUID(),
+                    code,
+                    label: code,
+                    ...draftSpan,
+                    params: {
+                      ...defaultLongRailParams(placed.rows, draftSpan),
+                      startChainage: placedCell.from,
+                      endChainage: placedCell.to,
+                      leftTemp: placedCell.leftTemp ?? placedCell.temp,
+                      rightTemp: placedCell.rightTemp ?? placedCell.temp,
+                    },
+                    updatedAt: new Date().toISOString(),
+                  }];
+                }
+                if (!commit({ ...layout, rows: placed.rows, longRails })) return false;
                 setSelectedId(placed.cellIds[0] ?? "");
                 setSelectedLongRailId(null);
                 setSelectedJoint(null);
