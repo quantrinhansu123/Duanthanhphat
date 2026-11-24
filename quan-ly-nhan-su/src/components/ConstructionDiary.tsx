@@ -65,7 +65,8 @@ const css = `@page { size: A4 portrait; margin: 0; }
 /* Mỗi dòng chữ là một khối cao đúng ${LINE}px có hàng chấm gắn ngay dưới chân chữ → chữ và đường kẻ cùng một hệ tọa độ, không lệch dù thu/phóng trang. */
 #diary-print .rl { position: relative; height: ${LINE}px; line-height: ${LINE}px; white-space: pre; }
 #diary-print .rl::after { content: ""; position: absolute; left: 0; right: 0; bottom: 3px; border-bottom: 1px dotted #000; }
-#diary-print .rl-probe { position: absolute; left: 0; right: 0; top: 0; opacity: 0; pointer-events: none; line-height: ${LINE}px; white-space: pre-wrap; overflow-wrap: anywhere; }
+#diary-print .rl-probe { position: absolute; left: 0; right: 0; top: 0; opacity: 0; pointer-events: none; line-height: ${LINE}px; white-space: pre-wrap; overflow-wrap: normal; }
+#diary-print .rl-probe span { display: inline-block; white-space: pre; }
 #diary-print .diary-fill { flex: 1 1 0; min-height: 0; overflow: hidden; }
 #diary-print .diary-sig-row { display: grid; grid-template-columns: 1fr 1fr 1fr; text-align: center; font-weight: bold; margin-top: 8pt; break-inside: avoid; }
 #diary-print .diary-sig-name { font-weight: normal; font-style: italic; min-height: 14pt; margin-top: 2pt; }
