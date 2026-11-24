@@ -272,7 +272,7 @@ export function TrackSchematic({
           <p className="w-full text-xs text-emerald-700">
             Đang chọn {planLine}: Km {formatChainage(lineExtent.startMetres)} – {formatChainage(lineExtent.endMetres)}
             {" · "}
-            {(lineExtent.endMetres - lineExtent.startMetres) / 1000} km
+            {((lineExtent.endMetres - lineExtent.startMetres) / 1000).toFixed(2)} km
           </p>
         ) : (
           <p className="w-full text-xs text-slate-500">{planLine}: chưa rải.</p>
@@ -285,7 +285,7 @@ export function TrackSchematic({
               <li key={line}>
                 {line}:{" "}
                 {independent
-                  ? `Km ${formatChainage(span.startMetres)} – ${formatChainage(span.endMetres)} · ${(span.endMetres - span.startMetres) / 1000} km`
+                  ? `Km ${formatChainage(span.startMetres)} – ${formatChainage(span.endMetres)} · ${((span.endMetres - span.startMetres) / 1000).toFixed(2)} km`
                   : "chưa rải"}
               </li>
             );

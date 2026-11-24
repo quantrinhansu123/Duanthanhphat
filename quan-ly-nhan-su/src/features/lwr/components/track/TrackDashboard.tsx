@@ -250,7 +250,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
       setJournalWelds(welds);
       const mapped = buildRailJoints(targetRows, welds, 0, linksRef.current, longRailsRef.current);
       setJoints(mapped.joints);
-      setWeldCount(welds.length);
+      setWeldCount(welds.filter(weld => weld.weldType !== "Chấp thuận").length);
       setWeldsMapped(welds.length - mapped.unmatched.length);
     } catch (cause) {
       if (request !== weldRequest.current) return;
@@ -925,10 +925,10 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
   return (
     <div className="w-full min-w-0 max-w-none space-y-3">
       <TrackHeader
-        subtitle={`Tuyến ${(extent.endMetres - extent.startMetres) / 1000} km · ${layout.rows.length} dải ray · ${cells.length} thanh ray · ${releasedLongRailCount} đoạn LWR đã giải toả`}
+        subtitle={`Tuyến ${((extent.endMetres - extent.startMetres) / 1000).toFixed(2)} km · ${layout.rows.length} dải ray · ${cells.length} thanh ray · ${releasedLongRailCount} đoạn LWR đã giải toả`}
         rangeLabel={`Km ${formatChainage(extent.startMetres)} – ${formatChainage(extent.endMetres)}`}
         stats={[
-          { label: "Tổng chiều dài ray", value: `${totalLength / 1000} km`, tone: "text-slate-900" },
+          { label: "Tổng chiều dài ray", value: `${(totalLength / 1000).toFixed(2)} km`, tone: "text-slate-900" },
           {
             label: "Đoạn LWR đã giải toả",
             value: String(releasedLongRailCount),

@@ -636,7 +636,7 @@ export function TrackPrint({
             <p className="meta">
               Đoạn in: Km{formatChainage(printRange.start)} – Km{formatChainage(printRange.end)}
               {" · "}
-              {(printRange.end - printRange.start) / 1000} km
+              {((printRange.end - printRange.start) / 1000).toFixed(2)} km
               {" · "}
               {stamp}
             </p>
