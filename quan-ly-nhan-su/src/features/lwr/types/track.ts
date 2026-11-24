@@ -41,6 +41,8 @@ export interface RailCell {
   leftTemp?: number;
   /** Nhiệt độ ray phải đo tại hiện trường trước giải toả. */
   rightTemp?: number;
+  /** Nhiệt độ ray ở giữa (điểm đo thứ 3, tuỳ chọn); có thì T khóa = (trái + giữa + phải) / 3. */
+  midTemp?: number;
   /**
    * Lượng điều chỉnh chiều dài (m, +/−) so với chênh lý trình.
    * Chiều dài ray = lý trình cuối − lý trình đầu + lengthAdjust.

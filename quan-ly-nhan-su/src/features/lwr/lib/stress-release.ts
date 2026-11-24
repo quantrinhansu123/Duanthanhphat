@@ -40,6 +40,8 @@ export interface StressInput {
   neutralTemp: number;
   leftTemp: number;
   rightTemp: number;
+  /** Điểm đo giữa (tuỳ chọn): có thì nhiệt độ trung bình = (trái + giữa + phải) / 3. */
+  midTemp?: number;
   maxTemp: number;
   minTemp: number;
   weldGap: number;
@@ -216,7 +218,7 @@ export function calculateStressRelease(input: StressInput) {
   const i = input;
   const length = i.leftLength + i.rightLength;
   // Chỉ đo nhiệt độ đầu trái và đầu phải; không có điểm đo riêng ở vị trí kéo.
-  const averageTemp = (i.leftTemp + i.rightTemp) / 2;
+  const averageTemp = Number.isFinite(i.midTemp) ? (i.leftTemp + (i.midTemp as number) + i.rightTemp) / 3 : (i.leftTemp + i.rightTemp) / 2;
   const deltaTemp = i.neutralTemp - averageTemp;
   const ea = i.area * i.modulus;
   const forceRaw = excelRound(ea * i.alpha * deltaTemp, 2);

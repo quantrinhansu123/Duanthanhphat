@@ -700,7 +700,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
         : layout.longRails.map((item) => (item.id === target.id ? target : item)),
     };
     try {
-      nextLayout = patchTrackCell(nextLayout, cell.id, { leftTemp, rightTemp, stress: params }); // mỗi thanh một bảng tính riêng
+      nextLayout = patchTrackCell(nextLayout, cell.id, { leftTemp, rightTemp, midTemp: Number.isFinite(params.midTemp) ? params.midTemp : null, stress: params }); // mỗi thanh một bảng tính riêng
     } catch (cause) {
       return { ok: false, message: cause instanceof Error ? cause.message : "Không cập nhật được nhiệt độ thanh." };
     }
@@ -1163,6 +1163,7 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
                       endChainage: placedCell.to,
                       leftTemp: placedCell.leftTemp ?? placedCell.temp,
                       rightTemp: placedCell.rightTemp ?? placedCell.temp,
+                      ...(Number.isFinite(placedCell.midTemp) ? { midTemp: placedCell.midTemp } : {}),
                     },
                     updatedAt: new Date().toISOString(),
                   }];

@@ -119,7 +119,7 @@ interface RailGridProps {
     rowKey: string,
     from: string,
     to: string,
-    temps?: { leftTemp: number; rightTemp: number },
+    temps?: { leftTemp: number; rightTemp: number; midTemp?: number },
   ) => boolean | void;
   onRemove?: (cellId: string) => void;
   appendError?: string | null;
@@ -134,6 +134,7 @@ type AppendDraft = {
   from: string;
   to: string;
   leftTemp: string;
+  midTemp: string;
   rightTemp: string;
 };
 
@@ -199,9 +200,13 @@ export const RailGrid = memo(function RailGrid({
       : null;
   const appendLeft = appendDraft ? Number(appendDraft.leftTemp.trim().replace(",", ".")) : NaN;
   const appendRight = appendDraft ? Number(appendDraft.rightTemp.trim().replace(",", ".")) : NaN;
+  // Điểm giữa để trống = chưa đo (T khóa = trung bình 2 điểm); nhập sai = không hợp lệ.
+  const appendMidText = appendDraft?.midTemp.trim() ?? "";
+  const appendMid = appendMidText ? Number(appendMidText.replace(",", ".")) : undefined;
+  const appendMidValid = appendMid === undefined || Number.isFinite(appendMid);
   const appendLockTemp =
-    Number.isFinite(appendLeft) && Number.isFinite(appendRight)
-      ? lockTempFromSides(appendLeft, appendRight)
+    Number.isFinite(appendLeft) && Number.isFinite(appendRight) && appendMidValid
+      ? Math.round(lockTempFromSides(appendLeft, appendRight, appendMid) * 10) / 10
       : null;
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -542,6 +547,7 @@ export const RailGrid = memo(function RailGrid({
                       from: formatChainage(start),
                       to: formatChainage(start + RAIL_SEGMENT_LENGTH_METRES),
                       leftTemp: String(DEFAULT_NEW_RAIL_TEMPERATURE),
+                      midTemp: "",
                       rightTemp: String(DEFAULT_NEW_RAIL_TEMPERATURE),
                     });
                   }}
@@ -578,15 +584,16 @@ export const RailGrid = memo(function RailGrid({
       aria-labelledby={dialogTitleId}
       onCancel={() => setAppendDraft(null)}
       onClose={() => setAppendDraft(null)}
-      className="fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-sm overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/40"
+      className="fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/40"
     >
       {appendDraft && <form onSubmit={(event) => {
         event.preventDefault();
         setSubmitted(true);
-        if (!Number.isFinite(appendLeft) || !Number.isFinite(appendRight)) return;
+        if (!Number.isFinite(appendLeft) || !Number.isFinite(appendRight) || !appendMidValid) return;
         if (onAppend?.(appendDraft.rowKey, appendDraft.from, appendDraft.to, {
-          leftTemp: appendLeft,
-          rightTemp: appendRight,
+          leftTemp: Math.round(appendLeft * 10) / 10,
+          rightTemp: Math.round(appendRight * 10) / 10,
+          ...(appendMid !== undefined ? { midTemp: Math.round(appendMid * 10) / 10 } : {}),
         }) !== false) setAppendDraft(null);
       }}>
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -624,40 +631,51 @@ export const RailGrid = memo(function RailGrid({
             ));
           })()}
         </p>
-        <div className="mt-3 grid grid-cols-2 gap-3">
+        <div className="mt-3 grid grid-cols-3 gap-3">
           <label className="block text-sm font-medium">
-            Nhiệt độ ray trái (°C)
+            Nhiệt độ bên trái (°C)
             <input
               required
               inputMode="decimal"
               className="mt-1 w-full rounded-lg border border-amber-400 bg-amber-50 px-3 py-2"
               value={appendDraft.leftTemp}
               onChange={(event) => { setSubmitted(false); setAppendDraft({ ...appendDraft, leftTemp: event.target.value }); }}
-              aria-label="Nhiệt độ ray trái"
+              aria-label="Nhiệt độ bên trái"
             />
           </label>
           <label className="block text-sm font-medium">
-            Nhiệt độ ray phải (°C)
+            Nhiệt độ ở giữa (°C)
+            <input
+              placeholder="chưa đo"
+              inputMode="decimal"
+              className="mt-1 w-full rounded-lg border border-amber-400 bg-amber-50 px-3 py-2"
+              value={appendDraft.midTemp}
+              onChange={(event) => { setSubmitted(false); setAppendDraft({ ...appendDraft, midTemp: event.target.value }); }}
+              aria-label="Nhiệt độ ở giữa"
+            />
+          </label>
+          <label className="block text-sm font-medium">
+            Nhiệt độ bên phải (°C)
             <input
               required
               inputMode="decimal"
               className="mt-1 w-full rounded-lg border border-amber-400 bg-amber-50 px-3 py-2"
               value={appendDraft.rightTemp}
               onChange={(event) => { setSubmitted(false); setAppendDraft({ ...appendDraft, rightTemp: event.target.value }); }}
-              aria-label="Nhiệt độ ray phải"
+              aria-label="Nhiệt độ bên phải"
             />
           </label>
         </div>
         <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
           T khóa đường:{" "}
           <span className="font-semibold">
-            {appendLockTemp !== null ? `${appendLockTemp} °C` : "—"}
+            {appendLockTemp !== null ? `${appendLockTemp.toFixed(1)} °C` : "—"}
           </span>
-          <span className="ml-1 text-xs font-medium">(T trái + T phải) / 2</span>
+          <span className="ml-1 text-xs font-medium">{appendMid !== undefined ? "(T trái + T giữa + T phải) / 3" : "(T trái + T phải) / 2 — nhập T giữa để tính / 3"}</span>
         </p>
         <p className="mt-2 text-xs text-slate-500">Ví dụ: 12+000 đến 12+250. Lý trình cuối phải lớn hơn lý trình đầu.</p>
-        {submitted && (!Number.isFinite(appendLeft) || !Number.isFinite(appendRight)) && (
-          <p role="alert" className="mt-3 text-sm text-red-700">Nhập nhiệt độ ray trái/phải là số hữu hạn.</p>
+        {submitted && (!Number.isFinite(appendLeft) || !Number.isFinite(appendRight) || !appendMidValid) && (
+          <p role="alert" className="mt-3 text-sm text-red-700">Nhập nhiệt độ ray trái/giữa/phải là số (điểm giữa có thể để trống).</p>
         )}
         {submitted && appendError && <p role="alert" className="mt-3 text-sm text-red-700">{appendError}</p>}
         <div className="mt-5 flex justify-end gap-2">

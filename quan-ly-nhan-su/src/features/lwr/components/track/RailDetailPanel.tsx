@@ -52,7 +52,7 @@ export function ReleaseStatusButtons({
         </button>
       </div>
       <p className="mt-2 text-xs leading-5 text-slate-500">
-        Đạt → màu theo T khóa (≥30 xanh, &lt;30 cam). Không đạt → xám. T khóa = (T trái + T phải) / 2.
+        Đạt → màu theo T khóa (≥30 xanh, &lt;30 cam). Không đạt → xám. T khóa = (T trái + T giữa + T phải) / 3.
       </p>
     </div>
   );
@@ -106,8 +106,9 @@ export function RailDetailPanel({
   const [toDraft, setToDraft] = useState(cell.to);
   const span = railCellSpanMetres(cell) ?? 0;
   const [adjustDraft, setAdjustDraft] = useState(String(cell.lengthAdjust ?? 0));
-  const [leftTempDraft, setLeftTempDraft] = useState(String(sideTempOf(cell, "left")));
-  const [rightTempDraft, setRightTempDraft] = useState(String(sideTempOf(cell, "right")));
+  const [leftTempDraft, setLeftTempDraft] = useState(sideTempOf(cell, "left").toFixed(1));
+  const [midTempDraft, setMidTempDraft] = useState(cell.midTemp === undefined ? "" : cell.midTemp.toFixed(1));
+  const [rightTempDraft, setRightTempDraft] = useState(sideTempOf(cell, "right").toFixed(1));
   const [fieldError, setFieldError] = useState<string | null>(null);
   // Hai tab: «Giải tỏa» (nhập nhiệt độ, lý trình, tính toán) và «Báo cáo» (bảng chuyển vị điểm M / E).
   const [view, setView] = useState<"giai-toa" | "bao-cao">("giai-toa");
@@ -131,10 +132,11 @@ export function RailDetailPanel({
     setFromDraft(cell.from);
     setToDraft(cell.to);
     setAdjustDraft(String(cell.lengthAdjust ?? 0));
-    setLeftTempDraft(String(sideTempOf(cell, "left")));
-    setRightTempDraft(String(sideTempOf(cell, "right")));
+    setLeftTempDraft(sideTempOf(cell, "left").toFixed(1));
+    setMidTempDraft(cell.midTemp === undefined ? "" : cell.midTemp.toFixed(1));
+    setRightTempDraft(sideTempOf(cell, "right").toFixed(1));
     setFieldError(null);
-  }, [cell.id, cell.from, cell.to, cell.temp, cell.leftTemp, cell.rightTemp, cell.lengthAdjust]);
+  }, [cell.id, cell.from, cell.to, cell.temp, cell.leftTemp, cell.midTemp, cell.rightTemp, cell.lengthAdjust]);
 
   function apply(patch: RailCellPatch): boolean {
     const ok = onChange(patch);
@@ -142,8 +144,9 @@ export function RailDetailPanel({
       setFromDraft(cell.from);
       setToDraft(cell.to);
       setAdjustDraft(String(cell.lengthAdjust ?? 0));
-      setLeftTempDraft(String(sideTempOf(cell, "left")));
-      setRightTempDraft(String(sideTempOf(cell, "right")));
+      setLeftTempDraft(sideTempOf(cell, "left").toFixed(1));
+      setMidTempDraft(cell.midTemp === undefined ? "" : cell.midTemp.toFixed(1));
+      setRightTempDraft(sideTempOf(cell, "right").toFixed(1));
       return false;
     }
     setFieldError(null);
@@ -186,59 +189,52 @@ export function RailDetailPanel({
     apply({ lengthAdjust: next });
   }
 
-  function parseSideTemp(draft: string, fallback: number) {
+  /** Làm tròn 1 số sau dấu phẩy (30.4). */
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+  const fmt1 = (n: number) => (Number.isFinite(n) ? round1(n).toFixed(1) : "");
+  function parseSideTemp(draft: string, _fallback?: number) {
     const next = Number(draft.trim().replace(",", "."));
-    if (!Number.isFinite(next)) return null;
-    return next;
+    if (!draft.trim() || !Number.isFinite(next)) return null;
+    return round1(next);
+  }
+  /** Điểm giữa: để trống = chưa đo (undefined); nhập sai = null. */
+  function parseMidTemp(draft: string): number | undefined | null {
+    if (!draft.trim()) return undefined;
+    return parseSideTemp(draft);
   }
 
-  function commitSideTemps(nextLeft?: number, nextRight?: number) {
-    const left = nextLeft ?? parseSideTemp(leftTempDraft, sideTempOf(cell, "left"));
-    const right = nextRight ?? parseSideTemp(rightTempDraft, sideTempOf(cell, "right"));
-    if (left === null || right === null) {
-      setFieldError("Nhiệt độ ray trái/phải phải là số hữu hạn.");
-      setLeftTempDraft(String(sideTempOf(cell, "left")));
-      setRightTempDraft(String(sideTempOf(cell, "right")));
-      return;
-    }
-    if (left === sideTempOf(cell, "left") && right === sideTempOf(cell, "right")) {
-      setLeftTempDraft(String(left));
-      setRightTempDraft(String(right));
-      return;
-    }
-    apply({ leftTemp: left, rightTemp: right });
+  function resetTempDrafts() {
+    setLeftTempDraft(fmt1(sideTempOf(cell, "left")));
+    setMidTempDraft(cell.midTemp === undefined ? "" : fmt1(cell.midTemp));
+    setRightTempDraft(fmt1(sideTempOf(cell, "right")));
   }
 
-  function commitLeftTemp() {
-    const left = parseSideTemp(leftTempDraft, sideTempOf(cell, "left"));
-    if (left === null) {
-      setFieldError("Nhiệt độ ray trái phải là số hữu hạn.");
-      setLeftTempDraft(String(sideTempOf(cell, "left")));
+  function commitTemps() {
+    const left = parseSideTemp(leftTempDraft);
+    const right = parseSideTemp(rightTempDraft);
+    const mid = parseMidTemp(midTempDraft);
+    if (left === null || right === null || mid === null) {
+      setFieldError("Nhiệt độ ray trái/giữa/phải phải là số (để trống điểm giữa nếu chưa đo).");
+      resetTempDrafts();
       return;
     }
-    commitSideTemps(left, parseSideTemp(rightTempDraft, sideTempOf(cell, "right")) ?? sideTempOf(cell, "right"));
-  }
-
-  function commitRightTemp() {
-    const right = parseSideTemp(rightTempDraft, sideTempOf(cell, "right"));
-    if (right === null) {
-      setFieldError("Nhiệt độ ray phải phải là số hữu hạn.");
-      setRightTempDraft(String(sideTempOf(cell, "right")));
+    if (left === sideTempOf(cell, "left") && right === sideTempOf(cell, "right") && mid === cell.midTemp) {
+      setLeftTempDraft(fmt1(left));
+      setMidTempDraft(mid === undefined ? "" : fmt1(mid));
+      setRightTempDraft(fmt1(right));
       return;
     }
-    commitSideTemps(parseSideTemp(leftTempDraft, sideTempOf(cell, "left")) ?? sideTempOf(cell, "left"), right);
+    apply({ leftTemp: left, rightTemp: right, midTemp: mid ?? null });
   }
 
   const draftLockTemp = (() => {
-    const left = parseSideTemp(leftTempDraft, sideTempOf(cell, "left"));
-    const right = parseSideTemp(rightTempDraft, sideTempOf(cell, "right"));
-    if (left === null || right === null) return lockTemp;
-    try {
-      return lockTempFromSides(left, right);
-    } catch {
-      return lockTemp;
-    }
+    const left = parseSideTemp(leftTempDraft);
+    const right = parseSideTemp(rightTempDraft);
+    const mid = parseMidTemp(midTempDraft);
+    if (left === null || right === null || mid === null) return lockTemp;
+    return lockTempFromSides(left, right, mid);
   })();
+  const hasMid = parseMidTemp(midTempDraft) !== undefined;
 
   return (
     <aside aria-labelledby="rail-detail-title" className="flex h-[calc(100dvh-100px)] min-h-[400px] min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 text-slate-900 xl:sticky xl:top-0">
@@ -287,42 +283,60 @@ export function RailDetailPanel({
           <StressReleaseCalculator
             compact
             headSlot={(
-          <div className="grid grid-cols-2 gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-sm">
+          <div className="grid grid-cols-3 gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-sm">
             <label className="block min-w-0">
-              <span className="font-semibold text-amber-900">Nhiệt độ ray trái (°C)</span>
+              <span className="font-semibold text-amber-900">Nhiệt độ bên trái (°C)</span>
               <span className="flex items-center gap-1">
                 <input
                   className={`${inputClass} border-amber-400 bg-white`}
                   inputMode="decimal"
                   value={leftTempDraft}
-                  aria-label="Nhiệt độ ray trái"
+                  aria-label="Nhiệt độ bên trái"
+                  placeholder=""
                   onChange={(event) => setLeftTempDraft(event.target.value)}
-                  onBlur={commitLeftTemp}
-                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitLeftTemp(); } }}
+                  onBlur={commitTemps}
+                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitTemps(); } }}
                 />
                 <span className="mt-1 shrink-0 font-semibold text-slate-500">°C</span>
               </span>
             </label>
             <label className="block min-w-0">
-              <span className="font-semibold text-amber-900">Nhiệt độ ray phải (°C)</span>
+              <span className="font-semibold text-amber-900">Nhiệt độ ở giữa (°C)</span>
+              <span className="flex items-center gap-1">
+                <input
+                  className={`${inputClass} border-amber-400 bg-white`}
+                  inputMode="decimal"
+                  value={midTempDraft}
+                  aria-label="Nhiệt độ ở giữa"
+                  placeholder="chưa đo"
+                  onChange={(event) => setMidTempDraft(event.target.value)}
+                  onBlur={commitTemps}
+                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitTemps(); } }}
+                />
+                <span className="mt-1 shrink-0 font-semibold text-slate-500">°C</span>
+              </span>
+            </label>
+            <label className="block min-w-0">
+              <span className="font-semibold text-amber-900">Nhiệt độ bên phải (°C)</span>
               <span className="flex items-center gap-1">
                 <input
                   className={`${inputClass} border-amber-400 bg-white`}
                   inputMode="decimal"
                   value={rightTempDraft}
-                  aria-label="Nhiệt độ ray phải"
+                  aria-label="Nhiệt độ bên phải"
+                  placeholder=""
                   onChange={(event) => setRightTempDraft(event.target.value)}
-                  onBlur={commitRightTemp}
-                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitRightTemp(); } }}
+                  onBlur={commitTemps}
+                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitTemps(); } }}
                 />
                 <span className="mt-1 shrink-0 font-semibold text-slate-500">°C</span>
               </span>
             </label>
-            <div className="col-span-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">
+            <div className="col-span-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">
               <p className="text-xs font-semibold text-emerald-900">Nhiệt độ khóa đường (tính tự động)</p>
               <p className="mt-1 font-bold text-emerald-800">
-                {draftLockTemp} °C
-                <span className="ml-2 text-xs font-medium text-emerald-700">= (T trái + T phải) / 2</span>
+                {fmt1(draftLockTemp)} °C
+                <span className="ml-2 text-xs font-medium text-emerald-700">{hasMid ? "= (T trái + T giữa + T phải) / 3" : "= (T trái + T phải) / 2 — nhập T giữa để tính / 3"}</span>
               </p>
             </div>
             </div>
@@ -406,6 +420,7 @@ export function RailDetailPanel({
               lengthAdjust: cell.lengthAdjust ?? 0,
               leftTemp: sideTempOf(cell, "left"),
               rightTemp: sideTempOf(cell, "right"),
+              midTemp: cell.midTemp,
             }}
             onSave={onSaveParams}
             onInputChange={(input) => {
