@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Buildings,
   CalendarBlank,
@@ -249,6 +249,25 @@ function localIsoDate(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+/** Tỉ lệ px/đơn vị của SVG đang bị co giãn (preserveAspectRatio="none") — để vẽ số liệu không bị méo. */
+function useSvgScale(viewW: number, viewH: number) {
+  const ref = useRef<SVGSVGElement>(null);
+  const [scale, setScale] = useState({ x: 1, y: 1 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) setScale((cur) => (Math.abs(cur.x - r.width / viewW) < 0.001 && Math.abs(cur.y - r.height / viewH) < 0.001 ? cur : { x: r.width / viewW, y: r.height / viewH }));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+  return { ref, scale };
+}
+
 function sampleChartLabels(labels: string[], maxCount: number) {
   if (labels.length <= maxCount) return labels.map((text) => ({ text }));
   const picked: { text: string }[] = [];
@@ -366,6 +385,11 @@ export default function OverviewDashboard() {
   const [chartViewMode, setChartViewMode] = useState<"daily" | "monthly" | "yearly">("daily");
   const [cumulativeChartViewMode, setCumulativeChartViewMode] = useState<"daily" | "monthly" | "yearly">("daily");
   const [cumulativeChartZoom, setCumulativeChartZoom] = useState(1);
+  /** Số liệu trên cột: bật/tắt + cỡ chữ (px) dùng chung cho hai biểu đồ sản lượng. */
+  const [showChartValues, setShowChartValues] = useState(true);
+  const [chartValueSize, setChartValueSize] = useState(11);
+  const dailySvg = useSvgScale(500, 260);
+  const cumSvg = useSvgScale(500, 260);
   const [spreadUndatedMonthly, setSpreadUndatedMonthly] = useState(true);
   const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
   const [chartZoom, setChartZoom] = useState(1);
@@ -2189,6 +2213,7 @@ export default function OverviewDashboard() {
               ) : (
                 <>
               <svg
+                ref={dailySvg.ref}
                 viewBox="0 0 500 260"
                 preserveAspectRatio="none"
                 className="h-[260px] w-full block overflow-visible"
@@ -2248,10 +2273,10 @@ export default function OverviewDashboard() {
                       </g>
                     );
                   })}
-                  {bars.map((b, i) => (
-                    <g key={`values-${i}`} fontSize="12" textAnchor="middle" fontWeight="600">
-                      <text x={b.x + b.w / 2} y={Math.max(8, b.yellowY - 5)} fill="#a16207">{fmt(b.target)}</text>
-                      {b.actual > 0 && <text x={b.x + b.w / 2} y={Math.max(18, b.blueY - 4)} fill="#1d4ed8">{fmt(b.actual)}</text>}
+                  {showChartValues && bars.map((b, i) => (
+                    <g key={`values-${i}`} fontSize={chartValueSize} textAnchor="middle" fontWeight="600">
+                      <text transform={`translate(${b.x + b.w / 2} ${Math.max(8, b.yellowY - 5)}) scale(${1 / dailySvg.scale.x} ${1 / dailySvg.scale.y})`} fill="#a16207">{fmt(b.target)}</text>
+                      {b.actual > 0 && <text transform={`translate(${b.x + b.w / 2} ${Math.max(18, b.blueY - 4)}) scale(${1 / dailySvg.scale.x} ${1 / dailySvg.scale.y})`} fill="#1d4ed8">{fmt(b.actual)}</text>}
                     </g>
                   ))}
                   {trendPath && (
@@ -2355,6 +2380,13 @@ export default function OverviewDashboard() {
                 </div>
               </div>
               <div className="mt-2 flex flex-wrap items-center justify-end gap-2 text-sm font-medium text-slate-900">
+                <div className="flex items-center gap-1.5">
+                  <button type="button" onClick={() => setShowChartValues((v) => !v)} aria-pressed={showChartValues} title="Hiện / ẩn số liệu trên cột" className={`rounded-md border px-2 py-1 text-xs font-semibold cursor-pointer ${showChartValues ? "border-blue-300 bg-blue-50 text-blue-800" : "border-slate-300 text-slate-700 hover:bg-slate-50"}`}>{showChartValues ? "Ẩn số" : "Hiện số"}</button>
+                  {showChartValues && <>
+                    <button type="button" onClick={() => setChartValueSize((v) => Math.max(7, v - 1))} disabled={chartValueSize <= 7} aria-label="Giảm cỡ số" className="h-7 w-7 rounded-md border border-slate-300 text-xs font-bold text-slate-900 hover:bg-slate-50 disabled:opacity-40 cursor-pointer">A−</button>
+                    <button type="button" onClick={() => setChartValueSize((v) => Math.min(18, v + 1))} disabled={chartValueSize >= 18} aria-label="Tăng cỡ số" className="h-7 w-7 rounded-md border border-slate-300 text-sm font-bold text-slate-900 hover:bg-slate-50 disabled:opacity-40 cursor-pointer">A+</button>
+                  </>}
+                </div>
                 <button
                   type="button"
                   onClick={() => setChartZoom(minChartZoom)}
@@ -2586,7 +2618,7 @@ export default function OverviewDashboard() {
                 </div>
                 <div className="min-w-0 flex-1 overflow-x-auto">
                   <div className="relative" style={{ width: `${500 * cumulativeChartZoom}px`, minWidth: "100%" }}>
-                    <svg viewBox="0 0 500 260" preserveAspectRatio="none" className="h-[260px] w-full overflow-visible">
+                    <svg ref={cumSvg.ref} viewBox="0 0 500 260" preserveAspectRatio="none" className="h-[260px] w-full overflow-visible">
                       {[0.5, 52, 104, 156, 208, 259.5].map((y) => <line key={y} x1="0" y1={y} x2="500" y2={y} stroke={y === 259.5 ? "#cbd5e1" : "#f1f5f9"} strokeWidth="1" />)}
                       {cumulativeChart.actualValues.map((actual, index) => {
                         const showActual = index <= cumulativeChart.lastActualIndex;
@@ -2608,12 +2640,12 @@ export default function OverviewDashboard() {
                         strokeLinecap="round"
                         vectorEffect="non-scaling-stroke"
                       />
-                      {cumulativeChart.actualValues.map((actual, index) => {
+                      {showChartValues && cumulativeChart.actualValues.map((actual, index) => {
                         const band = 500 / cumulativeChart.actualValues.length;
                         const target = cumulativeChart.targetValues[index] ?? 0;
-                        return <g key={`cum-values-${index}`} fontSize="12" textAnchor="middle" fontWeight="600">
-                          <text x={band * (index + .5)} y={Math.max(8, 260 - Math.max(target, index <= cumulativeChart.lastActualIndex ? actual : 0) / cumulativeChart.max * 260 - 5)} fill="#a16207">{fmt(target)}</text>
-                          {index <= cumulativeChart.lastActualIndex && actual > 0 && <text x={band * (index + .5)} y={Math.max(18, 260 - actual / cumulativeChart.max * 260 - 4)} fill="#1d4ed8">{fmt(actual)}</text>}
+                        return <g key={`cum-values-${index}`} fontSize={chartValueSize} textAnchor="middle" fontWeight="600">
+                          <text transform={`translate(${band * (index + .5)} ${Math.max(8, 260 - Math.max(target, index <= cumulativeChart.lastActualIndex ? actual : 0) / cumulativeChart.max * 260 - 5)}) scale(${1 / cumSvg.scale.x} ${1 / cumSvg.scale.y})`} fill="#a16207">{fmt(target)}</text>
+                          {index <= cumulativeChart.lastActualIndex && actual > 0 && <text transform={`translate(${band * (index + .5)} ${Math.max(18, 260 - actual / cumulativeChart.max * 260 - 4)}) scale(${1 / cumSvg.scale.x} ${1 / cumSvg.scale.y})`} fill="#1d4ed8">{fmt(actual)}</text>}
                         </g>;
                       })}
                       {cumulativeChart.lastActualIndex >= 0 ? (
@@ -2638,6 +2670,13 @@ export default function OverviewDashboard() {
             </>
           )}
           <div className="mt-2 flex flex-wrap items-center justify-end gap-2 text-sm font-medium text-slate-900">
+            <div className="flex items-center gap-1.5">
+                  <button type="button" onClick={() => setShowChartValues((v) => !v)} aria-pressed={showChartValues} title="Hiện / ẩn số liệu trên cột" className={`rounded-md border px-2 py-1 text-xs font-semibold cursor-pointer ${showChartValues ? "border-blue-300 bg-blue-50 text-blue-800" : "border-slate-300 text-slate-700 hover:bg-slate-50"}`}>{showChartValues ? "Ẩn số" : "Hiện số"}</button>
+                  {showChartValues && <>
+                    <button type="button" onClick={() => setChartValueSize((v) => Math.max(7, v - 1))} disabled={chartValueSize <= 7} aria-label="Giảm cỡ số" className="h-7 w-7 rounded-md border border-slate-300 text-xs font-bold text-slate-900 hover:bg-slate-50 disabled:opacity-40 cursor-pointer">A−</button>
+                    <button type="button" onClick={() => setChartValueSize((v) => Math.min(18, v + 1))} disabled={chartValueSize >= 18} aria-label="Tăng cỡ số" className="h-7 w-7 rounded-md border border-slate-300 text-sm font-bold text-slate-900 hover:bg-slate-50 disabled:opacity-40 cursor-pointer">A+</button>
+                  </>}
+                </div>
             <button
               type="button"
               onClick={() => setCumulativeChartZoom(1)}
