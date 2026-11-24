@@ -69,6 +69,7 @@ export const childIcons: Record<string, Icon> = {
   "kiem-toan-cwr-ket-cau-duong": Path,
   "kiem-toan-cwr-do-cung-goi-ray": Gauge,
   "kiem-toan-cwr-on-dinh-nen-da": Shapes,
+  "kiem-toan-cwr-mo-men-can": Gauge,
   "kiem-toan-cwr-he-so-van-toc-luc-ngang": ChartLine,
   "kiem-toan-cwr-so-do-tai-banh-xe": ListChecks,
   "lwr-track-map": Train,

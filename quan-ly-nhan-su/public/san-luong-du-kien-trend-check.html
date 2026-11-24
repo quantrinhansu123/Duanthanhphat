@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8" />
+<title>Kiểm tra đường Dự kiến — Sản lượng hàn theo ngày</title>
+<body>
+  <h1>Sản lượng hàn theo ngày — đường / số Dự kiến</h1>
+
+  <h2>Bảng phiếu cuối</h2>
+  <table border="1" cellpadding="8">
+    <tr><th>#</th><th>Mục trên phiếu</th><th>Sửa thành / quy tắc</th></tr>
+    <tr><td>1</td><td>Đường xu hướng vàng (Dự kiến)</td><td>Luôn neo theo <code>targetTopY</code> = mức kế hoạch ngày; ngày KH = 0 → đáy trục.</td></tr>
+    <tr><td>2</td><td>Khi thực tế ≥ dự kiến</td><td>Đường vàng <b>không</b> leo theo đỉnh cột xanh; số vàng vẫn là <code>so_moi_han</code> kế hoạch.</td></tr>
+    <tr><td>3</td><td>Nhãn số vàng trên cột</td><td>Đặt tại <code>targetTopY</code>, không dùng <code>yellowY</code> (đỉnh phần thiếu).</td></tr>
+    <tr><td>4</td><td>Dữ liệu PQ 22/11/2026</td><td>Trong DB <code>tien_do_ly_thuyet</code> ngày này = 0 (Chủ nhật nghỉ). Biểu đồ phải hiện Dự kiến 0, Thực tế theo nhật ký.</td></tr>
+  </table>
+
+  <h2>Lịch sử thay đổi</h2>
+  <p><b>25/11/2026:</b> Sửa bug đường/nhãn Dự kiến bám đỉnh Thực tế khi vượt kế hoạch (ngày 22 nhìn như 30 dù KH = 0).</p>
+</body>
+</html>

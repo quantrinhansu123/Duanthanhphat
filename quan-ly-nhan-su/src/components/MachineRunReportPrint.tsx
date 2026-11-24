@@ -9,6 +9,8 @@ import PrintFrame from "@/components/PrintFrame";
 
 export type MachineRunReportRow = MachineRunSchedule & {
   oilLiters?: number | null;
+  /** Số lít đã đổ trong ngày (chỉ cộng dồn số này). */
+  oilAdded?: number | null;
   oilUnit?: string;
   oilLow?: boolean;
   oilQuota?: number | null;
@@ -48,10 +50,11 @@ export function buildMachineRunReportRows(
     const unit = (oil?.unit || "lít").trim().toLowerCase();
     const isLiter = isLiterUnit(unit);
     const oilLow =
-      oil != null && quota != null && isLiter && oil.liters < quota;
+      oil != null && oil.hasActual && quota != null && isLiter && oil.liters < quota;
     return {
       ...row,
-      oilLiters: oil?.liters ?? null,
+      oilLiters: oil?.hasActual ? oil.liters : null,
+      oilAdded: oil?.added ?? null,
       oilUnit: oil?.unit || "lít",
       oilLow,
       oilQuota: quota,
@@ -116,10 +119,15 @@ export default function MachineRunReportPrint({
   const totalWelds = rows.reduce((sum, row) => sum + (row.weldCount ?? 0), 0);
   const totalFailed = rows.reduce((sum, row) => sum + (row.failedWeldCount ?? 0), 0);
   const machineCount = new Set(rows.map((row) => row.machineId)).size;
+  const firstOfDayMachine = new Map<string, string>();
+  for (const row of rows) {
+    const key = fuelKey(row.date, row.machineId);
+    if (!firstOfDayMachine.has(key)) firstOfDayMachine.set(key, row.id);
+  }
   const oilByDayMachine = new Map<string, number>();
   for (const row of rows) {
-    if (row.oilLiters == null || !isLiterUnit(row.oilUnit)) continue;
-    oilByDayMachine.set(fuelKey(row.date, row.machineId), row.oilLiters);
+    if (row.oilAdded == null || !isLiterUnit(row.oilUnit)) continue;
+    oilByDayMachine.set(fuelKey(row.date, row.machineId), row.oilAdded);
   }
   const totalFuelLiters = [...oilByDayMachine.values()].reduce((sum, liters) => sum + liters, 0);
   const headerProject = resolveProjectLabel(projectLabel, rows);
@@ -215,7 +223,7 @@ export default function MachineRunReportPrint({
                   <th className="num">Mối hàn</th>
                   <th className="num">Lỗi</th>
                   <th>Thợ hàn</th>
-                  <th className="num">Mức dầu</th>
+                  <th className="num">Tổng đổ dầu</th>
                 </tr>
               </thead>
               <tbody>
@@ -240,10 +248,11 @@ export default function MachineRunReportPrint({
                       <td className="num">{(row.weldCount ?? 0).toLocaleString("vi-VN")}</td>
                       <td className="num fail">{(row.failedWeldCount ?? 0).toLocaleString("vi-VN")}</td>
                       <td>{row.personInChargeName || "—"}</td>
-                      <td className={`num ${row.oilLow ? "fail" : ""}`}>
-                        {row.oilLiters == null
+                      <td className="num">
+                        {/* Tổng đổ trong ngày của máy: hiện một lần ở dòng đầu của (ngày, máy), các dòng cùng ngày để «—». */}
+                        {row.oilAdded == null || !(row.oilAdded > 0) || firstOfDayMachine.get(fuelKey(row.date, row.machineId)) !== row.id
                           ? "—"
-                          : `${row.oilLiters.toLocaleString("vi-VN", { maximumFractionDigits: 1 })} ${row.oilUnit || "lít"}`}
+                          : `${row.oilAdded.toLocaleString("vi-VN", { maximumFractionDigits: 1 })} ${row.oilUnit || "lít"}`}
                       </td>
                     </tr>
                   ))

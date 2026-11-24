@@ -22,6 +22,7 @@ function emptyBundle(): JsonBundle {
     ket_cau_duong: [],
     do_cung_goi: [],
     on_dinh_nen: [],
+    mo_men_can: [],
     he_so_tai: [],
     so_do_tai: [],
   };

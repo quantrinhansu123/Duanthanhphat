@@ -131,6 +131,7 @@ const viewRenderers: Record<string, () => React.ReactNode> = {
   "kiem-toan-cwr-ket-cau-duong": () => <Tb15CatalogPage tabId="kiem-toan-cwr-ket-cau-duong" />,
   "kiem-toan-cwr-do-cung-goi-ray": () => <Tb15CatalogPage tabId="kiem-toan-cwr-do-cung-goi-ray" />,
   "kiem-toan-cwr-on-dinh-nen-da": () => <Tb15CatalogPage tabId="kiem-toan-cwr-on-dinh-nen-da" />,
+  "kiem-toan-cwr-mo-men-can": () => <Tb15CatalogPage tabId="kiem-toan-cwr-mo-men-can" />,
   "kiem-toan-cwr-he-so-van-toc-luc-ngang": () => <Tb15CatalogPage tabId="kiem-toan-cwr-he-so-van-toc-luc-ngang" />,
   "kiem-toan-cwr-so-do-tai-banh-xe": () => <Tb15CatalogPage tabId="kiem-toan-cwr-so-do-tai-banh-xe" />,
   "lwr-cong-trinh": () => <LwrModuleEmbed path="/cong-trinh" title="Ký hiệu công trình" />,

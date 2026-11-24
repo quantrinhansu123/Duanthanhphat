@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8" />
+<title>Kiểm tra báo cáo dầu — Đã đổ / Thực tế</title>
+<body>
+  <h1>Báo cáo mức dầu — 2 ô Đã đổ &amp; Thực tế</h1>
+  <h2>Bảng phiếu cuối</h2>
+  <table border="1" cellpadding="8">
+    <tr><th>#</th><th>Mục trên phiếu</th><th>Sửa thành / quy tắc</th></tr>
+    <tr><td>1</td><td>Ô Đã đổ</td><td>Lượng dầu đổ thêm trong ngày → cột <code>do_them</code>.</td></tr>
+    <tr><td>2</td><td>Ô Thực tế</td><td>Mức dầu đo được sau khi đổ → cột <code>so_lit</code> (so định mức).</td></tr>
+    <tr><td>3</td><td>Còn lại trước khi đổ</td><td>Tự tính = Thực tế − Đã đổ → cột <code>con_lai</code>.</td></tr>
+    <tr><td>4</td><td>Cột danh sách máy</td><td>Hai ô nhỏ: Đã đổ | Thực tế (cảnh báo đỏ trên Thực tế nếu dưới định mức).</td></tr>
+    <tr><td>5</td><td>Lịch sử cấp phát</td><td>Hai cột Đã đổ / Thực tế.</td></tr>
+    <tr><td>6</td><td>Migration</td><td><code>migration_20261123_cap_dau_con_lai_do_them.sql</code> — thêm <code>con_lai</code>, <code>do_them</code>.</td></tr>
+  </table>
+  <h2>Lịch sử thay đổi</h2>
+  <p><b>23/11/2026:</b> Đổi giao diện từ «Còn lại / Đổ thêm» sang đúng 2 ô <b>Đã đổ</b> và <b>Thực tế</b>; danh sách + lịch sử hiển thị 2 ô.</p>
+  <a href="/phan-cong-may?fuel=1">Mở phân công máy (cấp dầu)</a>
+</body>
+</html>

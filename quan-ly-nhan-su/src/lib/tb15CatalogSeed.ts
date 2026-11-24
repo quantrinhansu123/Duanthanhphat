@@ -36,8 +36,11 @@ export const TB15_SEED: Partial<Record<Tb15CatalogKey, Tb15Row[]>> = {
     { id: "dc-wj-b", phuong_an: "Không ba lát – WJ-7B / WJ-8B / WJ-8C (đệm 23±3 kN/mm)", d_kn_mm: 23, ghi_chu: "" },
   ],
   on_dinh_nen: [
-    { id: "od-ii", loai_ta_vet: "II", q0: 23, b_hs: 63, z_hs: 1.2, c_hs: 106, n_hs: 2.5, ghi_chu: "B.0.4-1" },
-    { id: "od-iii", loai_ta_vet: "III", q0: 27.4, b_hs: 92, z_hs: 1.2, c_hs: 179, n_hs: 2.5, ghi_chu: "B.0.4-1" },
+    { id: "od-ii", loai_ta_vet: "II", bo_tri: "1 840 thanh/km", q0: 23, b_hs: 63, z_hs: 1.2, c_hs: 106, n_hs: 2.5, ghi_chu: "B.0.4-1" },
+    { id: "od-iii", loai_ta_vet: "III", bo_tri: "1 760 thanh/km", q0: 27.4, b_hs: 92, z_hs: 1.2, c_hs: 179, n_hs: 2.5, ghi_chu: "B.0.4-1" },
+  ],
+  mo_men_can: [
+    { id: "mmc-dan-hoi-ii", loai_phu_kien: "Loại đàn hồi II", h_ncm_cm: 22000, mu: 2, psi: 3.0983, ghi_chu: "B.0.4-2" },
   ],
   he_so_tai: [
     { id: "hs-v160", loai: "van_toc", nhan: "v > 160", v_min_kmh: 160.01, v_max_kmh: null, loai_keo: null, r_tu_m: null, he_so: 1, ghi_chu: "A.0.2-1" },
