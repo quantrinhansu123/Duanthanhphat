@@ -121,9 +121,9 @@ const viewRenderers: Record<string, () => React.ReactNode> = {
   "bc-bao-cao-ngay": () => <DailyWorkReport />,
   "quan-ly-du-an": () => <ProjectManagement />,
   "lwr-giai-toa-ung-suat": () => (
-    <LwrModuleEmbed path="/giai-toa-ung-suat" title="Giải toả ứng suất R2" />
+    <LwrModuleEmbed path="/giai-toa-ung-suat" title="Giải toả ứng suất" />
   ),
-  "lwr-track-map": () => <LwrModuleEmbed path="/" title="Tổng quan (Track Map)" />,
+  "lwr-track-map": () => <LwrModuleEmbed path="/" title="Bố trí tổng quan ray hàn dài/hàn liền" />,
   "lwr-cong-thuc-tb10015": () => <CwrFormulaReference />,
   "kiem-toan-cwr-nhiet-do-vung": () => <Tb15CatalogPage tabId="kiem-toan-cwr-nhiet-do-vung" />,
   "kiem-toan-cwr-loai-ray": () => <Tb15CatalogPage tabId="kiem-toan-cwr-loai-ray" />,

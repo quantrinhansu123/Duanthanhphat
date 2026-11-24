@@ -200,7 +200,7 @@ export default function CwrFormulaReference() {
     <div className="mx-auto max-w-6xl space-y-4 px-4 py-5 sm:px-6" data-no-i18n="true">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{en ? "TB 10015 formulas" : "Công thức TB 10015"}</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{en ? "CWR track verification (TB 10015)" : "Kiểm toán đường ray không mối nối"}</h1>
           <p className="mt-1 text-sm text-slate-600">{source.source}</p>
           <p className="mt-1 text-xs font-semibold text-[#0047AB]">{sheets.length} {en ? "sheets" : "bảng tính"} · {count} {en ? "formula cells" : "ô công thức"}</p>
         </div>
