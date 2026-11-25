@@ -3,6 +3,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readPrivateJson, writePrivateJson } from "@/lib/server/privateJsonStorage";
 import {
+  TB15_CATALOG_KEYS,
   type Tb15CatalogKey,
   type Tb15Row,
   type Tb15Wheel,
@@ -22,6 +23,7 @@ function emptyBundle(): JsonBundle {
     ket_cau_duong: [],
     do_cung_goi: [],
     on_dinh_nen: [],
+    mo_men_can: [],
     he_so_tai: [],
     so_do_tai: [],
   };
@@ -36,11 +38,31 @@ async function readJsonBundle(): Promise<JsonBundle> {
     return seeded;
   }
   const bundle = { ...emptyBundle(), ...stored };
-  // Nâng cấp khí hậu nếu còn bản mẫu cũ (< đủ trạm QCVN)
-  if (seededClimate.length > 0 && (bundle.khi_hau?.length ?? 0) < seededClimate.length) {
-    bundle.khi_hau = seededClimate;
-    await writePrivateJson(JSON_FILE, bundle);
+  // File JSON cũ chưa có khóa catalog mới: seed một lần. Mảng rỗng (đã xóa hết) thì giữ nguyên.
+  let seededNewCatalog = false;
+  for (const key of TB15_CATALOG_KEYS) {
+    if (key === "khi_hau") continue;
+    if (Object.prototype.hasOwnProperty.call(stored, key)) continue;
+    const seed = TB15_SEED[key];
+    if (!seed?.length) continue;
+    bundle[key] = seed.map((row) => ({ ...row }));
+    seededNewCatalog = true;
   }
+  // Chỉ nâng cấp một lần khi còn bản cũ (trống hoặc chưa có dòng nào có dữ liệu theo tháng);
+  // sau đó người dùng thêm / xóa trạm thì không bị seed khôi phục lại.
+  const climateOutdated = !(bundle.khi_hau ?? []).some(
+    (r) => Array.isArray(r.t_max_thang) && Array.isArray(r.t_min_thang),
+  );
+  if (seededClimate.length > 0 && climateOutdated) {
+    // Gộp: lấy bản QCVN (có theo tháng) và giữ các trạm do người dùng tự thêm.
+    const seedNames = new Set(seededClimate.map((r) => String(r.ten_tram ?? "").trim().toLowerCase()));
+    const custom = (bundle.khi_hau ?? []).filter(
+      (r) => !seedNames.has(String(r.ten_tram ?? "").trim().toLowerCase()),
+    );
+    bundle.khi_hau = [...seededClimate, ...custom];
+    seededNewCatalog = true;
+  }
+  if (seededNewCatalog) await writePrivateJson(JSON_FILE, bundle);
   return bundle;
 }
 
@@ -83,11 +105,30 @@ async function trySupabaseList(key: Tb15CatalogKey): Promise<Tb15Row[] | null> {
   }
 }
 
-export async function listCatalog(key: Tb15CatalogKey): Promise<{ rows: Tb15Row[]; backend: "supabase" | "json" }> {
+async function listCatalogRaw(key: Tb15CatalogKey): Promise<{ rows: Tb15Row[]; backend: "supabase" | "json" }> {
   const fromDb = await trySupabaseList(key);
   if (fromDb) return { rows: fromDb, backend: "supabase" };
   const bundle = await readJsonBundle();
   return { rows: bundle[key] ?? [], backend: "json" };
+}
+
+/** Bổ sung 12 tháng (A.5 / A.6) từ seed QCVN theo tên trạm khi bản ghi đọc được chưa có cột tháng. */
+function withSeedMonthly(rows: Tb15Row[]): Tb15Row[] {
+  const seedByName = new Map(
+    (TB15_SEED.khi_hau ?? []).map((r) => [String(r.ten_tram ?? "").trim().toLowerCase(), r] as const),
+  );
+  return rows.map((row) => {
+    if (Array.isArray(row.t_max_thang) && Array.isArray(row.t_min_thang)) return row;
+    const seed = seedByName.get(String(row.ten_tram ?? "").trim().toLowerCase());
+    if (!seed) return row;
+    return { ...row, t_max_thang: seed.t_max_thang, t_min_thang: seed.t_min_thang };
+  });
+}
+
+export async function listCatalog(key: Tb15CatalogKey): Promise<{ rows: Tb15Row[]; backend: "supabase" | "json" }> {
+  const result = await listCatalogRaw(key);
+  if (key === "khi_hau") return { ...result, rows: withSeedMonthly(result.rows) };
+  return result;
 }
 
 function cleanPayload(key: Tb15CatalogKey, raw: Record<string, unknown>, id?: string): Tb15Row {
@@ -132,9 +173,24 @@ function cleanPayload(key: Tb15CatalogKey, raw: Record<string, unknown>, id?: st
     row.wheels = wheels;
   }
   if (key === "khi_hau") {
-    const max = Number(row.t_kk_max);
-    const min = Number(row.t_kk_min);
-    if (max < min) throw new Error("Nhiệt độ không khí cao nhất phải ≥ nhiệt độ không khí thấp nhất.");
+    // Nhập theo tháng (QCVN A.5 cao nhất / A.6 thấp nhất); nhiệt độ năm tự tính = max / min của 12 tháng.
+    const parseMonths = (v: unknown, label: string): number[] => {
+      if (!Array.isArray(v) || v.length !== 12) throw new Error(`Thiếu đủ 12 giá trị tháng của ${label}.`);
+      return v.map((x, i) => {
+        const n = typeof x === "number" ? x : typeof x === "string" && x.trim() !== "" ? Number(x) : NaN;
+        if (!Number.isFinite(n)) throw new Error(`${label} tháng ${i + 1} không hợp lệ.`);
+        return n;
+      });
+    };
+    const maxM = parseMonths(raw.t_max_thang, "nhiệt độ kk cao nhất");
+    const minM = parseMonths(raw.t_min_thang, "nhiệt độ kk thấp nhất");
+    maxM.forEach((v, i) => {
+      if (v < minM[i]) throw new Error(`Tháng ${i + 1}: nhiệt độ cao nhất phải ≥ nhiệt độ thấp nhất.`);
+    });
+    row.t_max_thang = maxM;
+    row.t_min_thang = minM;
+    row.t_kk_max = Math.max(...maxM);
+    row.t_kk_min = Math.min(...minM);
   }
   row.updated_at = new Date().toISOString();
   if (!id) row.created_at = row.updated_at;
@@ -187,6 +243,12 @@ async function saveSupabase(key: Tb15CatalogKey, row: Tb15Row, editing: boolean)
     return true;
   } catch (e) {
     if (isMissingRelation(e as { message?: string; code?: string })) return false;
+    const err = e as { message?: string; code?: string };
+    if (key === "khi_hau" && (err.code === "PGRST204" || /t_(max|min)_thang/i.test(err.message || ""))) {
+      throw new Error(
+        "Bảng tb15_khi_hau chưa có cột theo tháng. Hãy chạy supabase/migration_20261123_tb15_dau_vao.sql trong Supabase SQL Editor rồi thử lại.",
+      );
+    }
     throw e;
   }
 }

@@ -13,20 +13,29 @@ if (!url || !key) {
 
 const ts = readFileSync(resolve(root, "src/lib/tb15ClimateSeed.generated.ts"), "utf8");
 const rows = [];
-const re =
-  /\{\s*id:\s*"([^"]+)",\s*ma_tram:\s*"([^"]*)",\s*ten_tram:\s*"([^"]*)",\s*tinh:\s*"([^"]*)",\s*t_kk_max:\s*([-\d.]+),\s*t_kk_min:\s*([-\d.]+),\s*nguon:\s*"([^"]*)",\s*ghi_chu:\s*"([^"]*)"\s*\}/g;
-let m;
-while ((m = re.exec(ts))) {
+// Mỗi trạm là một dòng: { id: "...", ma_tram: "...", ..., t_max_thang: [..12..], t_min_thang: [..12..], ... }
+const lineRe = /^\s*\{ id: "([^"]+)", ma_tram: "([^"]*)", ten_tram: "((?:[^"\\]|\\.)*)", tinh: "([^"]*)", t_kk_max: ([-\d.]+), t_kk_min: ([-\d.]+), t_max_thang: \[([^\]]*)\], t_min_thang: \[([^\]]*)\], nguon: "([^"]*)", ghi_chu: "([^"]*)" \},?\s*$/;
+const unescape = (s) => s.replace(/\\(.)/g, "$1");
+const parseList = (s) => s.split(",").map((x) => Number(x.trim()));
+for (const line of ts.split("\n")) {
+  const m = lineRe.exec(line);
+  if (!m) continue;
   rows.push({
     id: m[1],
     ma_tram: m[2],
-    ten_tram: m[3],
+    ten_tram: unescape(m[3]),
     tinh: m[4],
     t_kk_max: Number(m[5]),
     t_kk_min: Number(m[6]),
-    nguon: m[7],
-    ghi_chu: m[8],
+    t_max_thang: parseList(m[7]),
+    t_min_thang: parseList(m[8]),
+    nguon: m[9],
+    ghi_chu: m[10],
   });
+}
+if (rows.some((r) => r.t_max_thang.length !== 12 || r.t_min_thang.length !== 12)) {
+  console.error("Thiếu dữ liệu 12 tháng — chạy lại extract_qcvn_climate.py");
+  process.exit(1);
 }
 if (rows.length < 100) {
   console.error("Parsed too few climate rows:", rows.length);

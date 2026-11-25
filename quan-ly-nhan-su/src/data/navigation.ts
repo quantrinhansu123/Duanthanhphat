@@ -166,6 +166,11 @@ export const navigation: NavItem[] = [
         labelEn: "Ballast stability params",
       },
       {
+        id: "kiem-toan-cwr-mo-men-can-phu-kien",
+        label: "Mô men cản phụ kiện",
+        labelEn: "Fastener resisting moment",
+      },
+      {
         id: "kiem-toan-cwr-he-so-van-toc-luc-ngang",
         label: "Hệ số vận tốc / lực ngang",
         labelEn: "Speed / lateral factors",

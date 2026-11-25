@@ -1,4 +1,4 @@
--- TB 10015 — 8 bảng dữ liệu đầu vào thiết kế / kiểm toán CWR (không gắn thanh LWR).
+-- TB 10015 — bảng dữ liệu đầu vào thiết kế / kiểm toán CWR (không gắn thanh LWR).
 -- Chạy trong Supabase Dashboard > SQL Editor.
 
 begin;
@@ -19,6 +19,10 @@ create table if not exists public.tb15_khi_hau (
   constraint tb15_khi_hau_temp_check check (t_kk_max >= t_kk_min)
 );
 
+-- 1b. Khí hậu theo tháng (QCVN A.5 cao nhất / A.6 thấp nhất, 12 giá trị tháng 1–12)
+alter table public.tb15_khi_hau add column if not exists t_max_thang jsonb;
+alter table public.tb15_khi_hau add column if not exists t_min_thang jsonb;
+
 -- 2. Loại ray + mặt cắt (Phụ lục C)
 create table if not exists public.tb15_loai_ray (
   id uuid primary key default gen_random_uuid(),
@@ -29,6 +33,11 @@ create table if not exists public.tb15_loai_ray (
   w_day_mm3 numeric(14,2) not null,
   i_x_mm4 numeric(16,2) not null,
   i_y_mm4 numeric(16,2) not null,
+  k_an_toan numeric(8,4) not null default 1.3,
+  e_mpa numeric(12,2) not null default 210000,
+  alpha numeric(16,10) not null default 0.0000118,
+  pj_kn numeric(10,3) not null default 400,
+  khe_ho_mm numeric(6,2) not null default 18,
   ghi_chu text not null default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -51,8 +60,13 @@ create table if not exists public.tb15_ket_cau_duong (
   id uuid primary key default gen_random_uuid(),
   ten text not null,
   loai_duong text not null check (loai_duong in ('co_ba_lat', 'khong_ba_lat')),
+  so_thanh_km numeric(8,0),
+  r_khong_tai_hs numeric(10,3),
   r_khong_tai numeric(10,3),
+  r_dau_may_hs numeric(10,3),
   r_co_tai numeric(10,3),
+  r_toa_xe_hs numeric(10,3),
+  r_toa_xe numeric(10,3),
   q_kn_m numeric(10,3),
   loai_ta_vet text not null default '',
   cu_ly_nut_a_m numeric(10,4),
@@ -65,12 +79,17 @@ create table if not exists public.tb15_ket_cau_duong (
 -- 5. Độ cứng gối ray D
 create table if not exists public.tb15_do_cung_goi (
   id uuid primary key default gen_random_uuid(),
+  loai_duong text not null default 'co_ba_lat',
   phuong_an text not null,
-  d_kn_mm numeric(10,3) not null,
+  dem_kn_mm numeric(10,3),
+  dem_sai_so_kn_mm numeric(10,3),
+  d_kn_mm numeric(10,3),
+  tinh_min_kn_mm numeric(10,3),
+  tinh_max_kn_mm numeric(10,3),
   ghi_chu text not null default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint tb15_do_cung_goi_unique unique (phuong_an)
+  constraint tb15_do_cung_goi_unique unique (phuong_an, dem_kn_mm)
 );
 
 -- 6. Tham số ổn định nền đá (B.0.4-1)
@@ -86,6 +105,19 @@ create table if not exists public.tb15_on_dinh_nen (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint tb15_on_dinh_nen_unique unique (loai_ta_vet)
+);
+
+-- 6b. Mô men cản phụ kiện (Bảng B.0.4-2)
+create table if not exists public.tb15_mo_men_can (
+  id uuid primary key default gen_random_uuid(),
+  loai_phu_kien text not null,
+  h_ncm_cm numeric(14,4) not null,
+  mu numeric(10,4) not null,
+  psi numeric(12,6) not null,
+  ghi_chu text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint tb15_mo_men_can_unique unique (loai_phu_kien)
 );
 
 -- 7. Hệ số vận tốc / lực ngang (A.0.2-1, A.0.2-2)
@@ -128,21 +160,21 @@ create table if not exists public.tb15_so_do_tai_banh (
 create index if not exists tb15_so_do_tai_banh_so_do_idx on public.tb15_so_do_tai_banh (so_do_id);
 
 -- Seed từ Excel TB 10015 (Tra cứu) — bỏ qua nếu đã có dữ liệu
-insert into public.tb15_loai_ray (loai_kg_m, do_mon_mm, f_mm2, w_dau_mm3, w_day_mm3, i_x_mm4, i_y_mm4)
+insert into public.tb15_loai_ray (loai_kg_m, do_mon_mm, f_mm2, w_dau_mm3, w_day_mm3, i_x_mm4, i_y_mm4, k_an_toan, e_mpa, alpha, pj_kn, khe_ho_mm)
 select * from (values
-  (50::numeric, 0::numeric, 6580::numeric, 250000::numeric, 289000::numeric, 20370000::numeric, 3770000::numeric),
-  (50, 3, 6580, 242000, 283000, 19460000, 3770000),
-  (50, 6, 6580, 230000, 275000, 18270000, 3770000),
-  (50, 9, 6580, 216000, 264000, 17020000, 3770000),
-  (60, 0, 7745, 339400, 396000, 32170000, 5240000),
-  (60, 3, 7745, 318000, 385000, 30690000, 5240000),
-  (60, 6, 7745, 291000, 375000, 28790000, 5240000),
-  (60, 9, 7745, 264000, 363000, 26900000, 5240000),
-  (75, 0, 9504, 432000, 509000, 44890000, 6610000),
-  (75, 3, 9504, 420000, 496000, 43280000, 6610000),
-  (75, 6, 9504, 405000, 482000, 40890000, 6610000),
-  (75, 9, 9504, 390000, 480000, 38980000, 6610000)
-) as v(loai_kg_m, do_mon_mm, f_mm2, w_dau_mm3, w_day_mm3, i_x_mm4, i_y_mm4)
+  (50::numeric, 0::numeric, 6580::numeric, 250000::numeric, 289000::numeric, 20370000::numeric, 3770000::numeric, 1.3::numeric, 210000::numeric, 0.0000118::numeric, 400::numeric, 18::numeric),
+  (50, 3, 6580, 242000, 283000, 19460000, 3770000, 1.3, 210000, 0.0000118, 400, 18),
+  (50, 6, 6580, 230000, 275000, 18270000, 3770000, 1.3, 210000, 0.0000118, 400, 18),
+  (50, 9, 6580, 216000, 264000, 17020000, 3770000, 1.3, 210000, 0.0000118, 400, 18),
+  (60, 0, 7745, 339400, 396000, 32170000, 5240000, 1.3, 210000, 0.0000118, 400, 18),
+  (60, 3, 7745, 318000, 385000, 30690000, 5240000, 1.3, 210000, 0.0000118, 400, 18),
+  (60, 6, 7745, 291000, 375000, 28790000, 5240000, 1.3, 210000, 0.0000118, 400, 18),
+  (60, 9, 7745, 264000, 363000, 26900000, 5240000, 1.3, 210000, 0.0000118, 400, 18),
+  (75, 0, 9504, 432000, 509000, 44890000, 6610000, 1.3, 210000, 0.0000118, 400, 20),
+  (75, 3, 9504, 420000, 496000, 43280000, 6610000, 1.3, 210000, 0.0000118, 400, 20),
+  (75, 6, 9504, 405000, 482000, 40890000, 6610000, 1.3, 210000, 0.0000118, 400, 20),
+  (75, 9, 9504, 390000, 480000, 38980000, 6610000, 1.3, 210000, 0.0000118, 400, 20)
+) as v(loai_kg_m, do_mon_mm, f_mm2, w_dau_mm3, w_day_mm3, i_x_mm4, i_y_mm4, k_an_toan, e_mpa, alpha, pj_kn, khe_ho_mm)
 where not exists (select 1 from public.tb15_loai_ray limit 1);
 
 insert into public.tb15_mac_thep (mac_thep, sigma_s_mpa)
@@ -152,23 +184,27 @@ select * from (values
 ) as v(mac_thep, sigma_s_mpa)
 where not exists (select 1 from public.tb15_mac_thep limit 1);
 
-insert into public.tb15_ket_cau_duong (ten, loai_duong, r_khong_tai, r_co_tai, q_kn_m, loai_ta_vet, cu_ly_nut_a_m)
+insert into public.tb15_ket_cau_duong (ten, loai_duong, so_thanh_km, r_khong_tai_hs, r_khong_tai, r_dau_may_hs, r_co_tai, r_toa_xe_hs, r_toa_xe, q_kn_m, loai_ta_vet, cu_ly_nut_a_m, ghi_chu)
 select * from (values
-  ('Có ba lát – tà vẹt BT loại III (1 667 thanh/km)'::text, 'co_ba_lat'::text, 15::numeric, 23.2::numeric, 11.5::numeric, 'III'::text, 0.6::numeric),
-  ('Có ba lát – tà vẹt BT loại II mới (1 760 thanh/km)', 'co_ba_lat', 8.8, 13.6, 8.5, 'II', 0.568),
-  ('Có ba lát – tà vẹt BT loại II mới (1 840 thanh/km)', 'co_ba_lat', 8.8, 13.6, 8.9, 'II', 0.543),
-  ('Không ba lát – phụ kiện WJ-7 / WJ-8 (nút cách 625 mm)', 'khong_ba_lat', 24, 37.2, 0, '', 0.625)
-) as v(ten, loai_duong, r_khong_tai, r_co_tai, q_kn_m, loai_ta_vet, cu_ly_nut_a_m)
+  ('Có ba lát – tà vẹt BT loại III (1 667 thanh/km)'::text, 'co_ba_lat'::text, 1667::numeric, 7.5::numeric, 15::numeric, 11.6::numeric, 23.2::numeric, 7.5::numeric, 15::numeric, 11.5::numeric, 'III'::text, 0.6::numeric, '3.2.2-1'::text),
+  ('Có ba lát – tà vẹt BT loại II mới (1 760 thanh/km)', 'co_ba_lat', 1760, 4.4, 8.8, 6.8, 13.6, 4.4, 8.8, 8.5, 'II', 0.568, '3.2.2-1'),
+  ('Có ba lát – tà vẹt BT loại II mới (1 840 thanh/km)', 'co_ba_lat', 1840, 4.4, 8.8, 6.8, 13.6, 4.4, 8.8, 8.9, 'II', 0.543, 'r lấy bằng loại II 1 760 thanh/km'),
+  ('Không ba lát – phụ kiện WJ-7 / WJ-8 (nút cách 625 mm)', 'khong_ba_lat', null, null, 24, null, 37.2, null, null, 0, '', 0.625, ''),
+  ('Phụ kiện sức cản nhỏ trên cầu (lò xo V)', 'co_ba_lat', null, null, 8, null, null, null, null, null, '', 0.6, '3.2.2 — r = 8,0 kN/(m·ray), nút 600 mm')
+) as v(ten, loai_duong, so_thanh_km, r_khong_tai_hs, r_khong_tai, r_dau_may_hs, r_co_tai, r_toa_xe_hs, r_toa_xe, q_kn_m, loai_ta_vet, cu_ly_nut_a_m, ghi_chu)
 where not exists (select 1 from public.tb15_ket_cau_duong limit 1);
 
-insert into public.tb15_do_cung_goi (phuong_an, d_kn_mm)
+insert into public.tb15_do_cung_goi
+  (loai_duong, phuong_an, dem_kn_mm, dem_sai_so_kn_mm, d_kn_mm, tinh_min_kn_mm, tinh_max_kn_mm, ghi_chu)
 select * from (values
-  ('Có ba lát – tà vẹt II, đệm dưới ray 110 kN/mm'::text, 30::numeric),
-  ('Có ba lát – tà vẹt II, đệm dưới ray 80 kN/mm', 27.2),
-  ('Có ba lát – tà vẹt III, đệm dưới ray 80 kN/mm', 33),
-  ('Không ba lát – WJ-7A / WJ-8A (đệm 35±5 kN/mm)', 35),
-  ('Không ba lát – WJ-7B / WJ-8B / WJ-8C (đệm 23±3 kN/mm)', 23)
-) as v(phuong_an, d_kn_mm)
+  ('co_ba_lat'::text, 'Tà vẹt bê tông loại II'::text, 110::numeric, null::numeric, 30::numeric, null::numeric, null::numeric, 'A.0.3-1'::text),
+  ('co_ba_lat', 'Tà vẹt bê tông loại II', 80, null, 27.2, null, null, 'A.0.3-1'),
+  ('co_ba_lat', 'Tà vẹt bê tông loại III', 80, null, 33, null, null, 'A.0.3-1'),
+  ('khong_ba_lat', 'WJ-7A', 35, 5, null, 35, 50, 'A.0.3-2'),
+  ('khong_ba_lat', 'WJ-7B', 23, 3, null, 25, 35, 'A.0.3-2'),
+  ('khong_ba_lat', 'WJ-8A', 35, 5, null, 35, 50, 'A.0.3-2'),
+  ('khong_ba_lat', 'WJ-8B, WJ-8C', 23, 3, null, 25, 35, 'A.0.3-2')
+) as v(loai_duong, phuong_an, dem_kn_mm, dem_sai_so_kn_mm, d_kn_mm, tinh_min_kn_mm, tinh_max_kn_mm, ghi_chu)
 where not exists (select 1 from public.tb15_do_cung_goi limit 1);
 
 insert into public.tb15_on_dinh_nen (loai_ta_vet, q0, b_hs, z_hs, c_hs, n_hs)
@@ -177,6 +213,12 @@ select * from (values
   ('III', 27.4, 92, 1.2, 179, 2.5)
 ) as v(loai_ta_vet, q0, b_hs, z_hs, c_hs, n_hs)
 where not exists (select 1 from public.tb15_on_dinh_nen limit 1);
+
+insert into public.tb15_mo_men_can (loai_phu_kien, h_ncm_cm, mu, psi, ghi_chu)
+select * from (values
+  ('Loại đàn hồi II'::text, 22000::numeric, 2::numeric, 3.0983::numeric, 'B.0.4-2'::text)
+) as v(loai_phu_kien, h_ncm_cm, mu, psi, ghi_chu)
+where not exists (select 1 from public.tb15_mo_men_can limit 1);
 
 insert into public.tb15_he_so_tai (loai, nhan, v_min_kmh, v_max_kmh, loai_keo, r_tu_m, he_so, ghi_chu)
 select * from (values
@@ -226,7 +268,7 @@ declare t text;
 begin
   foreach t in array array[
     'tb15_khi_hau','tb15_loai_ray','tb15_mac_thep','tb15_ket_cau_duong',
-    'tb15_do_cung_goi','tb15_on_dinh_nen','tb15_he_so_tai','tb15_so_do_tai','tb15_so_do_tai_banh'
+    'tb15_do_cung_goi','tb15_on_dinh_nen','tb15_mo_men_can','tb15_he_so_tai','tb15_so_do_tai','tb15_so_do_tai_banh'
   ]
   loop
     execute format('alter table public.%I enable row level security', t);

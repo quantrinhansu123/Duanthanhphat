@@ -47,7 +47,14 @@ def parse_station_line(line: str) -> dict | None:
     name = " ".join(name_parts).strip(" -–")
     if not name:
         return None
-    return {"stt": stt, "ten_tram": name, "nam": nums[-1], "n_vals": len(nums)}
+    # 12 tháng + 1 cột Năm ở cuối
+    return {
+        "stt": stt,
+        "ten_tram": name,
+        "thang": nums[-13:-1],
+        "nam": nums[-1],
+        "n_vals": len(nums),
+    }
 
 
 def extract_range(start: int, end_exclusive: int) -> list[dict]:
@@ -112,6 +119,8 @@ def main() -> None:
                 "stt": (mx or mn)["stt"],
                 "t_kk_max": mx["nam"] if mx else None,
                 "t_kk_min": mn["nam"] if mn else None,
+                "t_max_thang": mx["thang"] if mx else None,
+                "t_min_thang": mn["thang"] if mn else None,
             }
         )
 
@@ -144,10 +153,13 @@ def main() -> None:
     for m in complete:
         rid = str(uuid.uuid5(uuid.NAMESPACE_URL, f"qcvn-a5a6:{m['ten_tram'].casefold()}"))
         ten = m["ten_tram"].replace("\\", "\\\\").replace('"', '\\"')
+        tmax = ", ".join(str(v) for v in m["t_max_thang"])
+        tmin = ", ".join(str(v) for v in m["t_min_thang"])
         lines.append(
             "  {"
             f' id: "{rid}", ma_tram: "{m["stt"]}", ten_tram: "{ten}", tinh: "",'
             f' t_kk_max: {m["t_kk_max"]}, t_kk_min: {m["t_kk_min"]},'
+            f" t_max_thang: [{tmax}], t_min_thang: [{tmin}],"
             f' nguon: "QCVN 02:2022/BXD", ghi_chu: ""'
             " },"
         )
