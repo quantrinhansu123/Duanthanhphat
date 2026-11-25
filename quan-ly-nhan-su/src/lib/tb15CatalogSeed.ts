@@ -45,16 +45,6 @@ export const TB15_SEED: Partial<Record<Tb15CatalogKey, Tb15Row[]>> = {
   mo_men_can: [
     { id: "mmc-dan-hoi-ii", loai_phu_kien: "Loại đàn hồi II", h_ncm_cm: 22000, mu: 2, psi: 3.0983, ghi_chu: "B.0.4-2" },
   ],
-  mo_men_can: [
-    {
-      id: "mm-dh-ii",
-      loai_phu_kien: "Loại đàn hồi II",
-      h_ncm_cm: 22000,
-      mu: 2,
-      psi: 3.0983,
-      ghi_chu: "B.0.4-2",
-    },
-  ],
   he_so_tai: [
     { id: "hs-v160", loai: "van_toc", nhan: "v > 160", v_min_kmh: 160.01, v_max_kmh: null, loai_keo: null, r_tu_m: null, he_so: 1, ghi_chu: "A.0.2-1" },
     { id: "hs-dien", loai: "van_toc", nhan: "Điện v≤160", v_min_kmh: 0, v_max_kmh: 160, loai_keo: "Dien", r_tu_m: null, he_so: 0.6, ghi_chu: "0.6*v/100" },
