@@ -184,11 +184,29 @@ export default function MachineAssignmentList() {
 
   const fuelByScheduleKey = useMemo(() => {
     const map = new Map<string, DailyFuelRow>();
+    const merge = (prev: DailyFuelRow, next: DailyFuelRow): DailyFuelRow => ({
+      ...prev,
+      ...next,
+      added: Math.max(prev.added || 0, next.added || 0),
+      hasActual: prev.hasActual || next.hasActual,
+      liters: next.hasActual ? next.liters : prev.hasActual ? prev.liters : next.liters,
+      remaining: next.hasActual ? next.remaining : prev.hasActual ? prev.remaining : next.remaining,
+    });
     for (const row of fuelRows) {
-      map.set(fuelKey(row.date, row.machineId), row);
+      const key = fuelKey(row.date, row.machineId);
+      const prev = map.get(key);
+      map.set(key, prev ? merge(prev, row) : row);
+    }
+    // Alias theo mã máy để lịch cũ (machineId = code:…) vẫn khớp được báo cáo dầu.
+    const idToCode = new Map(machines.map((item) => [item.id, item.code.trim().toLowerCase()]));
+    for (const row of fuelRows) {
+      const code = idToCode.get(row.machineId);
+      if (!code) continue;
+      const aliasKey = fuelKey(row.date, `code:${code}`);
+      if (!map.has(aliasKey)) map.set(aliasKey, row);
     }
     return map;
-  }, [fuelRows]);
+  }, [fuelRows, machines]);
 
   const totalWelds = filtered.reduce((sum, row) => sum + (row.weldCount ?? 0), 0);
   const totalFailed = filtered.reduce((sum, row) => sum + (row.failedWeldCount ?? 0), 0);
@@ -232,7 +250,10 @@ export default function MachineAssignmentList() {
     projectOptions: LookupOption[] = projects,
   ) {
     const quotaMap = new Map(machineOptions.map((item) => [item.id, item.oilQuota]));
-    const rows = buildMachineRunReportRows(schedules, fuelRows, quotaMap).sort(
+    const codeToMachineId = new Map(
+      machineOptions.map((item) => [item.code.trim().toLowerCase(), item.id] as const),
+    );
+    const rows = buildMachineRunReportRows(schedules, fuelRows, quotaMap, codeToMachineId).sort(
       (a, b) => compareNewestDate(a.date, b.date) || a.machineCode.localeCompare(b.machineCode, "vi"),
     );
     setPrintRows(rows);

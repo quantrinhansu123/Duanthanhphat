@@ -36,17 +36,59 @@ function isLiterUnit(unit?: string | null) {
   return value === "lít" || value === "lit" || value === "l";
 }
 
+function mergeFuelRow(prev: DailyFuelRow, next: DailyFuelRow): DailyFuelRow {
+  const preferNextActual = next.hasActual;
+  return {
+    ...prev,
+    ...next,
+    added: Math.max(prev.added || 0, next.added || 0),
+    hasActual: prev.hasActual || next.hasActual,
+    liters: preferNextActual ? next.liters : prev.hasActual ? prev.liters : next.liters,
+    remaining: preferNextActual ? next.remaining : prev.hasActual ? prev.remaining : next.remaining,
+    unit: (preferNextActual ? next.unit : prev.unit) || next.unit || prev.unit || "lít",
+  };
+}
+
+/** Gộp nhiều dòng dầu cùng ngày–máy; không để bản chỉ «đổ» đè mất «mức thực tế». */
+export function buildFuelByDateMachineMap(fuelRows: DailyFuelRow[]): Map<string, DailyFuelRow> {
+  const fuelMap = new Map<string, DailyFuelRow>();
+  for (const row of fuelRows) {
+    const key = fuelKey(row.date, row.machineId);
+    const prev = fuelMap.get(key);
+    fuelMap.set(key, prev ? mergeFuelRow(prev, row) : row);
+  }
+  return fuelMap;
+}
+
+function resolveFuelMachineId(
+  machineId: string,
+  machineCode: string,
+  codeToId: Map<string, string>,
+) {
+  if (machineId && !machineId.startsWith("code:")) return machineId;
+  const fromCode = codeToId.get(machineCode.trim().toLowerCase());
+  if (fromCode) return fromCode;
+  if (machineId.startsWith("code:")) {
+    return codeToId.get(machineId.slice(5).trim().toLowerCase()) || machineId;
+  }
+  return machineId;
+}
+
 export function buildMachineRunReportRows(
   schedules: MachineRunSchedule[],
   fuelRows: DailyFuelRow[],
   oilQuotaByMachine: Map<string, number | null | undefined>,
+  codeToMachineId: Map<string, string> = new Map(),
 ): MachineRunReportRow[] {
-  const fuelMap = new Map<string, DailyFuelRow>();
-  for (const row of fuelRows) fuelMap.set(fuelKey(row.date, row.machineId), row);
+  const fuelMap = buildFuelByDateMachineMap(fuelRows);
 
   return schedules.map((row) => {
-    const oil = fuelMap.get(fuelKey(row.date, row.machineId));
-    const quota = oilQuotaByMachine.get(row.machineId) ?? null;
+    const resolvedId = resolveFuelMachineId(row.machineId, row.machineCode, codeToMachineId);
+    const oil =
+      fuelMap.get(fuelKey(row.date, resolvedId)) ||
+      fuelMap.get(fuelKey(row.date, row.machineId));
+    const quota =
+      oilQuotaByMachine.get(resolvedId) ?? oilQuotaByMachine.get(row.machineId) ?? null;
     const unit = (oil?.unit || "lít").trim().toLowerCase();
     const isLiter = isLiterUnit(unit);
     const oilLow =
@@ -119,14 +161,10 @@ export default function MachineRunReportPrint({
   const totalWelds = rows.reduce((sum, row) => sum + (row.weldCount ?? 0), 0);
   const totalFailed = rows.reduce((sum, row) => sum + (row.failedWeldCount ?? 0), 0);
   const machineCount = new Set(rows.map((row) => row.machineId)).size;
-  const firstOfDayMachine = new Map<string, string>();
-  for (const row of rows) {
-    const key = fuelKey(row.date, row.machineId);
-    if (!firstOfDayMachine.has(key)) firstOfDayMachine.set(key, row.id);
-  }
+  // Cộng tổng đổ theo (ngày, máy) một lần — không nhân theo số dòng lịch cùng máy.
   const oilByDayMachine = new Map<string, number>();
   for (const row of rows) {
-    if (row.oilAdded == null || !isLiterUnit(row.oilUnit)) continue;
+    if (row.oilAdded == null || !(row.oilAdded > 0) || !isLiterUnit(row.oilUnit)) continue;
     oilByDayMachine.set(fuelKey(row.date, row.machineId), row.oilAdded);
   }
   const totalFuelLiters = [...oilByDayMachine.values()].reduce((sum, liters) => sum + liters, 0);
@@ -165,14 +203,17 @@ export default function MachineRunReportPrint({
         <article className="print-sheet">
           <PrintFrame>
             <header className="doc-head">
-              <div className="brand">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logo.png" alt="Thành Phát" className="logo-img" />
-                <div>
-                  <div className="brand-kicker">CÔNG TY CỔ PHẦN CÔNG TRÌNH</div>
-                  <div className="brand-name">THÀNH PHÁT</div>
-                  <div className="brand-kicker">CONSTRUCTION WORK JOINT STOCK COMPANY</div>
+              <div className="brand-row">
+                <div className="brand">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/logo.png" alt="Thành Phát" className="logo-img" />
+                  <div className="brand-text">
+                    <div className="brand-kicker">CÔNG TY CỔ PHẦN CÔNG TRÌNH</div>
+                    <div className="brand-name">THÀNH PHÁT</div>
+                    <div className="brand-kicker">CONSTRUCTION WORK JOINT STOCK COMPANY</div>
+                  </div>
                 </div>
+                <div className="head-meta" aria-hidden="true" />
               </div>
               <h1>BÁO CÁO THIẾT BỊ / LỊCH CHẠY MÁY</h1>
               <div className="meta-line">
@@ -223,13 +264,14 @@ export default function MachineRunReportPrint({
                   <th className="num">Mối hàn</th>
                   <th className="num">Lỗi</th>
                   <th>Thợ hàn</th>
+                  <th className="num">Mức dầu</th>
                   <th className="num">Tổng đổ dầu</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="empty">
+                    <td colSpan={11} className="empty">
                       Chưa có dữ liệu báo cáo trong khoảng đã chọn.
                     </td>
                   </tr>
@@ -248,9 +290,13 @@ export default function MachineRunReportPrint({
                       <td className="num">{(row.weldCount ?? 0).toLocaleString("vi-VN")}</td>
                       <td className="num fail">{(row.failedWeldCount ?? 0).toLocaleString("vi-VN")}</td>
                       <td>{row.personInChargeName || "—"}</td>
+                      <td className={`num${row.oilLow ? " fail" : ""}`}>
+                        {row.oilLiters == null
+                          ? "—"
+                          : `${row.oilLiters.toLocaleString("vi-VN", { maximumFractionDigits: 1 })} ${row.oilUnit || "lít"}`}
+                      </td>
                       <td className="num">
-                        {/* Tổng đổ trong ngày của máy: hiện một lần ở dòng đầu của (ngày, máy), các dòng cùng ngày để «—». */}
-                        {row.oilAdded == null || !(row.oilAdded > 0) || firstOfDayMachine.get(fuelKey(row.date, row.machineId)) !== row.id
+                        {row.oilAdded == null || !(row.oilAdded > 0)
                           ? "—"
                           : `${row.oilAdded.toLocaleString("vi-VN", { maximumFractionDigits: 1 })} ${row.oilUnit || "lít"}`}
                       </td>
@@ -296,18 +342,26 @@ const PRINT_CSS = `
   font-size: 10.5px; line-height: 1.35; box-shadow: 0 8px 24px rgba(15,23,42,.12);
 }
 #machine-run-report-print .doc-head { text-align: center; margin-bottom: 10px; }
-#machine-run-report-print .brand {
-  display: flex; align-items: center; justify-content: center; gap: 8px; text-align: left;
-  margin-bottom: 6px;
+#machine-run-report-print .brand-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8mm;
+  padding-bottom: 2.5mm; margin-bottom: 6px; border-bottom: 0.45mm solid #1d4ed8;
+  text-align: left;
 }
+#machine-run-report-print .brand {
+  display: flex; align-items: center; gap: 2.5mm; min-width: 0;
+}
+#machine-run-report-print .brand-text { min-width: 0; }
 #machine-run-report-print .logo-img {
-  width: 12mm; height: 12mm; object-fit: contain; flex-shrink: 0;
+  width: 14mm; height: 14mm; object-fit: contain; flex-shrink: 0;
 }
 #machine-run-report-print .brand-kicker {
-  font-size: 8px; font-weight: 700; letter-spacing: .04em; color: #0047ab;
+  font-size: 7.5px; font-weight: 700; letter-spacing: .04em; color: #0047ab;
 }
 #machine-run-report-print .brand-name {
   font-size: 14px; font-weight: 900; line-height: 1.05; letter-spacing: .06em; color: #0b1f4d;
+}
+#machine-run-report-print .head-meta {
+  width: 14mm; flex-shrink: 0;
 }
 #machine-run-report-print h1 {
   margin: 6px 0 8px; font-size: 15px; font-weight: 700; letter-spacing: .02em;
@@ -333,16 +387,17 @@ const PRINT_CSS = `
 #machine-run-report-print thead th {
   background: #f1f5f9; font-size: 9px; text-transform: uppercase; letter-spacing: .03em;
 }
-#machine-run-report-print th:nth-child(1), #machine-run-report-print td:nth-child(1) { width: 6%; }
-#machine-run-report-print th:nth-child(2), #machine-run-report-print td:nth-child(2) { width: 10%; }
-#machine-run-report-print th:nth-child(3), #machine-run-report-print td:nth-child(3) { width: 22%; }
-#machine-run-report-print th:nth-child(4), #machine-run-report-print td:nth-child(4) { width: 8%; }
-#machine-run-report-print th:nth-child(5), #machine-run-report-print td:nth-child(5) { width: 10%; }
-#machine-run-report-print th:nth-child(6), #machine-run-report-print td:nth-child(6) { width: 8%; }
-#machine-run-report-print th:nth-child(7), #machine-run-report-print td:nth-child(7) { width: 8%; }
-#machine-run-report-print th:nth-child(8), #machine-run-report-print td:nth-child(8) { width: 7%; }
-#machine-run-report-print th:nth-child(9), #machine-run-report-print td:nth-child(9) { width: 12%; }
-#machine-run-report-print th:nth-child(10), #machine-run-report-print td:nth-child(10) { width: 9%; }
+#machine-run-report-print th:nth-child(1), #machine-run-report-print td:nth-child(1) { width: 5%; }
+#machine-run-report-print th:nth-child(2), #machine-run-report-print td:nth-child(2) { width: 9%; }
+#machine-run-report-print th:nth-child(3), #machine-run-report-print td:nth-child(3) { width: 16%; }
+#machine-run-report-print th:nth-child(4), #machine-run-report-print td:nth-child(4) { width: 7%; }
+#machine-run-report-print th:nth-child(5), #machine-run-report-print td:nth-child(5) { width: 9%; }
+#machine-run-report-print th:nth-child(6), #machine-run-report-print td:nth-child(6) { width: 6%; }
+#machine-run-report-print th:nth-child(7), #machine-run-report-print td:nth-child(7) { width: 7%; }
+#machine-run-report-print th:nth-child(8), #machine-run-report-print td:nth-child(8) { width: 6%; }
+#machine-run-report-print th:nth-child(9), #machine-run-report-print td:nth-child(9) { width: 11%; }
+#machine-run-report-print th:nth-child(10), #machine-run-report-print td:nth-child(10) { width: 12%; }
+#machine-run-report-print th:nth-child(11), #machine-run-report-print td:nth-child(11) { width: 12%; }
 #machine-run-report-print .num, #machine-run-report-print .center { text-align: center; }
 #machine-run-report-print td.num { text-align: right; font-family: ui-monospace, monospace; }
 #machine-run-report-print .mono { font-family: ui-monospace, monospace; white-space: nowrap; }

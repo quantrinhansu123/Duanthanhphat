@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8" />
+<title>Kiểm tra Xem báo cáo — Phân công máy</title>
+<body>
+  <h1>Phân công máy — Xem báo cáo / In</h1>
+
+  <h2>Bảng phiếu cuối</h2>
+  <table border="1" cellpadding="8">
+    <tr><th>#</th><th>Mục trên phiếu</th><th>Sửa thành / quy tắc</th></tr>
+    <tr><td>1</td><td>Logo + tên công ty</td><td>Căn trái (<code>brand-row</code>), gạch chân xanh; tiêu đề báo cáo vẫn giữa.</td></tr>
+    <tr><td>2</td><td>Cột Mức dầu</td><td>Nằm ngay bên trái «Tổng đổ dầu»; lấy mức thực tế (<code>oilLiters</code>).</td></tr>
+    <tr><td>3</td><td>Cột Tổng đổ dầu</td><td>Giữ nguyên; cùng quy tắc hiện 1 lần / (ngày, máy) ở dòng đầu.</td></tr>
+    <tr><td>4</td><td>Mức dầu dưới định mức</td><td>Số mức dầu tô đỏ (<code>fail</code>) khi <code>oilLow</code>.</td></tr>
+  </table>
+
+  <h2>Lịch sử thay đổi</h2>
+  <p><b>25/11/2026 (lần 2):</b> Báo cáo khớp đủ số dầu — gộp dòng đổ+mức, map <code>code:</code>→UUID máy, hiện mức/đổ trên mọi dòng lịch cùng máy–ngày (không ẩn sau dòng đầu).</p>
+  <p><b>25/11/2026:</b> Logo căn trái cân đối; thêm cột «Mức dầu» bên trái «Tổng đổ dầu» trên phiếu xem/in.</p>
+</body>
+</html>
