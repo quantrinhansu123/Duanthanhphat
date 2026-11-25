@@ -525,13 +525,15 @@ export function extendRailRows(rows: RailRow[], count: number, line?: string): R
 
 export type PlaceShortRailTemps = {
   leftTemp?: number;
+  midTemp?: number;
   rightTemp?: number;
 };
 
-function shortRailTemps(temps?: PlaceShortRailTemps): Pick<RailCell, "temp" | "leftTemp" | "rightTemp"> {
+function shortRailTemps(temps?: PlaceShortRailTemps): Pick<RailCell, "temp" | "leftTemp" | "rightTemp" | "midTemp"> {
   const left = Number.isFinite(temps?.leftTemp) ? (temps!.leftTemp as number) : DEFAULT_NEW_RAIL_TEMPERATURE;
   const right = Number.isFinite(temps?.rightTemp) ? (temps!.rightTemp as number) : DEFAULT_NEW_RAIL_TEMPERATURE;
-  return { leftTemp: left, rightTemp: right, temp: lockTempFromSides(left, right) };
+  const mid = Number.isFinite(temps?.midTemp) ? (temps!.midTemp as number) : undefined;
+  return { leftTemp: left, rightTemp: right, ...(mid !== undefined ? { midTemp: mid } : {}), temp: lockTempFromSides(left, right, mid) };
 }
 
 /** Place a short rail at an exact chainage span. Width on the map follows metres. */
@@ -724,6 +726,8 @@ export type RailCellPatch = {
   /** Ghi đè T khóa trực tiếp (hiếm); ưu tiên leftTemp/rightTemp → temp = trung bình. */
   temp?: number;
   leftTemp?: number;
+  /** Nhiệt độ ray ở giữa; null để bỏ điểm đo giữa (quay về trung bình 2 điểm). */
+  midTemp?: number | null;
   rightTemp?: number;
   released?: boolean;
   /** Bảng báo cáo chuyển vị M/E; null để xóa. */
@@ -769,26 +773,28 @@ export function railCellLengthMetres(cell: RailCell): number | null {
   return Math.round((span + (Number.isFinite(cell.lengthAdjust) ? (cell.lengthAdjust as number) : 0)) * 1000) / 1000;
 }
 
-/** T khóa = (T trái + T phải) / 2. */
-export function lockTempFromSides(leftTemp: number, rightTemp: number): number {
-  if (!Number.isFinite(leftTemp) || !Number.isFinite(rightTemp)) {
-    throw new RangeError("Nhiệt độ ray trái/phải phải là số hữu hạn.");
+/** T khóa = (T trái + T giữa + T phải) / 3; chưa đo điểm giữa thì (T trái + T phải) / 2. */
+export function lockTempFromSides(leftTemp: number, rightTemp: number, midTemp?: number): number {
+  if (!Number.isFinite(leftTemp) || !Number.isFinite(rightTemp) || (midTemp !== undefined && !Number.isFinite(midTemp))) {
+    throw new RangeError("Nhiệt độ ray trái/giữa/phải phải là số hữu hạn.");
   }
-  return Math.round(((leftTemp + rightTemp) / 2) * 1000) / 1000;
+  const sum = midTemp === undefined ? (leftTemp + rightTemp) / 2 : (leftTemp + midTemp + rightTemp) / 3;
+  return Math.round(sum * 1000) / 1000;
 }
 
 /** T khóa dùng tô màu / nhãn: ưu tiên trung bình hai bên nếu đã nhập. */
-export function railCellLockTemp(cell: Pick<RailCell, "temp" | "leftTemp" | "rightTemp">): number {
+export function railCellLockTemp(cell: Pick<RailCell, "temp" | "leftTemp" | "rightTemp" | "midTemp">): number {
   if (Number.isFinite(cell.leftTemp) && Number.isFinite(cell.rightTemp)) {
-    return lockTempFromSides(cell.leftTemp as number, cell.rightTemp as number);
+    return lockTempFromSides(cell.leftTemp as number, cell.rightTemp as number, Number.isFinite(cell.midTemp) ? cell.midTemp : undefined);
   }
   return cell.temp;
 }
 
-function applySideTemps(cell: RailCell, leftTemp: number, rightTemp: number) {
+function applySideTemps(cell: RailCell, leftTemp: number, rightTemp: number, midTemp?: number) {
   cell.leftTemp = leftTemp;
   cell.rightTemp = rightTemp;
-  cell.temp = lockTempFromSides(leftTemp, rightTemp);
+  if (midTemp === undefined) delete cell.midTemp; else cell.midTemp = midTemp;
+  cell.temp = lockTempFromSides(leftTemp, rightTemp, midTemp);
 }
 
 /** Update one cell's chainage/length/temp. Later cells keep their length and slide. */
@@ -799,14 +805,15 @@ export function updateRailCell(rows: RailRow[], cellId: string, patch: RailCellP
   const index = row.cells.findIndex((cell) => cell.id === cellId);
   const cell = row.cells[index];
 
-  const hasSideTemps = patch.leftTemp !== undefined || patch.rightTemp !== undefined;
+  const hasSideTemps = patch.leftTemp !== undefined || patch.rightTemp !== undefined || patch.midTemp !== undefined;
   if (hasSideTemps) {
     const left = patch.leftTemp !== undefined ? patch.leftTemp : (cell.leftTemp ?? cell.temp);
     const right = patch.rightTemp !== undefined ? patch.rightTemp : (cell.rightTemp ?? cell.temp);
-    if (!Number.isFinite(left) || !Number.isFinite(right)) {
-      throw new RangeError("Nhiệt độ ray trái/phải phải là số hữu hạn.");
+    const mid = patch.midTemp === undefined ? cell.midTemp : (patch.midTemp ?? undefined);
+    if (!Number.isFinite(left) || !Number.isFinite(right) || (mid !== undefined && !Number.isFinite(mid))) {
+      throw new RangeError("Nhiệt độ ray trái/giữa/phải phải là số hữu hạn.");
     }
-    applySideTemps(cell, left, right);
+    applySideTemps(cell, left, right, mid);
   } else if (patch.temp !== undefined) {
     if (!Number.isFinite(patch.temp)) throw new RangeError("Nhiệt độ khóa phải là số hữu hạn.");
     cell.temp = patch.temp;
@@ -934,16 +941,19 @@ export function patchTrackCell(layout: TrackLayout, cellId: string, patch: RailC
     const tempChanged =
       patch.temp !== undefined
       || patch.leftTemp !== undefined
+      || patch.midTemp !== undefined
       || patch.rightTemp !== undefined;
     if (tempChanged && span.startCell.id === cellId) {
       if (Number.isFinite(span.startCell.leftTemp)) nextParams.leftTemp = span.startCell.leftTemp as number;
       if (Number.isFinite(span.startCell.rightTemp)) nextParams.rightTemp = span.startCell.rightTemp as number;
+      if (Number.isFinite(span.startCell.midTemp)) nextParams.midTemp = span.startCell.midTemp as number; else delete nextParams.midTemp;
     }
     if (
       nextParams.leftLength === item.params.leftLength
       && nextParams.neutralTemp === item.params.neutralTemp
       && nextParams.leftTemp === item.params.leftTemp
       && nextParams.rightTemp === item.params.rightTemp
+      && nextParams.midTemp === item.params.midTemp
     ) {
       return item;
     }
@@ -1003,6 +1013,10 @@ export function validateStressParams(value: unknown): StressInput | null {
     if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
     params[key] = raw;
   }
+  if (value.midTemp !== undefined) {
+    if (typeof value.midTemp !== "number" || !Number.isFinite(value.midTemp)) return null;
+    params.midTemp = value.midTemp;
+  }
   if (typeof value.sideRollers !== "boolean") return null;
   if (value.method !== "ATW" && value.method !== "FBW" && value.method !== "SINGLE") return null;
   params.sideRollers = value.sideRollers;
@@ -1060,6 +1074,7 @@ export function validateTrackLayout(value: unknown): TrackLayout | null {
         || typeof rawCell.temp !== "number" || !Number.isFinite(rawCell.temp)
         || (rawCell.leftTemp !== undefined && (typeof rawCell.leftTemp !== "number" || !Number.isFinite(rawCell.leftTemp)))
         || (rawCell.rightTemp !== undefined && (typeof rawCell.rightTemp !== "number" || !Number.isFinite(rawCell.rightTemp)))
+        || (rawCell.midTemp !== undefined && (typeof rawCell.midTemp !== "number" || !Number.isFinite(rawCell.midTemp)))
         || (rawCell.placed !== undefined && typeof rawCell.placed !== "boolean")
         || (rawCell.released !== undefined && typeof rawCell.released !== "boolean")
         || (rawCell.lengthAdjust !== undefined && (typeof rawCell.lengthAdjust !== "number" || !Number.isFinite(rawCell.lengthAdjust)))
@@ -1070,9 +1085,10 @@ export function validateTrackLayout(value: unknown): TrackLayout | null {
         || end <= start || (previousEnd !== null && previousEnd !== start)) return null;
       const leftTemp = typeof rawCell.leftTemp === "number" ? rawCell.leftTemp : undefined;
       const rightTemp = typeof rawCell.rightTemp === "number" ? rawCell.rightTemp : undefined;
+      const midTemp = typeof rawCell.midTemp === "number" ? rawCell.midTemp : undefined;
       const lockTemp =
         leftTemp !== undefined && rightTemp !== undefined
-          ? lockTempFromSides(leftTemp, rightTemp)
+          ? lockTempFromSides(leftTemp, rightTemp, midTemp)
           : rawCell.temp;
       cells.push({
         id: rawCell.id,
@@ -1081,6 +1097,7 @@ export function validateTrackLayout(value: unknown): TrackLayout | null {
         temp: lockTemp,
         ...(leftTemp !== undefined ? { leftTemp } : {}),
         ...(rightTemp !== undefined ? { rightTemp } : {}),
+        ...(midTemp !== undefined ? { midTemp } : {}),
         ...(rawCell.placed ? { placed: true } : {}),
         ...(rawCell.released ? { released: true } : {}),
         ...(typeof rawCell.lengthAdjust === "number" && rawCell.lengthAdjust !== 0 ? { lengthAdjust: rawCell.lengthAdjust } : {}),

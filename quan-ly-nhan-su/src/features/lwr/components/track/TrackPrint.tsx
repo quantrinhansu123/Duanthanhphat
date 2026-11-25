@@ -86,7 +86,7 @@ function lwrPrintSummary(params: StressInput): LwrPrintSummary {
   } catch {
     const temp = Number.isFinite(params.airTemp) ? params.airTemp : Number.NaN;
     const avgFallback = Number.isFinite(params.leftTemp) && Number.isFinite(params.rightTemp)
-      ? (params.leftTemp + params.rightTemp) / 2
+      ? (Number.isFinite(params.midTemp) ? (params.leftTemp + (params.midTemp as number) + params.rightTemp) / 3 : (params.leftTemp + params.rightTemp) / 2)
       : temp;
     const tensor = Number.isFinite(avgFallback) ? avgFallback < 30 : false;
     return {
@@ -393,6 +393,7 @@ export function TrackPrint({
         rightLength: 0,
         leftTemp,
         rightTemp,
+        ...(Number.isFinite(cell.midTemp) ? { midTemp: cell.midTemp } : {}),
         startChainage: cell.from,
         endChainage: cell.to,
       };
@@ -635,7 +636,7 @@ export function TrackPrint({
             <p className="meta">
               Đoạn in: Km{formatChainage(printRange.start)} – Km{formatChainage(printRange.end)}
               {" · "}
-              {(printRange.end - printRange.start) / 1000} km
+              {((printRange.end - printRange.start) / 1000).toFixed(2)} km
               {" · "}
               {stamp}
             </p>

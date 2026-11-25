@@ -20,8 +20,10 @@ import {
 } from "@/lib/machineRunSchedulesDb";
 import { resolveWeldTestStatus, type WeldReportRow } from "@/lib/weldReportData";
 import {
+  clearDailyFuelRefill,
   deleteDailyFuel,
   formatFuelDate,
+  fuelLevelAfter,
   loadDailyFuelRows,
   OIL_LEVEL_UNITS,
   upsertDailyFuel,
@@ -50,10 +52,23 @@ function emptyOilForm(date: string, machineId: string, personId = ""): DailyFuel
   return {
     date,
     machineId,
-    liters: 0,
+    added: 0,
+    actual: 0,
     unit: "lít",
     personId,
     note: "",
+  };
+}
+
+function oilFormFromRow(row: Pick<DailyFuelRow, "date" | "machineId" | "added" | "liters" | "unit" | "personId" | "note">): DailyFuelFormValues {
+  return {
+    date: row.date,
+    machineId: row.machineId,
+    added: row.added,
+    actual: row.liters,
+    unit: row.unit || "lít",
+    personId: row.personId,
+    note: row.note,
   };
 }
 
@@ -169,11 +184,29 @@ export default function MachineAssignmentList() {
 
   const fuelByScheduleKey = useMemo(() => {
     const map = new Map<string, DailyFuelRow>();
+    const merge = (prev: DailyFuelRow, next: DailyFuelRow): DailyFuelRow => ({
+      ...prev,
+      ...next,
+      added: Math.max(prev.added || 0, next.added || 0),
+      hasActual: prev.hasActual || next.hasActual,
+      liters: next.hasActual ? next.liters : prev.hasActual ? prev.liters : next.liters,
+      remaining: next.hasActual ? next.remaining : prev.hasActual ? prev.remaining : next.remaining,
+    });
     for (const row of fuelRows) {
-      map.set(fuelKey(row.date, row.machineId), row);
+      const key = fuelKey(row.date, row.machineId);
+      const prev = map.get(key);
+      map.set(key, prev ? merge(prev, row) : row);
+    }
+    // Alias theo mã máy để lịch cũ (machineId = code:…) vẫn khớp được báo cáo dầu.
+    const idToCode = new Map(machines.map((item) => [item.id, item.code.trim().toLowerCase()]));
+    for (const row of fuelRows) {
+      const code = idToCode.get(row.machineId);
+      if (!code) continue;
+      const aliasKey = fuelKey(row.date, `code:${code}`);
+      if (!map.has(aliasKey)) map.set(aliasKey, row);
     }
     return map;
-  }, [fuelRows]);
+  }, [fuelRows, machines]);
 
   const totalWelds = filtered.reduce((sum, row) => sum + (row.weldCount ?? 0), 0);
   const totalFailed = filtered.reduce((sum, row) => sum + (row.failedWeldCount ?? 0), 0);
@@ -217,7 +250,10 @@ export default function MachineAssignmentList() {
     projectOptions: LookupOption[] = projects,
   ) {
     const quotaMap = new Map(machineOptions.map((item) => [item.id, item.oilQuota]));
-    const rows = buildMachineRunReportRows(schedules, fuelRows, quotaMap).sort(
+    const codeToMachineId = new Map(
+      machineOptions.map((item) => [item.code.trim().toLowerCase(), item.id] as const),
+    );
+    const rows = buildMachineRunReportRows(schedules, fuelRows, quotaMap, codeToMachineId).sort(
       (a, b) => compareNewestDate(a.date, b.date) || a.machineCode.localeCompare(b.machineCode, "vi"),
     );
     setPrintRows(rows);
@@ -319,14 +355,7 @@ export default function MachineAssignmentList() {
     const existing = fuelByScheduleKey.get(fuelKey(schedule.date, schedule.machineId));
     setFuelDateEditable(false);
     if (existing) {
-      setFuelForm({
-        date: existing.date,
-        machineId: existing.machineId,
-        liters: existing.liters,
-        unit: existing.unit || "lít",
-        personId: existing.personId,
-        note: existing.note,
-      });
+      setFuelForm(oilFormFromRow(existing));
       setFuelEditId(existing.id);
       setFuelFormError("");
       setFuelModal("edit");
@@ -365,18 +394,17 @@ export default function MachineAssignmentList() {
 
   function openOilHistoryEdit(row: DailyFuelRow) {
     setFuelDateEditable(true);
-    setFuelForm({
-      date: row.date,
-      machineId: row.machineId,
-      liters: row.liters,
-      unit: row.unit || "lít",
-      personId: row.personId,
-      note: row.note,
-    });
+    setFuelForm(oilFormFromRow(row));
     setFuelEditId(row.id);
     setFuelFormError("");
     setFuelModal("edit");
   }
+
+  const addedTotalByMachine = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of fuelRows) if (isLiterUnit(r.unit)) map.set(r.machineId, (map.get(r.machineId) ?? 0) + r.added);
+    return map;
+  }, [fuelRows]);
 
   const oilHistoryRows = useMemo(() => {
     if (!oilHistoryMachine) return [];
@@ -394,16 +422,29 @@ export default function MachineAssignmentList() {
       setFuelFormError("Thiếu máy cần báo cáo.");
       return;
     }
-    if (!Number.isFinite(fuelForm.liters) || fuelForm.liters < 0) {
-      setFuelFormError("Mức dầu không hợp lệ.");
+    const refill = fuelDateEditable;
+    if (refill ? !Number.isFinite(fuelForm.added) || fuelForm.added <= 0 : !Number.isFinite(fuelForm.actual) || fuelForm.actual < 0) {
+      setFuelFormError(refill ? "Số đã đổ phải lớn hơn 0." : "Số thực tế không hợp lệ.");
       return;
     }
     setFuelSaving(true);
     setFuelFormError("");
     try {
-      const savedId = await upsertDailyFuel(fuelForm, fuelEditId ?? undefined);
+      // Lần đổ mới trong cùng ngày thì cộng dồn; sửa một lần đổ thì ghi đè đúng số đó.
+      const prior = fuelRows.find((r) => r.id === fuelEditId)
+        ?? fuelRows.find((r) => r.machineId === fuelForm.machineId && r.date === fuelForm.date);
+      const addedTotal = refill && !fuelEditId
+        ? Math.round(((prior?.added ?? 0) + (Number(fuelForm.added) || 0)) * 100) / 100
+        : Number(fuelForm.added) || 0;
+      const savedId = await upsertDailyFuel(
+        refill ? { ...fuelForm, added: addedTotal } : fuelForm,
+        fuelEditId ?? undefined,
+        refill ? "refill" : "report",
+      );
       setFuelModal(null);
       const machine = machines.find((item) => item.id === fuelForm.machineId);
+      const actual = fuelLevelAfter(fuelForm);
+      const added = Number(fuelForm.added) || 0;
       // Chỉ thay đúng dòng vừa lưu (cùng máy+ngày bị upsert đè thì bỏ dòng cũ), không tải lại cả danh sách.
       const savedRow: DailyFuelRow = {
         id: savedId,
@@ -411,7 +452,10 @@ export default function MachineAssignmentList() {
         machineId: fuelForm.machineId,
         machineCode: machine?.code || "—",
         machineName: machine?.name || "",
-        liters: Number(fuelForm.liters) || 0,
+        liters: refill ? (prior?.liters ?? 0) : actual,
+        remaining: refill ? (prior?.liters ?? 0) : actual,
+        added: refill ? addedTotal : (prior?.added ?? 0),
+        hasActual: refill ? (prior?.hasActual ?? false) : true,
         unit: fuelForm.unit.trim() || "lít",
         personId: fuelForm.personId.trim(),
         personName: personnel.find((p) => p.id === fuelForm.personId)?.label || "—",
@@ -424,12 +468,12 @@ export default function MachineAssignmentList() {
       );
       const quota = machine?.oilQuota ?? null;
       const belowQuota =
-        quota != null && isLiterUnit(fuelForm.unit) && fuelForm.liters < quota;
+        quota != null && !refill && isLiterUnit(fuelForm.unit) && actual < quota;
       if (machine && !fuelEditId) {
-        const level = `${fuelForm.liters.toLocaleString("vi-VN")} ${fuelForm.unit}`;
+        const level = `${actual.toLocaleString("vi-VN")} ${fuelForm.unit}`;
         const message = belowQuota && quota != null
-          ? `${machine.code} ngày ${formatFuelDate(fuelForm.date)}: mức dầu ${level} dưới định mức ${quota.toLocaleString("vi-VN")} lít.`
-          : `${machine.code} ngày ${formatFuelDate(fuelForm.date)}: mức dầu còn lại ${level}.`;
+          ? `${machine.code} ngày ${formatFuelDate(fuelForm.date)}: thực tế ${level} dưới định mức ${quota.toLocaleString("vi-VN")} lít.`
+          : `${machine.code} ngày ${formatFuelDate(fuelForm.date)}: ${refill ? `đã đổ thêm ${added.toLocaleString("vi-VN")} ${fuelForm.unit} (tổng đã đổ ${addedTotal.toLocaleString("vi-VN")})` : `thực tế ${level}`}.`;
         await notifyOilReport(message, { belowQuota });
         showToast(`Đã ghi báo cáo mức dầu — đã báo Tiến · ${machine.code}`);
       } else {
@@ -442,8 +486,40 @@ export default function MachineAssignmentList() {
     }
   }
 
+  async function deleteHistoryEntry(row: DailyFuelRow) {
+    const onlyRefill = row.hasActual && row.added > 0;
+    const code = row.machineCode || machines.find((m) => m.id === row.machineId)?.code || "";
+    const text = onlyRefill
+      ? `Xóa lần đổ ${row.added.toLocaleString("vi-VN")} ${row.unit} của ${code} ngày ${formatFuelDate(row.date)}? (giữ báo cáo Thực tế)`
+      : `Xóa dòng cấp phát/báo cáo của ${code} ngày ${formatFuelDate(row.date)}?`;
+    if (!window.confirm(text)) return;
+    setFuelSaving(true);
+    try {
+      if (onlyRefill) {
+        await clearDailyFuelRefill(row.id);
+        setFuelRows((rows) => rows.map((r) => (r.id === row.id ? { ...r, added: 0 } : r)));
+      } else {
+        await deleteDailyFuel(row.id);
+        setFuelRows((rows) => rows.filter((r) => r.id !== row.id));
+      }
+      showToast("Đã xóa");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Không xóa được");
+    } finally {
+      setFuelSaving(false);
+    }
+  }
+
   async function handleFuelDelete() {
     if (!fuelEditId) return;
+    if (fuelDateEditable) {
+      const row = fuelRows.find((r) => r.id === fuelEditId);
+      if (row) {
+        setFuelModal(null);
+        await deleteHistoryEntry(row);
+        return;
+      }
+    }
     const machineLabel =
       machines.find((m) => m.id === fuelForm.machineId)?.code || fuelForm.machineId;
     if (
@@ -708,6 +784,7 @@ export default function MachineAssignmentList() {
                 const quota = machines.find((item) => item.id === row.machineId)?.oilQuota ?? null;
                 const oilLow =
                   oil != null &&
+                  oil.hasActual &&
                   quota != null &&
                   isLiterUnit(oil.unit || "lít") &&
                   oil.liters < quota;
@@ -768,19 +845,35 @@ export default function MachineAssignmentList() {
                   <td className="px-2.5 py-3 sm:px-3">
                     {oil ? (
                       <div className="space-y-1.5">
-                        <div className={`inline-flex items-center gap-1.5 font-mono text-sm font-bold tabular-nums ${oilLow ? "text-rose-600" : "text-emerald-700"}`}>
-                          {oilLow ? (
-                            <Warning
-                              size={16}
-                              weight="fill"
-                              aria-label="Mức dầu dưới định mức tối thiểu"
-                              className="shrink-0 text-rose-600"
-                            />
-                          ) : null}
-                          <span>
-                            {oil.liters.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}{" "}
-                            {oil.unit || "lít"}
-                          </span>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <div className={`rounded-lg border px-2 py-1.5 ${oilLow ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50"}`}>
+                            <div className={`text-[10px] font-semibold uppercase tracking-wide ${oilLow ? "text-rose-600" : "text-emerald-700"}`}>Thực tế</div>
+                            <div className={`inline-flex items-center gap-1 font-mono text-sm font-bold tabular-nums ${oilLow ? "text-rose-600" : "text-emerald-800"}`}>
+                              {oilLow ? (
+                                <Warning
+                                  size={14}
+                                  weight="fill"
+                                  aria-label="Mức dầu dưới định mức tối thiểu"
+                                  className="shrink-0"
+                                />
+                              ) : null}
+                              {oil.hasActual ? (
+                                <span>
+                                  {oil.liters.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}{" "}
+                                  <span className="text-[11px] font-sans font-medium opacity-80">{oil.unit || "lít"}</span>
+                                </span>
+                              ) : (
+                                <span className="text-[11px] font-sans font-medium text-slate-500">Chưa báo cáo thực tế</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+                            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Tổng đã đổ</div>
+                            <div className="font-mono text-sm font-bold tabular-nums text-slate-800">
+                              {(addedTotalByMachine.get(row.machineId) ?? 0).toLocaleString("vi-VN", { maximumFractionDigits: 1 })}{" "}
+                              <span className="text-[11px] font-sans font-medium text-slate-500">lít</span>
+                            </div>
+                          </div>
                         </div>
                         {oilLow && (
                           <div className="text-[11px] font-bold leading-snug text-rose-600">
@@ -798,7 +891,7 @@ export default function MachineAssignmentList() {
                           <button
                             type="button"
                             onClick={() => openOilHistory(row)}
-                            className="h-8 rounded-lg border border-slate-300 bg-white px-1.5 text-[10px] font-semibold leading-tight text-slate-700 hover:bg-slate-50 sm:text-[11px]"
+                            className="min-h-8 rounded-lg border border-slate-300 bg-white px-1.5 text-[10px] font-semibold leading-tight text-slate-700 hover:bg-slate-50 sm:text-[11px]"
                           >
                             Lịch sử cấp phát
                           </button>
@@ -816,7 +909,7 @@ export default function MachineAssignmentList() {
                         <button
                           type="button"
                           onClick={() => openOilHistory(row)}
-                          className="h-8 rounded-lg border border-slate-300 bg-white px-1.5 text-[10px] font-semibold leading-tight text-slate-700 hover:bg-slate-50 sm:text-[11px]"
+                          className="min-h-8 rounded-lg border border-slate-300 bg-white px-1.5 text-[10px] font-semibold leading-tight text-slate-700 hover:bg-slate-50 sm:text-[11px]"
                         >
                           Lịch sử cấp phát
                         </button>
@@ -1065,8 +1158,8 @@ export default function MachineAssignmentList() {
                 </h3>
                 <p className="mt-0.5 text-xs text-slate-500">
                   {fuelDateEditable
-                    ? "Ghi lần cấp phát dầu cho máy đã chọn"
-                    : "Mức dầu tại thời điểm báo cáo · một máy / một ngày"}
+                    ? "Hai ô: Đã đổ và Thực tế · một máy / một ngày"
+                    : "Nhập Đã đổ và Thực tế · một máy / một ngày"}
                 </p>
               </div>
               <button
@@ -1110,17 +1203,38 @@ export default function MachineAssignmentList() {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
+                {fuelDateEditable && (
                 <label className="block text-xs font-semibold text-slate-700">
-                  Mức dầu tại thời điểm báo cáo *
+                  Đã đổ *
                   <input
                     type="number"
                     min="0"
                     step="0.1"
-                    value={fuelForm.liters}
-                    onChange={(e) => setFuelForm((f) => ({ ...f, liters: Number(e.target.value) }))}
+                    value={fuelForm.added}
+                    onChange={(e) => setFuelForm((f) => ({ ...f, added: Number(e.target.value) }))}
                     className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 px-3 font-mono text-sm outline-hidden focus:border-[#0047AB]"
+                    placeholder="0"
                   />
                 </label>
+                )}
+                {!fuelDateEditable && (
+                <label className="block text-xs font-semibold text-slate-700">
+                  Thực tế *
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={fuelForm.actual}
+                    onChange={(e) => setFuelForm((f) => ({ ...f, actual: Number(e.target.value) }))}
+                    className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 px-3 font-mono text-sm outline-hidden focus:border-[#0047AB]"
+                    placeholder="0"
+                    data-testid="fuel-level-after"
+                  />
+                </label>
+                )}
+                <p className="col-span-2 text-[11px] text-slate-500">
+                  {fuelDateEditable ? "Mỗi lần đổ được cộng dồn; tổng hiện ở nút Lịch sử cấp phát." : "Chỉ ghi số Thực tế (so với định mức); số đã đổ nhập ở Lịch sử cấp phát."}
+                </p>
                 <label className="block text-xs font-semibold text-slate-700">
                   Đơn vị
                   <select
@@ -1248,7 +1362,10 @@ export default function MachineAssignmentList() {
                 <strong className="font-mono font-semibold tabular-nums text-slate-900">
                   {oilHistoryRows.length}
                 </strong>{" "}
-                lần cấp · ngày mới nhất trước
+                lần cấp · tổng đã đổ{" "}
+                <strong className="font-mono font-semibold tabular-nums text-emerald-700">
+                  {(oilHistoryMachine ? addedTotalByMachine.get(oilHistoryMachine.id) ?? 0 : 0).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} lít
+                </strong>
               </span>
               <button
                 type="button"
@@ -1269,7 +1386,8 @@ export default function MachineAssignmentList() {
                   <thead className="sticky top-0 bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-600">
                     <tr className="border-b border-slate-200">
                       <th className="px-4 py-2.5">Ngày</th>
-                      <th className="px-3.5 py-2.5 text-right">Nhiên liệu</th>
+                      <th className="px-3.5 py-2.5 text-right">Đã đổ</th>
+                      <th className="px-3.5 py-2.5 text-right">Thực tế</th>
                       <th className="px-3.5 py-2.5">Người cấp</th>
                       <th className="px-3.5 py-2.5">Ghi chú</th>
                       <th className="px-3.5 py-2.5 text-right">Thao tác</th>
@@ -1282,8 +1400,16 @@ export default function MachineAssignmentList() {
                           {formatFuelDate(row.date)}
                         </td>
                         <td className="whitespace-nowrap px-3.5 py-2.5 text-right font-mono font-semibold tabular-nums text-slate-900">
-                          {row.liters.toLocaleString("vi-VN")}{" "}
+                          {row.added.toLocaleString("vi-VN")}{" "}
                           <span className="font-sans font-medium text-slate-500">{row.unit}</span>
+                        </td>
+                        <td className="whitespace-nowrap px-3.5 py-2.5 text-right font-mono font-semibold tabular-nums text-emerald-800">
+                          {row.hasActual ? (
+                            <>
+                              {row.liters.toLocaleString("vi-VN")}{" "}
+                              <span className="font-sans font-medium text-slate-500">{row.unit}</span>
+                            </>
+                          ) : "—"}
                         </td>
                         <td className="px-3.5 py-2.5 text-slate-700">{row.personName || "—"}</td>
                         <td className="max-w-[200px] px-3.5 py-2.5 text-slate-600">
@@ -1296,6 +1422,14 @@ export default function MachineAssignmentList() {
                             className="rounded-lg px-2.5 py-1 font-semibold text-[#0047AB] hover:bg-blue-50"
                           >
                             Sửa
+                          </button>
+                          <button
+                            type="button"
+                            disabled={fuelSaving}
+                            onClick={() => void deleteHistoryEntry(row)}
+                            className="ml-1 rounded-lg px-2.5 py-1 font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                          >
+                            Xóa
                           </button>
                         </td>
                       </tr>

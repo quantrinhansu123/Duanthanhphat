@@ -49,7 +49,7 @@ function cellOptions(layout: TrackLayout | null): CellOption[] {
   });
 }
 
-/** Trang «Theo dõi ray hàn dài»: chọn dự án + tên thanh ray rồi điền báo cáo chuyển vị điểm M / điểm E. */
+/** Trang «Theo dõi ray hàn dài/hàn liền»: chọn dự án + tên thanh ray rồi điền báo cáo chuyển vị điểm M / điểm E. */
 export default function RailReportEntry() {
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [projectId, setProjectId] = useState("");
@@ -102,7 +102,7 @@ export default function RailReportEntry() {
         let local = readStoredTrackLayout(null);
         try { local = readStoredTrackLayout(localStorage.getItem(key)); } catch { /* Use remote when browser storage is unavailable. */ }
         if (!local.layout && !result.layout) {
-          setMessage(result.error ?? "Dự án này chưa có sơ đồ thanh ray. Mở Tổng quan (Track Map) để tạo sơ đồ trước.");
+          setMessage(result.error ?? "Dự án này chưa có sơ đồ thanh ray. Mở Bố trí tổng quan ray hàn dài/hàn liền để tạo sơ đồ trước.");
           return;
         }
         const chosen = chooseTrackLayout({ local: local.layout, localSavedAt: local.savedAt, remote: result.layout, remoteUpdatedAt: result.updatedAt });
@@ -204,7 +204,7 @@ export default function RailReportEntry() {
   return (
     <div className="w-full min-w-0 space-y-3 px-4 pb-10 sm:px-6">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-lg font-bold text-slate-900">Theo dõi ray hàn dài</h1>
+        <h1 className="text-lg font-bold text-slate-900">Theo dõi ray hàn dài/hàn liền</h1>
         <button type="button" disabled={saving} onClick={() => {
           setCellId(""); setRowIndex(null); setReport({ ...EMPTY_ROW, measuredAt: measurementNow() }); setMessage(""); setEditorOpen(true);
         }} className="min-h-11 rounded-lg bg-[#0047AB] px-4 py-2 font-semibold text-white disabled:opacity-50">+ Thêm mới</button>
@@ -212,7 +212,7 @@ export default function RailReportEntry() {
       {message && <p role="status" className="text-sm text-slate-600">{message}</p>}
       <dialog ref={editorRef} aria-labelledby="rail-editor-title" onClose={() => setEditorOpen(false)} onCancel={event => { if (saving) event.preventDefault(); }} className="m-auto max-h-[92dvh] w-[calc(100%_-_1.5rem)] max-w-3xl overflow-y-auto rounded-2xl border-0 bg-white p-4 text-slate-900 shadow-xl backdrop:bg-slate-900/50 sm:p-6">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 id="rail-editor-title" className="text-lg font-bold">Theo dõi ray hàn dài — {selected ? selected.name : "Thêm mới"}</h2>
+        <h2 id="rail-editor-title" className="text-lg font-bold">Theo dõi ray hàn dài/hàn liền — {selected ? selected.name : "Thêm mới"}</h2>
         <button type="button" disabled={saving} onClick={() => setEditorOpen(false)} className="min-h-11 rounded-lg border border-slate-300 px-4 font-semibold disabled:opacity-50">Đóng</button>
       </div>
       {message && <p role="status" className="mb-3 text-sm text-slate-600">{message}</p>}

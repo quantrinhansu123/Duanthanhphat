@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8" />
+<title>Kiểm tra tab Thông số đầu vào</title>
+<body>
+  <h1>Kiểm toán đường ray không mối nối — Thông số đầu vào</h1>
+  <h2>Bảng phiếu cuối</h2>
+  <table border="1" cellpadding="8">
+    <tr><th>#</th><th>Mục trên phiếu</th><th>Sửa thành / quy tắc</th></tr>
+    <tr><td>1</td><td>Tab Thông số đầu vào</td><td>Thêm trên trang <code>/lwr-cong-thuc-tb10015</code>, cạnh Thanh ray dự án / Excel gốc / Hướng dẫn.</td></tr>
+    <tr><td>2</td><td>01 Các thông số đầu vào</td><td>Nhóm A–D; mặc định mở A.</td></tr>
+    <tr><td>3</td><td>Bảng gộp A.5 + A.6</td><td>Một bảng: Trạm · Tỉnh · T_kk thấp nhất · T_kk cao nhất · T_ray thấp nhất · T_ray cao nhất.</td></tr>
+    <tr><td>4</td><td>Cột nhiệt độ ray</td><td>T_ray min = T_kk min; T_ray max = T_kk max + 20 °C.</td></tr>
+    <tr><td>6</td><td>Nguồn dữ liệu</td><td>API <code>/api/tb15-catalogs/khi_hau</code>, fallback seed 151 trạm.</td></tr>
+  </table>
+  <h2>Lịch sử thay đổi</h2>
+  <p><b>24/11/2026:</b> Database: migration TB15 + <code>tb15_mo_men_can</code> + seed 151 trạm khí hậu — xem <code>supabase/README_tb15_thong_so_dau_vao.md</code>.</p>
+  <p><b>24/11/2026:</b> Nạp nhóm B (Phụ lục C, r 3.2.2, D A.0.3, B.0.4-1/2) · C (A.0.2-1/2) · D (β lệch tải).</p>
+  <p><b>24/11/2026:</b> Gộp A.5+A.6 thành 1 bảng; thêm cột T_ray min / T_ray max (+20°C).</p>
+  <p><b>24/11/2026:</b> Tab Thông số đầu vào full-width (bỏ max-w-6xl).</p>
+  <p><b>24/11/2026:</b> Thêm tab «Thông số đầu vào»; bảng thứ nhất = QCVN A.5/A.6 (cột Năm) + bảng tính T_ray.</p>
+  <a href="/lwr-cong-thuc-tb10015">Mở Kiểm toán đường ray không mối nối</a>
+</body>
+</html>

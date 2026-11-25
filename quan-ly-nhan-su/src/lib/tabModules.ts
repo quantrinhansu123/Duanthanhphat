@@ -32,7 +32,7 @@ export const tabModuleImporters: Record<string, () => Promise<unknown>> = {
   "kiem-toan-cwr-ket-cau-duong": () => import("@/components/Tb15CatalogPage"),
   "kiem-toan-cwr-do-cung-goi-ray": () => import("@/components/Tb15CatalogPage"),
   "kiem-toan-cwr-on-dinh-nen-da": () => import("@/components/Tb15CatalogPage"),
-  "kiem-toan-cwr-mo-men-can-phu-kien": () => import("@/components/Tb15CatalogPage"),
+  "kiem-toan-cwr-mo-men-can": () => import("@/components/Tb15CatalogPage"),
   "kiem-toan-cwr-he-so-van-toc-luc-ngang": () => import("@/components/Tb15CatalogPage"),
   "kiem-toan-cwr-so-do-tai-banh-xe": () => import("@/components/Tb15CatalogPage"),
   "lwr-track-map": () => import("@/components/LwrModuleEmbed"),

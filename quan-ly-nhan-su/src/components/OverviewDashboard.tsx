@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Buildings,
   CalendarBlank,
@@ -15,8 +15,9 @@ import { useProjectsData } from "@/hooks/useProjectsData";
 import { useTongMoiHanNam } from "@/hooks/useTongMoiHanNam";
 import { useWeldDailyRollup } from "@/hooks/useWeldDailyRollup";
 import { useOverviewAggregates } from "@/hooks/useOverviewAggregates";
-import { useDashboardQuality } from "@/hooks/useDashboardQuality";
+import { isCurrentProject, useDashboardQuality } from "@/hooks/useDashboardQuality";
 import { useWeldReportData } from "@/hooks/useWeldReportData";
+import { invalidateWeldDailyRollupCache } from "@/lib/weldDailyStats";
 import { compareNewestDate } from "@/lib/dateOrder";
 import { buildDailyWeldPlan, loadTheoreticalProgressViewRows } from "@/lib/projectsDb";
 import {
@@ -249,6 +250,25 @@ function localIsoDate(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+/** Tỉ lệ px/đơn vị của SVG đang bị co giãn (preserveAspectRatio="none") — để vẽ số liệu không bị méo. */
+function useSvgScale(viewW: number, viewH: number) {
+  const ref = useRef<SVGSVGElement>(null);
+  const [scale, setScale] = useState({ x: 1, y: 1 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) setScale((cur) => (Math.abs(cur.x - r.width / viewW) < 0.001 && Math.abs(cur.y - r.height / viewH) < 0.001 ? cur : { x: r.width / viewW, y: r.height / viewH }));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+  return { ref, scale };
+}
+
 function sampleChartLabels(labels: string[], maxCount: number) {
   if (labels.length <= maxCount) return labels.map((text) => ({ text }));
   const picked: { text: string }[] = [];
@@ -366,6 +386,13 @@ export default function OverviewDashboard() {
   const [chartViewMode, setChartViewMode] = useState<"daily" | "monthly" | "yearly">("daily");
   const [cumulativeChartViewMode, setCumulativeChartViewMode] = useState<"daily" | "monthly" | "yearly">("daily");
   const [cumulativeChartZoom, setCumulativeChartZoom] = useState(1);
+  const [dailyRollupRefreshing, setDailyRollupRefreshing] = useState(false);
+  const [dailyRollupRefreshStatus, setDailyRollupRefreshStatus] = useState<{ message: string; error: boolean }>({ message: "", error: false });
+  /** Số liệu trên cột: bật/tắt + cỡ chữ (px) dùng chung cho hai biểu đồ sản lượng. */
+  const [showChartValues, setShowChartValues] = useState(true);
+  const [chartValueSize, setChartValueSize] = useState(11);
+  const dailySvg = useSvgScale(500, 260);
+  const cumSvg = useSvgScale(500, 260);
   const [spreadUndatedMonthly, setSpreadUndatedMonthly] = useState(true);
   const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
   const [chartZoom, setChartZoom] = useState(1);
@@ -373,6 +400,30 @@ export default function OverviewDashboard() {
   const completionStatsRef = useRef<HTMLDivElement | null>(null);
   // Số mối làm thêm mỗi ngày (ngoài mức trung bình) — nhấn +/- thì ngày hoàn thành tính lại theo tổng mối còn lại.
   const [extraPerDay, setExtraPerDay] = useState(0);
+  const refreshDailyRollup = async () => {
+    if (dailyRollupRefreshing) return;
+    setDailyRollupRefreshing(true);
+    setDailyRollupRefreshStatus({ message: "", error: false });
+    try {
+      const response = await fetch("/api/dashboard/refresh-daily-rollup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.error || "Không thể làm mới tổng hợp theo ngày.");
+      invalidateWeldDailyRollupCache();
+      window.dispatchEvent(new Event("weld-daily-rollup-refreshed"));
+      setDailyRollupRefreshStatus({ message: "Đã tính lại dữ liệu hôm qua và hôm nay.", error: false });
+    } catch (error) {
+      setDailyRollupRefreshStatus({
+        message: error instanceof Error ? error.message : "Không thể làm mới tổng hợp theo ngày.",
+        error: true,
+      });
+    } finally {
+      setDailyRollupRefreshing(false);
+    }
+  };
   useEffect(() => {
     if (!completionStatsOn) return;
     const onDown = (e: MouseEvent) => {
@@ -693,14 +744,63 @@ export default function OverviewDashboard() {
       unitLabel: "ngày",
     };
   }, [canSkipJournal, chartViewMode, dailySeries, dailyTargets, dailyValues, fastRollupRows, yearlySeries, selectedRows, selectedProjects, isAllDates, filterFrom, filterTo]);
+  // Dự báo tiến độ (đường tím): năng suất bình quân = thực tế đến hết hôm qua / số ngày làm việc đã qua;
+  // số ngày cần = mối còn lại / năng suất; ngày hoàn thành = hôm nay + số ngày cần (bỏ qua ngày nghỉ theo lịch dự án).
+  // Tính lại mỗi khi dữ liệu thực tế đổi → biểu đồ đổi theo thời gian thực.
+  const progressForecast = useMemo(() => {
+    let planned = 0;
+    let first = "";
+    let last = "";
+    const workDays = new Set<string>();
+    for (const project of selectedProjects) {
+      for (const row of planRows(project)) {
+        if (!row.ngay || (!isAllDates && (row.ngay < filterFrom || row.ngay > filterTo))) continue;
+        planned += row.so_moi_han;
+        if (!first || row.ngay < first) first = row.ngay;
+        if (!last || row.ngay > last) last = row.ngay;
+        if (row.so_moi_han > 0) workDays.add(row.ngay);
+      }
+    }
+    const empty = { monthly: new Map<string, number>(), planned, rate: 0, finishDate: "", remaining: 0 };
+    if (planned <= 0 || !first) return empty;
+    const actual = showFastCharts
+      ? fastRollupRows.reduce((sum, row) => row.ngay_thuc_hien < todayIso && (isAllDates || (row.ngay_thuc_hien >= filterFrom && row.ngay_thuc_hien <= filterTo)) ? sum + (row.so_moi ?? row.so_luong_thuc_hien ?? 0) : sum, 0)
+      : selectedRows.reduce((sum, row, index) => {
+        const date = getJournalRowDateIso(row, index);
+        return date && date < todayIso && (isAllDates || (date >= filterFrom && date <= filterTo)) ? sum + 1 : sum;
+      }, 0);
+    let elapsed = 0;
+    for (const day of workDays) if (day < todayIso) elapsed += 1;
+    const remaining = Math.max(0, planned - actual);
+    const rate = elapsed > 0 ? actual / elapsed : 0;
+    if (rate <= 0 || remaining <= 0) return { ...empty, rate, remaining };
+    // Ngày nằm trong khoảng lịch dự án mà không có mối = ngày nghỉ; ngoài lịch thì coi là ngày làm việc.
+    const isWorking = (iso: string) => (iso >= first && iso <= last ? workDays.has(iso) : true);
+    const monthly = new Map<string, number>();
+    let cum = actual;
+    let finishDate = "";
+    const cursor = new Date(`${todayIso}T12:00:00`);
+    for (let i = 0; i < 1500; i += 1) {
+      const iso = localIsoDate(cursor);
+      if (isWorking(iso)) cum = Math.min(planned, cum + rate);
+      monthly.set(iso.slice(0, 7), Math.round(cum));
+      if (cum >= planned) { finishDate = iso; break; }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return { monthly, planned, rate, finishDate, remaining };
+  }, [selectedProjects, isAllDates, filterFrom, filterTo, todayIso, showFastCharts, fastRollupRows, selectedRows]);
+
   const cumulativeChartPeriod = useMemo(() => {
     if (cumulativeChartViewMode === "daily") {
+      // Biểu đồ lũy kế: mốc kết thúc chỉ là hôm nay (hoặc «đến ngày» nếu sớm hơn) — không có 3 ngày tương lai.
+      const endIso = isAllDates || !appliedFilters.dateTo || todayIso < filterTo ? todayIso : filterTo;
+      const keep = dailySeries.map((point, index) => ({ point, index })).filter(({ point }) => point.date <= endIso);
       return {
-        values: dailyValues,
-        targets: dailyTargets,
-        labels: dailySeries.map((point) => viDateShort(point.date)),
-        fullLabels: dailySeries.map((point) => viDate(point.date)),
-        dates: dailySeries.map((point) => point.date),
+        values: keep.map(({ index }) => dailyValues[index]),
+        targets: keep.map(({ index }) => dailyTargets[index]),
+        labels: keep.map(({ point }) => viDateShort(point.date)),
+        fullLabels: keep.map(({ point }) => viDate(point.date)),
+        dates: keep.map(({ point }) => point.date),
         undatedTotal: 0,
       };
     }
@@ -783,6 +883,7 @@ export default function OverviewDashboard() {
         }
       });
     });
+    for (const key of progressForecast.monthly.keys()) get(key); // trục tháng kéo dài tới tháng dự báo hoàn thành
     const known = [...months.keys()].filter((key) => /^\d{4}-\d{2}$/.test(key)).sort();
     if (known.length > 0) {
       const cursor = new Date(`${known[0]}-01T00:00:00`);
@@ -803,7 +904,7 @@ export default function OverviewDashboard() {
       dates: keys.map((key) => `${key}-01`),
       undatedTotal,
     };
-  }, [canSkipJournal, cumulativeChartViewMode, dailySeries, dailyTargets, dailyValues, fastRollupRows, filterFrom, filterTo, isAllDates, selectedProjects, selectedRows, spreadUndatedMonthly, todayIso, yearTotals, yearlySeries]);
+  }, [canSkipJournal, cumulativeChartViewMode, dailySeries, dailyTargets, dailyValues, fastRollupRows, filterFrom, filterTo, isAllDates, progressForecast, selectedProjects, selectedRows, spreadUndatedMonthly, todayIso, yearTotals, yearlySeries]);
 
   // Chốt thực tế đến hết hôm qua; chia đều phần còn lại trên toàn bộ ngày kế hoạch còn lại.
   const futureQuota = useMemo(() => {
@@ -870,10 +971,29 @@ export default function OverviewDashboard() {
       }
       return actual;
     });
-    const targetValues = cumulativeChartPeriod.targets.map((value) => (target += value));
-    const max = Math.max(10, Math.ceil(Math.max(...actualValues, ...targetValues, 1) / 10) * 10);
-    return { actualValues, targetValues, max, totalActual: actual, totalTarget: target, lastActualIndex };
-  }, [cumulativeChartPeriod, cumulativeChartViewMode, filterTo, isAllDates, todayIso]);
+    // Đường kế hoạch vẽ đủ cả kỳ; số «Kế hoạch» ở tiêu đề chỉ hạch toán đến hôm nay.
+    let targetToday = 0;
+    const targetValues = cumulativeChartPeriod.targets.map((value, index) => {
+      target += value;
+      const date = cumulativeChartPeriod.dates[index] ?? "";
+      const key = cumulativeChartViewMode === "yearly"
+        ? date.slice(0, 4)
+        : cumulativeChartViewMode === "monthly"
+          ? date.slice(0, 7)
+          : date;
+      if (key && key <= asOfKey) targetToday = target;
+      return target;
+    });
+    // Đường dự báo chỉ vẽ ở chế độ Tháng, từ tháng hiện tại đến tháng hoàn thành.
+    const forecastValues: (number | null)[] = cumulativeChartPeriod.dates.map((date) => {
+      if (cumulativeChartViewMode !== "monthly" || progressForecast.monthly.size === 0) return null;
+      const key = date.slice(0, 7);
+      if (key < todayIso.slice(0, 7)) return null;
+      return progressForecast.monthly.get(key) ?? progressForecast.planned;
+    });
+    const max = Math.max(10, Math.ceil(Math.max(...actualValues, ...targetValues, ...forecastValues.map((v) => v ?? 0), 1) / 10) * 10);
+    return { actualValues, targetValues, forecastValues, max, totalActual: actual, totalTarget: targetToday, lastActualIndex };
+  }, [cumulativeChartPeriod, cumulativeChartViewMode, filterTo, isAllDates, todayIso, progressForecast]);
 
   const PLAN_YEAR = Number(todayIso.slice(0, 4));
   const planYearStart = `${PLAN_YEAR}-01-01`;
@@ -946,6 +1066,22 @@ export default function OverviewDashboard() {
     if (showFastDaily) return summarizeProductionRollup(fastRollupRows);
     return summarizeProductionWelds(selectedRows);
   }, [fastRollupRows, overviewAggregateSummary, selectedRows, showFastAggregate, showFastDaily]);
+  // Mối sản xuất của dự án cũ = tổng sản xuất trừ phần dự án hiện tại (PQ). Dự án cũ coi như đã ký / đã thanh toán.
+  const legacyProduction = useMemo(() => {
+    let current = 0;
+    if (showFastAggregate || showFastDaily || canSkipJournal) {
+      for (const row of fastRollupRows) {
+        if (row.loai_moi_han === "Sản xuất" && isCurrentProject(row.du_an_id, row.du_an, row.ma_du_an)) current += Number(row.so_moi ?? row.so_luong_thuc_hien ?? 0);
+      }
+    } else {
+      for (const row of selectedRows) {
+        if (row.loai_moi_han === "Sản xuất" && isCurrentProject(row.du_an_id, row.du_an, row.ma_du_an)) current += 1;
+      }
+    }
+    return Math.max(0, productionWelds.total - current);
+  }, [canSkipJournal, fastRollupRows, productionWelds.total, selectedRows, showFastAggregate, showFastDaily]);
+  const signedTotal = quality ? legacyProduction + quality.acceptedCount : 0;
+  const paidTotal = quality ? legacyProduction + quality.paidCount : 0;
   const totalPerformed = singleProjectSelected ? productionWelds.total : total;
 
   const doneBeforePlanYear = useMemo(
@@ -1274,8 +1410,8 @@ export default function OverviewDashboard() {
       areaPath = `${top} ${bottom}`;
     }
 
-    // Cột chồng: 1 cột/ngày, cao = dự kiến. Dưới (xanh) = thực tế, trên (vàng) = phần còn thiếu.
-    // Mỗi ngày chiếm 1 ô rộng bằng nhau (band); cột nằm giữa ô, bề rộng ~46% band để có khe hở.
+    // Cột chồng: phần xanh = thực tế; phần vàng = thiếu so với kế hoạch (chỉ khi dự kiến > thực tế).
+    // Đường/nhãn Dự kiến luôn neo theo mức kế hoạch (targetTopY), không bám đỉnh thực tế.
     const band = 500 / Math.max(1, count);
     const stackBarW = Math.min(26, band * 0.46);
     const makeStackBars = (actualArr: number[], targetArr: number[], axisMax: number) =>
@@ -1286,6 +1422,7 @@ export default function OverviewDashboard() {
         const px = (v: number) => Math.min(plotH - 4, (v / axisMax) * plotH);
         const blueH = a > 0 ? Math.max(2, px(a)) : 0;
         const yellowH = t > a ? Math.max(2, Math.min(px(t) - blueH, plotH - 4 - blueH)) : 0;
+        const targetH = t > 0 ? Math.max(2, px(t)) : 0;
         return {
           x: cx - stackBarW / 2,
           w: stackBarW,
@@ -1295,6 +1432,7 @@ export default function OverviewDashboard() {
           blueH,
           yellowY: plotH - blueH - yellowH,
           yellowH,
+          targetTopY: plotH - targetH,
           actual: a,
           target: t,
         };
@@ -1398,10 +1536,8 @@ export default function OverviewDashboard() {
   const stackBars = chart.dailyStackBars;
   const toPath = (pts: { x: number; y: number }[]) =>
     pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-  // ...theo mức dự kiến (đỉnh cả cột)
-  const trendTops = stackBars
-    .filter((b) => b.target > 0 || b.actual > 0)
-    .map((b) => ({ x: b.x + b.w / 2, y: b.yellowH > 0 ? b.yellowY : b.blueY }));
+  // Dự kiến: luôn theo mức kế hoạch (kể cả ngày = 0 → đáy), không leo theo thực tế khi vượt KH.
+  const trendTops = stackBars.map((b) => ({ x: b.x + b.w / 2, y: b.targetTopY }));
   const trendPath = toPath(trendTops);
   // ...theo thực tế (đỉnh phần xanh)
   // Từ ngày có số liệu đầu tiên đến hôm nay; ngày bằng 0 vẫn có điểm ở đáy để đường tụt xuống (không nối thẳng qua ngày trống).
@@ -1725,12 +1861,12 @@ export default function OverviewDashboard() {
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
               <div className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-mono leading-none tabular-nums">
-                {quality ? fmt(quality.acceptedCount) : "—"}
+                {quality ? fmt(signedTotal) : "—"}
               </div>
               <div className="text-xs font-medium text-slate-400">mối</div>
             </div>
             <div className="mt-2.5 text-xs text-slate-500">
-              <span className="text-xl font-bold text-emerald-700 font-mono tabular-nums">{quality && productionWelds.total > 0 ? pctComma(quality.acceptedCount, productionWelds.total) : "—"}</span> đã ký SX / tổng sản xuất
+              <span className="text-xl font-bold text-emerald-700 font-mono tabular-nums">{quality && productionWelds.total > 0 ? pctComma(signedTotal, productionWelds.total) : "—"}</span> đã ký SX / tổng sản xuất
             </div>
           </div>
           <div className="hidden sm:flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -1815,11 +1951,11 @@ export default function OverviewDashboard() {
         <button type="button" onClick={() => setLookup("paid")} className="w-full cursor-pointer rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm">
           <div className="text-xs font-bold tracking-wider text-emerald-700">ĐÃ THANH TOÁN</div>
           <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{quality ? fmt(quality.paidCount) : "—"}</span>
+            <span className="text-2xl sm:text-3xl font-bold text-slate-900 font-mono tabular-nums">{quality ? fmt(paidTotal) : "—"}</span>
             <span className="text-xs text-slate-400">mối</span>
             <span className="text-xs font-semibold text-emerald-700 font-mono tabular-nums">
               {quality
-                ? `(% = ${fmt(quality.paidCount)}/${fmt(quality.acceptedCount)}${quality.acceptedCount > 0 ? ` · ${pctComma(quality.paidCount, quality.acceptedCount)}` : ""})`
+                ? `(% = ${fmt(paidTotal)}/${fmt(productionWelds.total)}${productionWelds.total > 0 ? ` · ${pctComma(paidTotal, productionWelds.total)}` : ""})`
                 : "(% = —/—)"}
             </span>
           </div>
@@ -2189,6 +2325,7 @@ export default function OverviewDashboard() {
               ) : (
                 <>
               <svg
+                ref={dailySvg.ref}
                 viewBox="0 0 500 260"
                 preserveAspectRatio="none"
                 className="h-[260px] w-full block overflow-visible"
@@ -2248,10 +2385,10 @@ export default function OverviewDashboard() {
                       </g>
                     );
                   })}
-                  {bars.map((b, i) => (
-                    <g key={`values-${i}`} fontSize="12" textAnchor="middle" fontWeight="600">
-                      <text x={b.x + b.w / 2} y={Math.max(8, b.yellowY - 5)} fill="#a16207">{fmt(b.target)}</text>
-                      {b.actual > 0 && <text x={b.x + b.w / 2} y={Math.max(18, b.blueY - 4)} fill="#1d4ed8">{fmt(b.actual)}</text>}
+                  {showChartValues && bars.map((b, i) => (
+                    <g key={`values-${i}`} fontSize={chartValueSize} textAnchor="middle" fontWeight="600">
+                      <text transform={`translate(${b.x + b.w / 2} ${Math.max(8, b.targetTopY - 5)}) scale(${1 / dailySvg.scale.x} ${1 / dailySvg.scale.y})`} fill="#a16207">{fmt(b.target)}</text>
+                      {b.actual > 0 && <text transform={`translate(${b.x + b.w / 2} ${Math.max(18, b.blueY - 4)}) scale(${1 / dailySvg.scale.x} ${1 / dailySvg.scale.y})`} fill="#1d4ed8">{fmt(b.actual)}</text>}
                     </g>
                   ))}
                   {trendPath && (
@@ -2355,6 +2492,13 @@ export default function OverviewDashboard() {
                 </div>
               </div>
               <div className="mt-2 flex flex-wrap items-center justify-end gap-2 text-sm font-medium text-slate-900">
+                <div className="flex items-center gap-1.5">
+                  <button type="button" onClick={() => setShowChartValues((v) => !v)} aria-pressed={showChartValues} title="Hiện / ẩn số liệu trên cột" className={`rounded-md border px-2 py-1 text-xs font-semibold cursor-pointer ${showChartValues ? "border-blue-300 bg-blue-50 text-blue-800" : "border-slate-300 text-slate-700 hover:bg-slate-50"}`}>{showChartValues ? "Ẩn số" : "Hiện số"}</button>
+                  {showChartValues && <>
+                    <button type="button" onClick={() => setChartValueSize((v) => Math.max(7, v - 1))} disabled={chartValueSize <= 7} aria-label="Giảm cỡ số" className="h-7 w-7 rounded-md border border-slate-300 text-xs font-bold text-slate-900 hover:bg-slate-50 disabled:opacity-40 cursor-pointer">A−</button>
+                    <button type="button" onClick={() => setChartValueSize((v) => Math.min(18, v + 1))} disabled={chartValueSize >= 18} aria-label="Tăng cỡ số" className="h-7 w-7 rounded-md border border-slate-300 text-sm font-bold text-slate-900 hover:bg-slate-50 disabled:opacity-40 cursor-pointer">A+</button>
+                  </>}
+                </div>
                 <button
                   type="button"
                   onClick={() => setChartZoom(minChartZoom)}
@@ -2523,7 +2667,18 @@ export default function OverviewDashboard() {
             <div className="text-sm sm:text-base font-bold tracking-tight text-slate-900">
               LŨY KẾ SẢN LƯỢNG HÀN
             </div>
-            <div className="inline-flex shrink-0 items-center rounded-lg border border-slate-200 bg-slate-100/90 p-0.5 shadow-2xs">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={refreshDailyRollup}
+                disabled={dailyRollupRefreshing}
+                title="Tính lại tổng hợp từ nhật ký nguồn cho hôm qua và hôm nay"
+                className="flex h-8 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
+              >
+                <span aria-hidden>{dailyRollupRefreshing ? "…" : "↻"}</span>
+                {dailyRollupRefreshing ? "Đang làm mới" : "Làm mới 2 ngày"}
+              </button>
+              <div className="inline-flex shrink-0 items-center rounded-lg border border-slate-200 bg-slate-100/90 p-0.5 shadow-2xs">
               {([
                 ["daily", "Ngày", CalendarBlank],
                 ["monthly", "Tháng", CalendarBlank],
@@ -2541,12 +2696,24 @@ export default function OverviewDashboard() {
                   <span>{label}</span>
                 </button>
               ))}
+              </div>
             </div>
           </div>
+          {dailyRollupRefreshStatus.message ? (
+            <p role="status" aria-live="polite" className={`mt-1 text-xs ${dailyRollupRefreshStatus.error ? "text-red-600" : "text-emerald-700"}`}>
+              {dailyRollupRefreshStatus.message}
+            </p>
+          ) : null}
 
           <p className="mt-2 text-sm font-semibold text-[#0047AB]">
             Lũy kế toàn kỳ: {fmt(cumulativeChart.totalActual)} mối · Kế hoạch: {fmt(cumulativeChart.totalTarget)} mối
           </p>
+          {cumulativeChartViewMode === "monthly" && progressForecast.rate > 0 && progressForecast.remaining > 0 ? (
+            <p className="mt-1 text-xs font-medium text-violet-700">
+              <span aria-hidden>┅ </span>Dự báo: năng suất bình quân {progressForecast.rate.toLocaleString("vi-VN", { maximumFractionDigits: 1 })} mối/ngày · còn {fmt(progressForecast.remaining)} mối
+              {progressForecast.finishDate ? ` · hoàn thành dự kiến ${viDate(progressForecast.finishDate)}` : ""}
+            </p>
+          ) : null}
           {cumulativeChartViewMode === "monthly" && cumulativeChartPeriod.undatedTotal > 0 ? (
             <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-600">
               <button
@@ -2586,7 +2753,7 @@ export default function OverviewDashboard() {
                 </div>
                 <div className="min-w-0 flex-1 overflow-x-auto">
                   <div className="relative" style={{ width: `${500 * cumulativeChartZoom}px`, minWidth: "100%" }}>
-                    <svg viewBox="0 0 500 260" preserveAspectRatio="none" className="h-[260px] w-full overflow-visible">
+                    <svg ref={cumSvg.ref} viewBox="0 0 500 260" preserveAspectRatio="none" className="h-[260px] w-full overflow-visible">
                       {[0.5, 52, 104, 156, 208, 259.5].map((y) => <line key={y} x1="0" y1={y} x2="500" y2={y} stroke={y === 259.5 ? "#cbd5e1" : "#f1f5f9"} strokeWidth="1" />)}
                       {cumulativeChart.actualValues.map((actual, index) => {
                         const showActual = index <= cumulativeChart.lastActualIndex;
@@ -2608,14 +2775,25 @@ export default function OverviewDashboard() {
                         strokeLinecap="round"
                         vectorEffect="non-scaling-stroke"
                       />
-                      {cumulativeChart.actualValues.map((actual, index) => {
+                      {showChartValues && cumulativeChart.actualValues.map((actual, index) => {
                         const band = 500 / cumulativeChart.actualValues.length;
                         const target = cumulativeChart.targetValues[index] ?? 0;
-                        return <g key={`cum-values-${index}`} fontSize="12" textAnchor="middle" fontWeight="600">
-                          <text x={band * (index + .5)} y={Math.max(8, 260 - Math.max(target, index <= cumulativeChart.lastActualIndex ? actual : 0) / cumulativeChart.max * 260 - 5)} fill="#a16207">{fmt(target)}</text>
-                          {index <= cumulativeChart.lastActualIndex && actual > 0 && <text x={band * (index + .5)} y={Math.max(18, 260 - actual / cumulativeChart.max * 260 - 4)} fill="#1d4ed8">{fmt(actual)}</text>}
+                        return <g key={`cum-values-${index}`} fontSize={chartValueSize} textAnchor="middle" fontWeight="600">
+                          <text transform={`translate(${band * (index + .5)} ${Math.max(8, 260 - target / cumulativeChart.max * 260 - 5)}) scale(${1 / cumSvg.scale.x} ${1 / cumSvg.scale.y})`} fill="#a16207">{fmt(target)}</text>
+                          {index <= cumulativeChart.lastActualIndex && actual > 0 && <text transform={`translate(${band * (index + .5)} ${Math.max(18, 260 - actual / cumulativeChart.max * 260 - 4)}) scale(${1 / cumSvg.scale.x} ${1 / cumSvg.scale.y})`} fill="#1d4ed8">{fmt(actual)}</text>}
                         </g>;
                       })}
+                      {cumulativeChart.forecastValues.some((v) => v != null) ? (
+                        <path
+                          d={cumulativeChart.forecastValues.map((value, index) => value == null ? "" : `${index && cumulativeChart.forecastValues[index - 1] != null ? "L" : "M"} ${(500 / cumulativeChart.forecastValues.length) * (index + .5)} ${Math.max(6, 260 - value / cumulativeChart.max * 260)}`).filter(Boolean).join(" ")}
+                          fill="none"
+                          stroke="#7c3aed"
+                          strokeWidth="2.25"
+                          strokeDasharray="6 4"
+                          strokeLinecap="round"
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      ) : null}
                       {cumulativeChart.lastActualIndex >= 0 ? (
                         <path
                           d={cumulativeChart.actualValues.slice(0, cumulativeChart.lastActualIndex + 1).map((value, index) => `${index ? "L" : "M"} ${(500 / cumulativeChart.actualValues.length) * (index + .5)} ${Math.max(6, 260 - value / cumulativeChart.max * 260)}`).join(" ")}
@@ -2638,6 +2816,13 @@ export default function OverviewDashboard() {
             </>
           )}
           <div className="mt-2 flex flex-wrap items-center justify-end gap-2 text-sm font-medium text-slate-900">
+            <div className="flex items-center gap-1.5">
+                  <button type="button" onClick={() => setShowChartValues((v) => !v)} aria-pressed={showChartValues} title="Hiện / ẩn số liệu trên cột" className={`rounded-md border px-2 py-1 text-xs font-semibold cursor-pointer ${showChartValues ? "border-blue-300 bg-blue-50 text-blue-800" : "border-slate-300 text-slate-700 hover:bg-slate-50"}`}>{showChartValues ? "Ẩn số" : "Hiện số"}</button>
+                  {showChartValues && <>
+                    <button type="button" onClick={() => setChartValueSize((v) => Math.max(7, v - 1))} disabled={chartValueSize <= 7} aria-label="Giảm cỡ số" className="h-7 w-7 rounded-md border border-slate-300 text-xs font-bold text-slate-900 hover:bg-slate-50 disabled:opacity-40 cursor-pointer">A−</button>
+                    <button type="button" onClick={() => setChartValueSize((v) => Math.min(18, v + 1))} disabled={chartValueSize >= 18} aria-label="Tăng cỡ số" className="h-7 w-7 rounded-md border border-slate-300 text-sm font-bold text-slate-900 hover:bg-slate-50 disabled:opacity-40 cursor-pointer">A+</button>
+                  </>}
+                </div>
             <button
               type="button"
               onClick={() => setCumulativeChartZoom(1)}

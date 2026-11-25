@@ -121,9 +121,9 @@ const viewRenderers: Record<string, () => React.ReactNode> = {
   "bc-bao-cao-ngay": () => <DailyWorkReport />,
   "quan-ly-du-an": () => <ProjectManagement />,
   "lwr-giai-toa-ung-suat": () => (
-    <LwrModuleEmbed path="/giai-toa-ung-suat" title="Giải toả ứng suất R2" />
+    <LwrModuleEmbed path="/giai-toa-ung-suat" title="Giải toả ứng suất" />
   ),
-  "lwr-track-map": () => <LwrModuleEmbed path="/" title="Tổng quan (Track Map)" />,
+  "lwr-track-map": () => <LwrModuleEmbed path="/" title="Bố trí tổng quan ray hàn dài/hàn liền" />,
   "lwr-cong-thuc-tb10015": () => <CwrFormulaReference />,
   "kiem-toan-cwr-nhiet-do-vung": () => <Tb15CatalogPage tabId="kiem-toan-cwr-nhiet-do-vung" />,
   "kiem-toan-cwr-loai-ray": () => <Tb15CatalogPage tabId="kiem-toan-cwr-loai-ray" />,
@@ -131,7 +131,7 @@ const viewRenderers: Record<string, () => React.ReactNode> = {
   "kiem-toan-cwr-ket-cau-duong": () => <Tb15CatalogPage tabId="kiem-toan-cwr-ket-cau-duong" />,
   "kiem-toan-cwr-do-cung-goi-ray": () => <Tb15CatalogPage tabId="kiem-toan-cwr-do-cung-goi-ray" />,
   "kiem-toan-cwr-on-dinh-nen-da": () => <Tb15CatalogPage tabId="kiem-toan-cwr-on-dinh-nen-da" />,
-  "kiem-toan-cwr-mo-men-can-phu-kien": () => <Tb15CatalogPage tabId="kiem-toan-cwr-mo-men-can-phu-kien" />,
+  "kiem-toan-cwr-mo-men-can": () => <Tb15CatalogPage tabId="kiem-toan-cwr-mo-men-can" />,
   "kiem-toan-cwr-he-so-van-toc-luc-ngang": () => <Tb15CatalogPage tabId="kiem-toan-cwr-he-so-van-toc-luc-ngang" />,
   "kiem-toan-cwr-so-do-tai-banh-xe": () => <Tb15CatalogPage tabId="kiem-toan-cwr-so-do-tai-banh-xe" />,
   "lwr-cong-trinh": () => <LwrModuleEmbed path="/cong-trinh" title="Ký hiệu công trình" />,

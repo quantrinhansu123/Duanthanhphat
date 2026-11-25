@@ -39,8 +39,11 @@ export const TB15_SEED: Partial<Record<Tb15CatalogKey, Tb15Row[]>> = {
     { id: "dc-wj-8bc", loai_duong: "khong_ba_lat", phuong_an: "WJ-8B, WJ-8C", dem_kn_mm: 23, dem_sai_so_kn_mm: 3, d_kn_mm: null, tinh_min_kn_mm: 25, tinh_max_kn_mm: 35, ghi_chu: "A.0.3-2" },
   ],
   on_dinh_nen: [
-    { id: "od-ii", loai_ta_vet: "II", q0: 23, b_hs: 63, z_hs: 1.2, c_hs: 106, n_hs: 2.5, ghi_chu: "B.0.4-1" },
-    { id: "od-iii", loai_ta_vet: "III", q0: 27.4, b_hs: 92, z_hs: 1.2, c_hs: 179, n_hs: 2.5, ghi_chu: "B.0.4-1" },
+    { id: "od-ii", loai_ta_vet: "II", bo_tri: "1 840 thanh/km", q0: 23, b_hs: 63, z_hs: 1.2, c_hs: 106, n_hs: 2.5, ghi_chu: "B.0.4-1" },
+    { id: "od-iii", loai_ta_vet: "III", bo_tri: "1 760 thanh/km", q0: 27.4, b_hs: 92, z_hs: 1.2, c_hs: 179, n_hs: 2.5, ghi_chu: "B.0.4-1" },
+  ],
+  mo_men_can: [
+    { id: "mmc-dan-hoi-ii", loai_phu_kien: "Loại đàn hồi II", h_ncm_cm: 22000, mu: 2, psi: 3.0983, ghi_chu: "B.0.4-2" },
   ],
   mo_men_can: [
     {

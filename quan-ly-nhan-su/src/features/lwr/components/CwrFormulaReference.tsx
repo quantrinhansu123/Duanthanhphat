@@ -6,6 +6,8 @@ import { useLanguage } from "@/i18n/LanguageProvider";
 import { deaccent } from "@/i18n/deaccent";
 import source from "@lwr/data/tb10015.json";
 import CwrProjectRails, { CwrGuide } from "./CwrProjectRails";
+import CwrInputParams from "./CwrInputParams";
+import Tb15GroundCheck from "./Tb15GroundCheck";
 
 type Value = string | number | null;
 type Cell = string | number | { formula: string; result: Value };
@@ -191,28 +193,31 @@ function SheetView({ sheet, en, address = "" }: { sheet: Sheet; en: boolean; add
 export default function CwrFormulaReference() {
   const [sheetName, setSheetName] = useState("1_Độ bền ray");
   const [address, setAddress] = useState("");
-  const [view, setView] = useState<"rails" | "excel" | "guide">("rails");
+  const [view, setView] = useState<"rails" | "inputs" | "ground" | "excel" | "guide">("rails");
   const { lang } = useLanguage();
   const en = lang === "en";
   const sheet = sheets.find((item) => item.name === sheetName) ?? sheets[0];
   const count = total.toLocaleString(en ? "en-US" : "vi-VN");
+  const wide = view === "inputs";
   return (
-    <div className="mx-auto max-w-6xl space-y-4 px-4 py-5 sm:px-6" data-no-i18n="true">
+    <div className={wide ? "w-full max-w-none space-y-4 px-3 py-4 sm:px-4 sm:py-5" : "mx-auto max-w-6xl space-y-4 px-4 py-5 sm:px-6"} data-no-i18n="true">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{en ? "TB 10015 formulas" : "Công thức TB 10015"}</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{en ? "CWR track verification (TB 10015)" : "Kiểm toán đường ray không mối nối"}</h1>
           <p className="mt-1 text-sm text-slate-600">{source.source}</p>
           <p className="mt-1 text-xs font-semibold text-[#0047AB]">{sheets.length} {en ? "sheets" : "bảng tính"} · {count} {en ? "formula cells" : "ô công thức"}</p>
         </div>
       </header>
       <nav aria-label={en ? "TB 10015 views" : "Nội dung TB 10015"} className="flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-white p-1">
-        {([["rails", en ? "Project rails" : "Thanh ray dự án"], ["excel", en ? "Source workbook" : "Excel gốc"], ["guide", en ? "Guide" : "Hướng dẫn"]] as const).map(([key, label]) =>
+        {([["rails", en ? "Project rails" : "Thanh ray dự án"], ["inputs", en ? "Input parameters" : "Thông số đầu vào"], ["ground", en ? "Ballasted track check (VI)" : "Kiểm toán nền đường"], ["excel", en ? "Source workbook" : "Excel gốc"], ["guide", en ? "Guide" : "Hướng dẫn"]] as const).map(([key, label]) =>
           <button key={key} type="button" aria-pressed={view === key} onClick={() => setView(key)}
             className={`min-h-10 rounded-md px-4 text-sm font-semibold ${view === key ? "bg-[#0047AB] text-white" : "text-slate-700 hover:bg-slate-100"}`}>{label}</button>)}
       </nav>
       <div hidden={view !== "rails"}>
         <CwrProjectRails en={en} sectionAreas={sectionAreas} openCell={(name, cell) => { setSheetName(name); setAddress(cell); setView("excel"); }} />
       </div>
+      {view === "inputs" && <CwrInputParams en={en} />}
+      {view === "ground" && <Tb15GroundCheck />}
       {view === "guide" && <CwrGuide en={en} />}
       {view === "excel" && <>
         <label className="block min-w-0 w-full text-xs font-semibold text-slate-700 sm:w-72">

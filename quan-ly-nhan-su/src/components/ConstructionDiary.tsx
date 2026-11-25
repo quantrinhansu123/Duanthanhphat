@@ -65,7 +65,8 @@ const css = `@page { size: A4 portrait; margin: 0; }
 /* Mỗi dòng chữ là một khối cao đúng ${LINE}px có hàng chấm gắn ngay dưới chân chữ → chữ và đường kẻ cùng một hệ tọa độ, không lệch dù thu/phóng trang. */
 #diary-print .rl { position: relative; height: ${LINE}px; line-height: ${LINE}px; white-space: pre; }
 #diary-print .rl::after { content: ""; position: absolute; left: 0; right: 0; bottom: 3px; border-bottom: 1px dotted #000; }
-#diary-print .rl-probe { position: absolute; left: 0; right: 0; top: 0; opacity: 0; pointer-events: none; line-height: ${LINE}px; white-space: pre-wrap; overflow-wrap: anywhere; }
+#diary-print .rl-probe { position: absolute; left: 0; right: 0; top: 0; opacity: 0; pointer-events: none; line-height: ${LINE}px; white-space: pre-wrap; overflow-wrap: normal; }
+#diary-print .rl-probe span { display: inline-block; white-space: pre; }
 #diary-print .diary-fill { flex: 1 1 0; min-height: 0; overflow: hidden; }
 #diary-print .diary-sig-row { display: grid; grid-template-columns: 1fr 1fr 1fr; text-align: center; font-weight: bold; margin-top: 8pt; break-inside: avoid; }
 #diary-print .diary-sig-name { font-weight: normal; font-style: italic; min-height: 14pt; margin-top: 2pt; }
@@ -323,6 +324,33 @@ export default function ConstructionDiaryForm() {
     scrollToForm();
   }
 
+  /** Tự điền lại + lưu hàng loạt từ ngày–đến ngày: ngày đã có nhật ký giữ thời tiết / nhân lực / người ký, chỉ viết lại 2.2 + mục 3; ngày chưa có thì tạo mới. */
+  async function autofillRange() {
+    const days: string[] = [];
+    for (let t = new Date(`${range.from}T00:00:00Z`); t <= new Date(`${range.to}T00:00:00Z`) && days.length <= 62; t.setUTCDate(t.getUTCDate() + 1)) days.push(t.toISOString().slice(0, 10));
+    if (!days.length || days.length > 62) { setStatus("Chọn khoảng tối đa 62 ngày."); return; }
+    if (!window.confirm(`Tự điền lại và LƯU nhật ký ${days.length} ngày (${range.from.split("-").reverse().join("/")} – ${range.to.split("-").reverse().join("/")}).
+Nội dung thiết bị (2.2) và mục 3 đã sửa tay trong các ngày này sẽ bị ghi đè. Tiếp tục?`)) return;
+    setBusy(true);
+    let ok = 0, fail = 0;
+    for (const [i, day] of days.entries()) {
+      setStatus(`Đang tự điền ${i + 1}/${days.length}: ${day.split("-").reverse().join("/")}…`);
+      try {
+        const [r, defaults] = await Promise.all([loadDiary(projectId, day), loadDefaults(projectId, day)]);
+        const base = r.saved ? r.diary : { ...r.diary, ...defaults.values };
+        const { thietBi, noiDungCongViec, nghiemThuHangNgay, nghiemThuHangNgayTuDong } = defaults.values;
+        const next = { ...base, thietBi: thietBi ?? base.thietBi, noiDungCongViec: noiDungCongViec ?? base.noiDungCongViec, nghiemThuHangNgay: nghiemThuHangNgay ?? base.nghiemThuHangNgay, nghiemThuHangNgayTuDong: nghiemThuHangNgayTuDong ?? base.nghiemThuHangNgayTuDong };
+        if (!r.saved) { next.kyTvgs = signers.tvgs; next.kyNtc = signers.ntc; next.kyNtp = signers.ntp; }
+        await saveDiary(projectId, day, next);
+        ok += 1;
+      } catch { fail += 1; }
+    }
+    reloadSaved();
+    setReloadDiary((n) => n + 1);
+    setStatus(`Đã tự điền và lưu ${ok}/${days.length} ngày${fail ? `, ${fail} ngày lỗi (thử lại)` : ""}.`);
+    setBusy(false);
+  }
+
   /** Ghép các nhật ký đã lưu của dự án trong khoảng ngày thành một bản in (số trang đánh liên tục từ 1). */
   function printRange() {
     const rows = saved.filter((r) => r.projectId === projectId && r.date >= range.from && r.date <= range.to).sort((a, b) => a.date.localeCompare(b.date));
@@ -394,8 +422,9 @@ export default function ConstructionDiaryForm() {
             <button type="button" disabled={busy || loading || !projectId || !date} onClick={() => setPreviewOpen(true)} className="h-10 cursor-pointer rounded-lg border border-slate-300 bg-white px-4 font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">In / Lưu PDF</button>
           </div>
           <div className="flex basis-full flex-wrap items-end gap-3 border-t border-slate-100 pt-3">
-            <label className={lbl}>In từ ngày<input className={inp} type="date" value={range.from} max={range.to || undefined} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} /></label>
-            <label className={lbl}>đến ngày<input className={inp} type="date" value={range.to} min={range.from || undefined} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} /></label>
+            <label className={lbl}>Từ ngày<input className={inp} type="date" value={range.from} max={range.to || undefined} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} /></label>
+            <label className={lbl}>Đến ngày<input className={inp} type="date" value={range.to} min={range.from || undefined} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} /></label>
+            <button type="button" disabled={busy || !projectId || !range.from || !range.to} onClick={autofillRange} title="Tự điền lại thiết bị (2.2) + mục 3 và lưu cho mọi ngày trong khoảng; giữ thời tiết, nhân lực, người ký" className="h-10 cursor-pointer rounded-lg border border-emerald-600/40 bg-emerald-50 px-4 font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50">Tự điền &amp; lưu hàng loạt</button>
             <button type="button" disabled={busy || !projectId || !range.from || !range.to} onClick={printRange} title="Ghép các nhật ký đã lưu trong khoảng ngày thành một bản in / một file PDF" className="h-10 cursor-pointer rounded-lg border border-[#0047AB]/40 bg-[#0047AB]/5 px-4 font-semibold text-[#0047AB] transition-colors hover:bg-[#0047AB]/10 disabled:cursor-not-allowed disabled:opacity-50">In nhiều ngày (ghép PDF)</button>
           </div>
           {status && <p role="status" className={`basis-full text-xs ${status.startsWith("Đã lưu.") ? "text-emerald-700" : "text-slate-600"}`}>{status}</p>}

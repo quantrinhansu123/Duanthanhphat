@@ -19,7 +19,11 @@ export function useWeldDailyRollup() {
   useEffect(() => {
     const refresh = () => setRevision((n) => n + 1);
     window.addEventListener("weld-quality-changed", refresh);
-    return () => window.removeEventListener("weld-quality-changed", refresh);
+    window.addEventListener("weld-daily-rollup-refreshed", refresh);
+    return () => {
+      window.removeEventListener("weld-quality-changed", refresh);
+      window.removeEventListener("weld-daily-rollup-refreshed", refresh);
+    };
   }, []);
 
   useEffect(() => {

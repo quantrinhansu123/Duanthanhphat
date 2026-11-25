@@ -79,7 +79,7 @@ export default function FuelHistoryList() {
     let liters = 0;
     const machines = new Set<string>();
     for (const row of filtered) {
-      if (isLiterUnit(row.unit)) liters += row.liters;
+      if (isLiterUnit(row.unit)) liters += row.added;
       machines.add(row.machineId);
     }
     return { liters, machines: machines.size };
@@ -97,7 +97,7 @@ export default function FuelHistoryList() {
           </div>
         </div>
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Tổng nhiên liệu</div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Tổng đã đổ</div>
           <div className="mt-1 font-mono text-2xl font-bold tabular-nums text-[#0047AB]">
             {totals.liters.toLocaleString("vi-VN")}
             <span className="ml-1 text-sm font-semibold text-slate-400">lít</span>
@@ -177,7 +177,8 @@ export default function FuelHistoryList() {
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-600">
                 <th className="px-4 py-3">Ngày</th>
                 <th className="px-3.5 py-3">Máy</th>
-                <th className="px-3.5 py-3 text-right">Nhiên liệu</th>
+                <th className="px-3.5 py-3 text-right">Đã đổ</th>
+                <th className="px-3.5 py-3 text-right">Thực tế</th>
                 <th className="px-3.5 py-3">Người cấp</th>
                 <th className="px-3.5 py-3">Ghi chú</th>
               </tr>
@@ -191,7 +192,10 @@ export default function FuelHistoryList() {
                     {row.machineName && row.machineName !== row.machineCode && <div className="mt-0.5 text-xs text-slate-500">{row.machineName}</div>}
                   </td>
                   <td className="whitespace-nowrap px-3.5 py-3 text-right font-mono font-semibold tabular-nums text-slate-900">
-                    {row.liters.toLocaleString("vi-VN")} <span className="font-sans font-medium text-slate-500">{row.unit}</span>
+                    {row.added.toLocaleString("vi-VN")} <span className="font-sans font-medium text-slate-500">{row.unit}</span>
+                  </td>
+                  <td className="whitespace-nowrap px-3.5 py-3 text-right font-mono font-semibold tabular-nums text-emerald-800">
+                    {row.hasActual ? <>{row.liters.toLocaleString("vi-VN")} <span className="font-sans font-medium text-slate-500">{row.unit}</span></> : "—"}
                   </td>
                   <td className="px-3.5 py-3 text-slate-700">{row.personName}</td>
                   <td className="max-w-[320px] px-3.5 py-3 text-slate-600">
@@ -201,14 +205,14 @@ export default function FuelHistoryList() {
               ))}
               {loading && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={6} className="px-4 py-12 text-center text-slate-500">
                     Đang tải lịch sử cấp nhiên liệu...
                   </td>
                 </tr>
               )}
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-sm text-slate-500">
+                  <td colSpan={6} className="px-4 py-12 text-center text-sm text-slate-500">
                     Chưa có lượt cấp nhiên liệu phù hợp.
                   </td>
                 </tr>
