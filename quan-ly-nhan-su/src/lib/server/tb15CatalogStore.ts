@@ -62,6 +62,22 @@ async function readJsonBundle(): Promise<JsonBundle> {
     bundle.khi_hau = [...seededClimate, ...custom];
     seededNewCatalog = true;
   }
+  // Bản JSON đã lưu trước khi có B.0.4-3 (l₀, i₀, ΔP) và WJ d: bổ sung đúng trường còn thiếu theo seed.
+  // Chỉ điền ô undefined, hoặc d_kn_mm null của phương án WJ (seed đã có số). Không ghi đè số người dùng nhập.
+  for (const key of ["loai_ray", "do_cung_goi"] as const) {
+    for (const row of bundle[key] ?? []) {
+      const seedRow = (TB15_SEED[key] ?? []).find((s) => s.id === row.id);
+      if (!seedRow) continue;
+      for (const [field, value] of Object.entries(seedRow)) {
+        const missing = row[field] === undefined;
+        const wjBlankD = key === "do_cung_goi" && field === "d_kn_mm" && row[field] === null && value !== null;
+        if (missing || wjBlankD) {
+          row[field] = value;
+          seededNewCatalog = true;
+        }
+      }
+    }
+  }
   if (seededNewCatalog) await writePrivateJson(JSON_FILE, bundle);
   return bundle;
 }

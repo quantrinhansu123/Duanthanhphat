@@ -15,7 +15,16 @@ type ClimateRow = {
   tinh: string;
   t_kk_min: number;
   t_kk_max: number;
+  /** 12 tháng (A.6 thấp nhất, A.5 cao nhất); null nếu bản ghi chưa có dữ liệu theo tháng. */
+  t_min_thang: number[] | null;
+  t_max_thang: number[] | null;
 };
+
+const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
+
+function monthList(v: unknown): number[] | null {
+  return Array.isArray(v) && v.length === 12 && v.every((x) => Number.isFinite(Number(x))) ? v.map(Number) : null;
+}
 
 function toClimate(rows: Tb15Row[]): ClimateRow[] {
   return rows
@@ -25,6 +34,8 @@ function toClimate(rows: Tb15Row[]): ClimateRow[] {
       tinh: String(row.tinh ?? "").trim(),
       t_kk_min: Number(row.t_kk_min),
       t_kk_max: Number(row.t_kk_max),
+      t_min_thang: monthList(row.t_min_thang),
+      t_max_thang: monthList(row.t_max_thang),
     }))
     .filter((r) => r.ten_tram && Number.isFinite(r.t_kk_min) && Number.isFinite(r.t_kk_max))
     .sort((a, b) => a.stt - b.stt || a.ten_tram.localeCompare(b.ten_tram, "vi"));
@@ -71,6 +82,61 @@ const A022_COLS = [
   { nhan: "R ≥ 2000 m", f: 1.3 },
 ] as const;
 
+/** Bảng 12 tháng: không khí thấp nhất (A.6) và cao nhất (A.5) cho từng trạm. */
+function ClimateMonthTable({ rows, en }: { rows: ClimateRow[]; en: boolean }) {
+  const cell = (values: number[] | null, month: number) => {
+    const v = values?.[month - 1];
+    return v === undefined ? "—" : fmt(v);
+  };
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[90rem] border-collapse text-left text-xs">
+        <thead className="sticky top-0 z-10 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+          <tr className="border-b border-slate-200">
+            <th className="px-3 py-2.5" rowSpan={2}>{en ? "Station" : "Trạm"}</th>
+            <th className="px-3 py-2.5" rowSpan={2}>{en ? "Province" : "Tỉnh"}</th>
+            <th className="border-l border-slate-200 px-3 py-2 text-center text-sky-800" colSpan={12}>
+              {en ? "Air min by month (A.6, °C)" : "Không khí thấp nhất theo tháng (A.6, °C)"}
+            </th>
+            <th className="border-l border-slate-200 px-3 py-2 text-center text-rose-700" colSpan={12}>
+              {en ? "Air max by month (A.5, °C)" : "Không khí cao nhất theo tháng (A.5, °C)"}
+            </th>
+          </tr>
+          <tr className="border-b border-slate-200">
+            {MONTHS.map((m) => (
+              <th key={`min-${m}`} className={`px-2 py-2 text-right ${m === 1 ? "border-l border-slate-200" : ""}`}>T{m}</th>
+            ))}
+            {MONTHS.map((m) => (
+              <th key={`max-${m}`} className={`px-2 py-2 text-right ${m === 1 ? "border-l border-slate-200" : ""}`}>T{m}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {rows.map((r) => (
+            <tr key={`${r.stt}-${r.ten_tram}`} className="hover:bg-slate-50">
+              <td className="px-3 py-2 font-medium text-slate-900">{r.stt}. {r.ten_tram}</td>
+              <td className="px-3 py-2 text-slate-600">{r.tinh || "—"}</td>
+              {MONTHS.map((m) => (
+                <td key={`min-${m}`} className={`px-2 py-2 text-right font-mono tabular-nums text-sky-800 ${m === 1 ? "border-l border-slate-100" : ""}`}>{cell(r.t_min_thang, m)}</td>
+              ))}
+              {MONTHS.map((m) => (
+                <td key={`max-${m}`} className={`px-2 py-2 text-right font-mono tabular-nums text-rose-700 ${m === 1 ? "border-l border-slate-100" : ""}`}>{cell(r.t_max_thang, m)}</td>
+              ))}
+            </tr>
+          ))}
+          {!rows.length && (
+            <tr>
+              <td colSpan={26} className="px-3 py-8 text-center text-slate-500">
+                {en ? "No stations match." : "Không có trạm khớp."}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 /** Tab «Thông số đầu vào» — A khí hậu; B ray/tà vẹt; C tải; D tuyến. */
 export default function CwrInputParams({ en = false }: { en?: boolean }) {
   const [rows, setRows] = useState<ClimateRow[]>(() => toClimate(TB15_CLIMATE_SEED));
@@ -78,10 +144,8 @@ export default function CwrInputParams({ en = false }: { en?: boolean }) {
   const [page, setPage] = useState(0);
   const [section, setSection] = useState<SectionId>("A");
   const [status, setStatus] = useState("");
+  const [monthly, setMonthly] = useState(false);
   const [deltaH, setDeltaH] = useState(0);
-  const [H, setH] = useState(2300);
-  const [S, setS] = useState(1500);
-
   useEffect(() => {
     let live = true;
     void (async () => {
@@ -110,7 +174,6 @@ export default function CwrInputParams({ en = false }: { en?: boolean }) {
   const pageIndex = Math.min(page, pages - 1);
   const visible = filtered.slice(pageIndex * PAGE, (pageIndex + 1) * PAGE);
 
-  const betaFull = S > 0 ? (2 * deltaH * H) / (S * S) : 0;
   const betaSimple = 0.002 * deltaH;
 
   const loaiRay = TB15_SEED.loai_ray ?? [];
@@ -162,6 +225,8 @@ export default function CwrInputParams({ en = false }: { en?: boolean }) {
           pageIndex={pageIndex}
           pages={pages}
           setPage={setPage}
+          monthly={monthly}
+          setMonthly={setMonthly}
         />
       )}
 
@@ -378,33 +443,17 @@ export default function CwrInputParams({ en = false }: { en?: boolean }) {
           <RefBlock
             title={en ? "Load eccentricity β on curves (A.0.2-2 / A.0.2-3)" : "Hệ số lệch tải β trên đường cong (A.0.2-2 / A.0.2-3)"}
             note={en
-              ? "β = 2·Δh·H / S² · with H=2300 mm, S=1500 mm → β = 0.002·Δh"
-              : "β = 2·Δh·H / S² · với H=2300 mm, S=1500 mm → β = 0,002·Δh"}
+              ? "β = 0.002·Δh (A.0.2-3), Δh in mm"
+              : "β = 0,002·Δh (A.0.2-3), Δh tính bằng mm"}
           >
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <label className="text-xs font-semibold text-slate-700">
                 Δh — {en ? "unbalanced cant (mm)" : "siêu cao không cân bằng (mm)"}
                 <input type="number" value={deltaH} onChange={(e) => setDeltaH(Number(e.target.value))}
                   className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3 font-mono text-sm" />
               </label>
-              <label className="text-xs font-semibold text-slate-700">
-                H — {en ? "CG height (mm)" : "chiều cao trọng tâm (mm)"}
-                <input type="number" value={H} onChange={(e) => setH(Number(e.target.value))}
-                  className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3 font-mono text-sm" />
-              </label>
-              <label className="text-xs font-semibold text-slate-700">
-                S — {en ? "rail centre spacing (mm)" : "cự ly tâm ray (mm)"}
-                <input type="number" value={S} onChange={(e) => setS(Number(e.target.value))}
-                  className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3 font-mono text-sm" />
-              </label>
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold text-slate-500">{en ? "Full formula" : "Công thức đầy đủ"}</p>
-                <p className="mt-1 font-mono text-lg font-bold text-slate-900">β = {fmt(betaFull, 4)}</p>
-              </div>
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
-                <p className="text-xs font-semibold text-emerald-800">{en ? "Simplified (H=2300, S=1500)" : "Rút gọn (H=2300, S=1500)"}</p>
+                <p className="text-xs font-semibold text-emerald-800">{en ? "Load eccentricity" : "Hệ số lệch tải"}</p>
                 <p className="mt-1 font-mono text-lg font-bold text-emerald-950">β = 0,002·Δh = {fmt(betaSimple, 4)}</p>
               </div>
             </div>
@@ -433,7 +482,7 @@ function RefBlock({ title, note, children }: { title: string; note?: string; chi
 }
 
 function ClimateSection({
-  en, query, setQuery, status, filteredCount, totalCount, visible, pageIndex, pages, setPage,
+  en, query, setQuery, status, filteredCount, totalCount, visible, pageIndex, pages, setPage, monthly, setMonthly,
 }: {
   en: boolean;
   query: string;
@@ -445,6 +494,8 @@ function ClimateSection({
   pageIndex: number;
   pages: number;
   setPage: (fn: (p: number) => number) => void;
+  monthly: boolean;
+  setMonthly: (value: boolean) => void;
 }) {
   return (
     <section className="space-y-4" aria-labelledby="cwr-input-a-title">
@@ -477,10 +528,25 @@ function ClimateSection({
           <p className="text-xs font-semibold text-slate-500">
             {filteredCount.toLocaleString("vi-VN")} / {totalCount.toLocaleString("vi-VN")} {en ? "stations" : "trạm"}
           </p>
+          <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5 text-xs font-semibold">
+            <button type="button" aria-pressed={!monthly} onClick={() => setMonthly(false)}
+              className={`h-8 rounded-md px-3 ${!monthly ? "bg-[#0047AB] text-white" : "text-slate-700"}`}>
+              {en ? "By year" : "Theo năm"}
+            </button>
+            <button type="button" aria-pressed={monthly} onClick={() => setMonthly(true)}
+              className={`h-8 rounded-md px-3 ${monthly ? "bg-[#0047AB] text-white" : "text-slate-700"}`}>
+              {en ? "By month" : "Theo tháng"}
+            </button>
+          </div>
         </div>
         {status && <p className="mt-2 text-xs text-amber-700">{status}</p>}
       </div>
 
+      {monthly ? (
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <ClimateMonthTable rows={visible} en={en} />
+        </div>
+      ) : (
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[52rem] border-collapse text-left text-xs sm:text-sm">
@@ -535,10 +601,13 @@ function ClimateSection({
           </table>
         </div>
       </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-slate-500">
-          {en ? "Year column from QCVN. Rail columns calculated." : "Cột Năm theo QCVN. Hai cột nhiệt độ ray tính tự động."}
+          {monthly
+            ? (en ? "Monthly values from QCVN (12 months). Rail min = air min of month; rail max = air max of month + 20 °C." : "Giá trị theo 12 tháng từ QCVN. Ray thấp nhất = không khí thấp nhất của tháng; ray cao nhất = không khí cao nhất của tháng + 20 °C.")
+            : (en ? "Year column from QCVN. Rail columns calculated." : "Cột Năm theo QCVN. Hai cột nhiệt độ ray tính tự động.")}
         </p>
         <div className="flex items-center gap-2">
           <button type="button" disabled={pageIndex <= 0} onClick={() => setPage((p) => Math.max(0, p - 1))}

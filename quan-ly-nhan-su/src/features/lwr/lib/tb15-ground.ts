@@ -1,3 +1,16 @@
+/** Bảng B.0.4-1 (q₀, B, Z, C, N) và B.0.4-2 (H, μ) theo loại tà vẹt / phụ kiện đàn hồi. */
+export type IrregularInput = {
+  q0: number; // N/cm — B.0.4-1
+  B: number; Z: number; C: number; N: number; // B.0.4-1
+  H: number; // N·cm/cm — B.0.4-2
+  mu: number; // B.0.4-2
+  l0: number; // cm — B.0.4-3 (theo loại ray)
+  i0Permil: number; // ‰ — B.0.4-3
+  dpKn: number; // kN — B.0.4-3
+};
+
+export type RiseMethod = "uniform" | "irregular" | "min";
+
 export type GroundCheckInput = {
   area: number;
   ix: number;
@@ -17,8 +30,6 @@ export type GroundCheckInput = {
   lateralFactor: number;
   radius: number;
   cantDeficiency: number;
-  centerHeight: number;
-  railCenters: number;
   minRailTemperature: number;
   maxRailTemperature: number;
   lockTolerance: number;
@@ -27,34 +38,103 @@ export type GroundCheckInput = {
   additionalStress: number;
   brakingStress: number;
   wheels: { position: number; load: number }[];
+  /** Phương pháp ổn định dùng cho [ΔT_u]; mặc định "irregular" như sheet Nhập liệu của Excel. */
+  riseMethod?: RiseMethod;
+  /** Bắt buộc khi riseMethod là "irregular" hoặc "min". */
+  irregular?: IrregularInput;
 };
+
+/** Gamma log (Lanczos, g = 7) — tương đương GAMMALN của Excel. */
+function lnGamma(x: number): number {
+  const c = [
+    0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313,
+    -176.61503916999385, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6,
+    1.5056327351493116e-7,
+  ];
+  if (x < 0.5) return Math.log(Math.PI / Math.abs(Math.sin(Math.PI * x))) - lnGamma(1 - x);
+  const z = x - 1;
+  let a = c[0];
+  const t = z + 7.5;
+  for (let i = 1; i < 9; i++) a += c[i] / (z + i);
+  return 0.5 * Math.log(2 * Math.PI) + (z + 0.5) * Math.log(t) - t + Math.log(a);
+}
+
+/**
+ * Phương pháp B.0.4 (bước sóng không đều) — đúng sheet 2_Ổn định của bảng tính Excel.
+ * Đơn vị trong công thức: N, cm. Quét l từ 100 đến 1 500 cm, bước 5 cm.
+ */
+function irregularRise(input: GroundCheckInput, p: IrregularInput) {
+  const f = 0.02; // cm — B.0.4-2 (độ võng uốn)
+  const d = 0.5833; // tỷ lệ uốn đàn hồi trong tổng uốn ban đầu (B.0.4)
+  const { Z, N, mu, B, C, q0, H, l0, i0Permil } = p;
+  if ([Z, N, mu, B, C, q0, H, l0, i0Permil].some((v) => !Number.isFinite(v) || v <= 0) || !Number.isFinite(p.dpKn)) {
+    throw new Error("Thiếu thông số phương pháp B.0.4 (B.0.4-1 đến B.0.4-3).");
+  }
+  const E = input.steelModulus * 100; // N/cm²
+  const Iy = input.iy / 1e4; // cm⁴
+  const i0 = i0Permil / 1000;
+  const G = Math.exp(lnGamma((2 * (1 + Z) + 1) / 2) - lnGamma((2 * (1 + Z)) / 2 + 1)) / Math.sqrt(Math.PI);
+  const a = (2 * (1 + N)) / N;
+  const K = Math.exp(lnGamma((a + 1) / 2) - lnGamma(a / 2 + 1)) / Math.sqrt(Math.PI);
+  const psi = Math.PI ** ((1 + mu) / mu)
+    * Math.exp(lnGamma(((mu + 1) / mu + 1) / 2) - lnGamma(((mu + 1) / mu) / 2 + 1)) / Math.sqrt(Math.PI);
+  const R = input.radius;
+  let pMin = Infinity;
+  let lMin = 0;
+  for (let l = 100; l <= 1500; l += 5) {
+    const phi = l < l0
+      ? (2 * l0 * l) / (Math.PI * (l0 * l0 - l * l)) * Math.sin((Math.PI * l) / l0)
+      : l === l0
+        ? 1
+        : (2 * l0 * l0) / (Math.PI * (l * l - l0 * l0)) * Math.sin((Math.PI * l0) / l);
+    const eta = l < l0 ? (phi * l0) / l : l === l0 ? 1 : (phi * l) / l0;
+    const tauI = 8 * E * Iy * Math.PI ** 2 * (f / (l * l) + (d * i0) / l0 * phi);
+    const tauQM = ((l * l) / Math.PI ** 2) * (q0 - 2 * B * G * f ** Z + 2 * C * K * f ** (1 / N))
+      + (2 * psi * H) / Math.PI ** 2 * f ** (1 / mu) * l ** ((mu - 1) / mu);
+    const curve = R === 0 ? 0 : (l * l) / (R * 100 * Math.PI ** 2);
+    const P = (tauI + tauQM) / (f + l * i0 * eta + curve);
+    if (P < pMin) {
+      pMin = P;
+      lMin = l;
+    }
+  }
+  const dropN = p.dpKn * 1000;
+  const deltaT = (pMin / 2 - dropN) / (input.steelModulus * input.expansion * input.area);
+  const riseLimit = R === 0 || R >= 2000 ? deltaT - 8 : deltaT;
+  return { pMin, lMin, deltaT, riseLimit, psi, G, K };
+}
 
 /** TB 10015 Appendix A and B.0.3, for standard-gauge ballasted track on formation. */
 export function checkTb15Ground(input: GroundCheckInput) {
   const { wheels, area, ix, iy, steelModulus: E, expansion, minRailTemperature, maxRailTemperature } = input;
+  const method: RiseMethod = input.riseMethod ?? "irregular";
   const positive = [area, ix, iy, input.headModulus, input.baseModulus, E, expansion, input.yieldStress,
     input.seatStiffness, input.spacing, input.resistance, input.lateralResistance, input.lateralFactor,
-    input.centerHeight, input.railCenters, input.gapLimit];
+    input.gapLimit];
   const nonnegative = [input.speed, input.speedCoefficient, input.radius, input.lockTolerance,
     input.additionalStress, input.brakingStress];
   if (positive.some((n) => !Number.isFinite(n) || n <= 0) ||
-      nonnegative.some((n) => !Number.isFinite(n) || n < 0) ||
-      !Number.isFinite(input.safety) || input.safety < 1.3 ||
-      !Number.isFinite(input.cantDeficiency) ||
-      !Number.isFinite(input.lockAdjustment) || Math.abs(input.lockAdjustment) > 5 ||
-      ![3, 5].includes(input.lockTolerance) ||
-      !Number.isFinite(minRailTemperature) || !Number.isFinite(maxRailTemperature) ||
-      minRailTemperature >= maxRailTemperature || !wheels.length ||
-      wheels.some(({ position, load }) => !Number.isFinite(position) || !Number.isFinite(load) || load <= 0) ||
-      new Set(wheels.map(({ position }) => position)).size !== wheels.length) {
+    nonnegative.some((n) => !Number.isFinite(n) || n < 0) ||
+    !Number.isFinite(input.safety) || input.safety < 1.3 ||
+    !Number.isFinite(input.cantDeficiency) ||
+    !Number.isFinite(input.lockAdjustment) || Math.abs(input.lockAdjustment) > 5 ||
+    ![3, 5].includes(input.lockTolerance) ||
+    !Number.isFinite(minRailTemperature) || !Number.isFinite(maxRailTemperature) ||
+    minRailTemperature >= maxRailTemperature || !wheels.length ||
+    wheels.some(({ position, load }) => !Number.isFinite(position) || !Number.isFinite(load) || load <= 0) ||
+    new Set(wheels.map(({ position }) => position)).size !== wheels.length) {
     throw new Error("Thông số đầu vào thiếu hoặc nằm ngoài miền tính.");
+  }
+  if (method !== "uniform" && !input.irregular) {
+    throw new Error("Thiếu thông số phương pháp B.0.4 (B.0.4-1 đến B.0.4-3).");
   }
 
   const spacingMm = input.spacing * 1000;
   const foundation = input.seatStiffness * 1000 / spacingMm;
   const k = (foundation / (4 * E * ix)) ** 0.25;
+  // Excel: β = 0,002·Δh (A.0.2-3).
+  const betaLoad = 0.002 * Math.abs(input.cantDeficiency);
   const alphaSpeed = input.speed > 160 ? 1 : input.speedCoefficient * input.speed / 100;
-  const betaLoad = 2 * Math.abs(input.cantDeficiency) * input.centerHeight / input.railCenters ** 2;
   const sections = wheels.map((wheel) => {
     let settlementLoad = 0;
     let bendingLoad = 0;
@@ -94,7 +174,18 @@ export function checkTb15Ground(input: GroundCheckInput) {
   const criticalForce = (rigidity * (f + initialDeflection) / halfWaveSquared + ballastTerm * halfWaveSquared)
     / (f + initialDeflection + curvatureTerm * halfWaveSquared);
   const allowedForce = criticalForce / input.safety;
-  const riseLimit = allowedForce / (2 * E * expansion * area);
+  // B.0.3 (phương pháp A) — Excel: [ΔT_u] = [P]/(2EαF) khi P_f = 0 (nền đường).
+  const riseUniform = allowedForce / (2 * E * expansion * area);
+
+  // Phương pháp B.0.4 chỉ chạy khi được chọn; "min" lấy giá trị nhỏ hơn của A và B.
+  const irregular = method !== "uniform" && input.irregular ? irregularRise(input, input.irregular) : null;
+  const riseIrregular = irregular ? irregular.riseLimit : null;
+  const riseLimit = method === "uniform"
+    ? riseUniform
+    : method === "irregular"
+      ? (riseIrregular as number)
+      : Math.min(riseUniform, riseIrregular as number);
+
   const dropGap = Math.sqrt(input.gapLimit * input.resistance / (E * area)) / expansion;
   const lockMin = Math.max(minRailTemperature, maxRailTemperature - riseLimit) + input.lockTolerance;
   const lockMax = Math.min(maxRailTemperature, minRailTemperature + Math.min(dropStrength, dropGap)) - input.lockTolerance;
@@ -107,7 +198,10 @@ export function checkTb15Ground(input: GroundCheckInput) {
   if (![foundation, k, baseStress, dropStrength, riseLimit, dropGap, lockMin, lockMax].every(Number.isFinite)) {
     throw new Error("Kết quả vượt miền số của phép tính. Kiểm tra đơn vị và đầu vào.");
   }
-  return { sections, foundation, k, alphaSpeed, betaLoad, staticMoment, dynamicMoment, headStress, baseStress,
+  return {
+    sections, foundation, k, alphaSpeed, betaLoad, staticMoment, dynamicMoment, headStress, baseStress,
     stressLimit, dropStrength, halfWave: Math.sqrt(halfWaveSquared), criticalForce, allowedForce, riseLimit,
-    dropGap, lockMin, lockMax, candidate, lockTemperature, drop, rise, gap, totalStress };
+    riseUniform, riseIrregular, irregularHalfWave: irregular?.lMin ?? null, irregularMinP: irregular?.pMin ?? null,
+    riseMethod: method, dropGap, lockMin, lockMax, candidate, lockTemperature, drop, rise, gap, totalStress,
+  };
 }
