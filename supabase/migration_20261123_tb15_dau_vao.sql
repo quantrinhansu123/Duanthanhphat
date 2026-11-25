@@ -44,6 +44,13 @@ create table if not exists public.tb15_loai_ray (
   constraint tb15_loai_ray_unique unique (loai_kg_m, do_mon_mm)
 );
 
+-- Bảng tạo từ bản cũ có thể thiếu cột (create if not exists bỏ qua bảng đã có): bổ sung trước khi insert.
+alter table public.tb15_loai_ray add column if not exists k_an_toan numeric(8,4) not null default 1.3;
+alter table public.tb15_loai_ray add column if not exists e_mpa numeric(12,2) not null default 210000;
+alter table public.tb15_loai_ray add column if not exists alpha numeric(16,10) not null default 0.0000118;
+alter table public.tb15_loai_ray add column if not exists pj_kn numeric(10,3) not null default 400;
+alter table public.tb15_loai_ray add column if not exists khe_ho_mm numeric(6,2) not null default 18;
+
 -- 3. Mác thép → σ_s (bảng 3.2.4)
 create table if not exists public.tb15_mac_thep (
   id uuid primary key default gen_random_uuid(),
@@ -183,6 +190,19 @@ select * from (values
   ('U75V / U75VG / U76CrRE / U77MnCr / U78CrV', 472)
 ) as v(mac_thep, sigma_s_mpa)
 where not exists (select 1 from public.tb15_mac_thep limit 1);
+
+-- Bổ sung cột của bảng kết cấu đường và độ cứng gối nếu bảng được tạo từ bản cũ.
+alter table public.tb15_ket_cau_duong add column if not exists so_thanh_km numeric(8,0);
+alter table public.tb15_ket_cau_duong add column if not exists r_khong_tai_hs numeric(10,3);
+alter table public.tb15_ket_cau_duong add column if not exists r_dau_may_hs numeric(10,3);
+alter table public.tb15_ket_cau_duong add column if not exists r_co_tai numeric(10,3);
+alter table public.tb15_ket_cau_duong add column if not exists r_toa_xe_hs numeric(10,3);
+alter table public.tb15_ket_cau_duong add column if not exists r_toa_xe numeric(10,3);
+alter table public.tb15_do_cung_goi add column if not exists loai_duong text not null default 'co_ba_lat';
+alter table public.tb15_do_cung_goi add column if not exists dem_kn_mm numeric(10,3);
+alter table public.tb15_do_cung_goi add column if not exists dem_sai_so_kn_mm numeric(10,3);
+alter table public.tb15_do_cung_goi add column if not exists tinh_min_kn_mm numeric(10,3);
+alter table public.tb15_do_cung_goi add column if not exists tinh_max_kn_mm numeric(10,3);
 
 insert into public.tb15_ket_cau_duong (ten, loai_duong, so_thanh_km, r_khong_tai_hs, r_khong_tai, r_dau_may_hs, r_co_tai, r_toa_xe_hs, r_toa_xe, q_kn_m, loai_ta_vet, cu_ly_nut_a_m, ghi_chu)
 select * from (values
