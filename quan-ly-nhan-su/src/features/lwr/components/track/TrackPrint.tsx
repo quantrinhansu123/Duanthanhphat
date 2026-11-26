@@ -303,6 +303,60 @@ function GtusPage({ line, layout, printRange, joints, symbols, projectName, rows
 
 const RANGE_PRESETS_KM = [1, 2, 3, 5] as const;
 
+/** Các dòng bảng BBNT - GTUS của một đoạn đã cắt; onlyCellIds = thanh ray của RFI (bỏ trống = tất cả). */
+function lwrRowsFor(sliced: TrackLayout, onlyCellIds?: string[]): LwrPrintRow[] {
+    // Mỗi dòng bảng = một thanh vẽ trên sơ đồ (cùng mã, chiều dài); thanh nằm trong đoạn LWR thì lấy mã + thông số của LWR đó.
+  return sliced.rows.flatMap((row) => row.cells.flatMap((cell) => {
+    if (!cell.placed) return [];
+    if (onlyCellIds && !onlyCellIds.includes(cell.id)) return [];
+    const startMetres = parseChainage(cell.from);
+    const endMetres = parseChainage(cell.to);
+    if (startMetres === null || endMetres === null || endMetres <= startMetres) return [];
+    const leftTemp = Number.isFinite(cell.leftTemp) ? Number(cell.leftTemp) : cell.temp;
+    const rightTemp = Number.isFinite(cell.rightTemp) ? Number(cell.rightTemp) : cell.temp;
+    const rail = coveringLongRail(
+      sliced.longRails.flatMap((item) => {
+        if (item.rowKey !== railRowKey(row)) return [];
+        const span = visibleLongRailSpan(sliced.rows, item);
+        return span ? [{ rail: item, span }] : [];
+      }),
+      startMetres,
+      endMetres,
+    )?.rail;
+    const params: StressInput = cell.stress ? { ...cell.stress, startChainage: cell.from, endChainage: cell.to } : rail ? rail.params : {
+      ...DEFAULT_STRESS_INPUT,
+      leftLength: railCellLengthMetres(cell) ?? endMetres - startMetres,
+      rightLength: 0,
+      leftTemp,
+      rightTemp,
+      ...(Number.isFinite(cell.midTemp) ? { midTemp: cell.midTemp } : {}),
+      startChainage: cell.from,
+      endChainage: cell.to,
+    };
+    const stub: LongRail = {
+      id: cell.id,
+      code: cell.id,
+      label: cell.id,
+      rowKey: railRowKey(row),
+      startCellId: cell.id,
+      endCellId: cell.id,
+      startMetres,
+      endMetres,
+      params,
+      updatedAt: "",
+    };
+    return [{
+      lengthM: railCellLengthMetres(cell) ?? undefined,
+      code: displayRailCode(rail ? rail.code : cell.id),
+      railLabel: railDisplayLabel(row.line, row.rail),
+      span: { startMetres, endMetres },
+      summary: withReportTimes(lwrPrintSummary(params), cell),
+      neutralTemp: formatStressNumber(params.neutralTemp),
+      completed: cell.released || rail?.completedAt || isLongRailReleased(sliced.rows, stub) ? "Đạt" : "Chưa",
+    }];
+  }));
+}
+
 export function TrackPrint({
   layout,
   joints,
@@ -313,6 +367,8 @@ export function TrackPrint({
   initialRange,
   onlyCellIds,
   pycSo,
+  batch,
+  onPrinted,
 }: {
   layout: TrackLayout;
   joints: RailJoint[];
@@ -326,6 +382,10 @@ export function TrackPrint({
   onlyCellIds?: string[];
   /** Số PYC của RFI GTUS (in ở đầu phụ lục BBNT). */
   pycSo?: string;
+  /** In hàng loạt BBNT - GTUS: mỗi phần tử là một RFI (thanh ray, đoạn Km, số PYC); mỗi RFI in các trang riêng nối tiếp nhau. */
+  batch?: { cellIds: string[]; range?: { start: number; end: number }; pycSo?: string }[];
+  /** Gọi sau khi bấm in (để nơi gọi bỏ tick các phiếu đã in). */
+  onPrinted?: () => void;
 }) {
   const extent = trackExtent(layout.rows);
   const defaultSpanM = Math.min(2000, Math.max(500, extent.endMetres - extent.startMetres));
@@ -343,7 +403,7 @@ export function TrackPrint({
     }
     return starts.length ? Math.max(extent.startMetres, Math.floor(Math.min(...starts) / 1000) * 1000) : extent.startMetres;
   })();
-  const [format, setFormat] = useState<string>(initialFormat ?? "A4");
+  const [format, setFormat] = useState<string>(batch ? "BBNT" : initialFormat ?? "A4");
   const [fromDraft, setFromDraft] = useState(formatChainage(initialRange?.start ?? dataStart));
   const [toDraft, setToDraft] = useState(formatChainage(initialRange?.end ?? Math.min(extent.endMetres, dataStart + defaultSpanM)));
   const [rangeError, setRangeError] = useState<string | null>(null);
@@ -367,59 +427,7 @@ export function TrackPrint({
   const config = FORMATS[format];
   const stamp = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
 
-  const lwrRows = useMemo(() => {
-    if (!sliced) return [];
-    // Mỗi dòng bảng = một thanh vẽ trên sơ đồ (cùng mã, chiều dài); thanh nằm trong đoạn LWR thì lấy mã + thông số của LWR đó.
-    return sliced.rows.flatMap((row) => row.cells.flatMap((cell) => {
-      if (!cell.placed) return [];
-      if (onlyCellIds && !onlyCellIds.includes(cell.id)) return [];
-      const startMetres = parseChainage(cell.from);
-      const endMetres = parseChainage(cell.to);
-      if (startMetres === null || endMetres === null || endMetres <= startMetres) return [];
-      const leftTemp = Number.isFinite(cell.leftTemp) ? Number(cell.leftTemp) : cell.temp;
-      const rightTemp = Number.isFinite(cell.rightTemp) ? Number(cell.rightTemp) : cell.temp;
-      const rail = coveringLongRail(
-        sliced.longRails.flatMap((item) => {
-          if (item.rowKey !== railRowKey(row)) return [];
-          const span = visibleLongRailSpan(sliced.rows, item);
-          return span ? [{ rail: item, span }] : [];
-        }),
-        startMetres,
-        endMetres,
-      )?.rail;
-      const params: StressInput = cell.stress ? { ...cell.stress, startChainage: cell.from, endChainage: cell.to } : rail ? rail.params : {
-        ...DEFAULT_STRESS_INPUT,
-        leftLength: railCellLengthMetres(cell) ?? endMetres - startMetres,
-        rightLength: 0,
-        leftTemp,
-        rightTemp,
-        ...(Number.isFinite(cell.midTemp) ? { midTemp: cell.midTemp } : {}),
-        startChainage: cell.from,
-        endChainage: cell.to,
-      };
-      const stub: LongRail = {
-        id: cell.id,
-        code: cell.id,
-        label: cell.id,
-        rowKey: railRowKey(row),
-        startCellId: cell.id,
-        endCellId: cell.id,
-        startMetres,
-        endMetres,
-        params,
-        updatedAt: "",
-      };
-      return [{
-        lengthM: railCellLengthMetres(cell) ?? undefined,
-        code: displayRailCode(rail ? rail.code : cell.id),
-        railLabel: railDisplayLabel(row.line, row.rail),
-        span: { startMetres, endMetres },
-        summary: withReportTimes(lwrPrintSummary(params), cell),
-        neutralTemp: formatStressNumber(params.neutralTemp),
-        completed: cell.released || rail?.completedAt || isLongRailReleased(sliced.rows, stub) ? "Đạt" : "Chưa",
-      }];
-    }));
-  }, [sliced, onlyCellIds]);
+  const lwrRows = useMemo(() => (sliced ? lwrRowsFor(sliced, onlyCellIds) : []), [sliced, onlyCellIds]);
 
   function applyPresetKm(km: number) {
     const start = parseChainage(fromDraft) ?? extent.startMetres;
@@ -468,6 +476,22 @@ export function TrackPrint({
     el.style.zoom = previous;
     if (height > 0) setNaturalH(height);
   }, [sliced, format, printRange]);
+
+  // Hàng loạt: cắt riêng sơ đồ và bảng cho từng RFI.
+  const batchPages = useMemo(() => (batch ?? []).flatMap((item) => {
+    if (!item.range) return [];
+    try {
+      const part = sliceLayoutForPrint(layout, item.range.start, item.range.end);
+      const rows = lwrRowsFor(part, item.cellIds);
+      const lines = ["TUYẾN THƯỢNG", "TUYẾN HẠ"].filter((line) => layout.rows.some((row) => row.line === line));
+      const hasRows = (line: string) => rows.some((row) => /hạ/i.test(row.railLabel) === /hạ/i.test(line));
+      const withData = lines.filter(hasRows);
+      return (withData.length ? withData : lines).map((line) => ({
+        key: `${item.pycSo ?? item.cellIds.join(",")}-${line}`, line, part, range: item.range!, pycSo: item.pycSo,
+        rows: rows.filter((row) => /hạ/i.test(row.railLabel) === /hạ/i.test(line)),
+      }));
+    } catch { return []; }
+  }), [batch, layout]);
 
   const filteredJoints = useMemo(() => {
     if (!printRange) return [];
@@ -548,12 +572,12 @@ export function TrackPrint({
             }
     `}</style>
       <div className="toolbar">
-        <select aria-label="Khổ giấy" value={format} onChange={(e) => setFormat(e.target.value)}>
+        {batch ? <b>In hàng loạt BBNT - GTUS ({batch.length} phiếu)</b> : <select aria-label="Khổ giấy" value={format} onChange={(e) => setFormat(e.target.value)}>
           {Object.entries(FORMATS).map(([id, item]) => (
             <option key={id} value={id}>{item.label}</option>
           ))}
-        </select>
-        <label className="text-sm">
+        </select>}
+        {!batch && <><label className="text-sm">
           Km đầu
           <input
             className="ml-1 w-24"
@@ -587,12 +611,13 @@ export function TrackPrint({
           }}
         >
           Cả tuyến
-        </button>
+        </button></>}
         <button
           type="button"
           onClick={() => {
-            if (!validateRange()) return;
+            if (!batch && !validateRange()) return;
             window.print();
+            onPrinted?.();
           }}
         >
           In / lưu PDF
@@ -601,7 +626,11 @@ export function TrackPrint({
         {rangeError ? <span className="text-sm text-red-700">{rangeError}</span> : null}
       </div>
 
-      {!sliced || !printRange ? (
+      {batch ? (
+        batchPages.length
+          ? <>{batchPages.map((page) => <GtusPage key={page.key} line={page.line} layout={page.part} printRange={page.range} joints={joints} symbols={symbols} projectName={projectName} pycSo={page.pycSo} rows={page.rows} />)}</>
+          : <article><p>Không có thanh ray nào để in trong các phiếu đã chọn.</p></article>
+      ) : !sliced || !printRange ? (
         <article>
           <p>Nhập đoạn Km hợp lệ để xem trước bản in.</p>
         </article>

@@ -75,7 +75,7 @@ function evidenceShort(kind: SplitKind, e?: Evidence | null) {
 export type SplitStage = "tao" | "duyet";
 
 export default function SplitWeldAcceptance({ project, projectName, kind, stage = "tao", onPrintRecord, onPrintRecords, onGoToUltrasound, initialTicketId, onInitialTicketOpened }: {
-  project: string; projectName: string; kind: SplitKind; stage?: SplitStage; onPrintRecord?: (record: RecordSet) => void; onPrintRecords?: (records: RecordSet[]) => void;
+  project: string; projectName: string; kind: SplitKind; stage?: SplitStage; onPrintRecord?: (record: RecordSet) => void; onPrintRecords?: (records: RecordSet[], onPrinted?: () => void) => void;
   /** Tab 1: sau khi chốt, người dùng chọn «Có» duyệt siêu âm ngay → chuyển sang tab 2 mở phiếu này. */
   onGoToUltrasound?: (sieuAmTicketId: string) => void;
   /** Tab 2: mở sẵn phiếu này khi vào tab (từ modal «Duyệt siêu âm ngay»). */
@@ -457,7 +457,14 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
     await refresh();
   }
   const [batchPick, setBatchPick] = useState<string[]>([]);
-  const printBatch = () => run(async () => { onPrintRecords?.(await Promise.all(batchPick.map((id) => loadGeometryRecord(id)))); });
+  const bulkSign = (signed: boolean) => run(async () => {
+    const todo = doneTickets.filter((t) => batchPick.includes(t.id) && Boolean(t.da_ky) !== signed);
+    for (const t of todo) await signSplitRecord(t.id, signed);
+    setOkMsg(`Đã ${signed ? "đánh dấu đã ký" : "đặt lại chờ ký"} ${todo.length} phiếu.`);
+    setBatchPick([]);
+    await refresh();
+  });
+  const printBatch = () => run(async () => { onPrintRecords?.(await Promise.all(batchPick.map((id) => loadGeometryRecord(id))), () => setBatchPick([])); });
   const printRecord = (t: Ticket, draft = false) => run(async () => { if (onPrintRecord) onPrintRecord(await loadGeometryRecord(t.id, draft)); });
 
   function renderTicketTable(rows: Ticket[], mode: "rfi" | "accept" | "records") {
@@ -466,7 +473,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
       {scan.node}
       <table className="w-full min-w-[680px] border-collapse text-left text-sm">
         <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
-          <tr>{mode === "records" && onPrintRecords && <th className="w-9 px-3 py-2"><input type="checkbox" aria-label="Chọn tất cả phiếu để in hàng loạt" checked={rows.length > 0 && rows.every((t) => batchPick.includes(t.id))} onChange={(e) => setBatchPick(e.target.checked ? rows.map((t) => t.id) : [])} /></th>}<th className="px-3 py-2">STT</th><th className="px-3 py-2">Số phiếu</th>{kind === "hinh-hoc" && <th className="px-3 py-2">Ngày mời</th>}<th className="px-3 py-2">Ngày hoàn thành</th><th className="px-3 py-2">Người lập</th><th className="px-3 py-2">Trạng thái</th><th className="px-3 py-2">Trạng thái scan</th><th className="px-3 py-2">Thanh toán</th><th className="px-3 py-2 text-right">Thao tác</th></tr>
+          <tr>{(mode === "records" || mode === "accept") && onPrintRecords && <th className="w-9 px-3 py-2"><input type="checkbox" aria-label="Chọn tất cả phiếu để in hàng loạt" checked={rows.length > 0 && rows.every((t) => batchPick.includes(t.id))} onChange={(e) => setBatchPick(e.target.checked ? rows.map((t) => t.id) : [])} /></th>}<th className="px-3 py-2">STT</th><th className="px-3 py-2">Số phiếu</th>{kind === "hinh-hoc" && <th className="px-3 py-2">Ngày mời</th>}<th className="px-3 py-2">Ngày hoàn thành</th><th className="px-3 py-2">Người lập</th><th className="px-3 py-2">Trạng thái</th><th className="px-3 py-2">Trạng thái scan</th><th className="px-3 py-2">Thanh toán</th><th className="px-3 py-2 text-right">Thao tác</th></tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.map((t, i) => {
@@ -478,7 +485,7 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
               ? { label: "In biên bản", onClick: () => printRecord(t) }
               : { label: done ? "Xem" : "Nghiệm thu", onClick: () => run(() => openTicket(t.id)) };
             return <tr key={t.id} className="hover:bg-slate-50">
-              {mode === "records" && onPrintRecords && <td className="px-3 py-2"><input type="checkbox" aria-label={`Chọn phiếu ${t.so_phieu}`} checked={batchPick.includes(t.id)} onChange={(e) => setBatchPick(e.target.checked ? [...batchPick, t.id] : batchPick.filter((id) => id !== t.id))} /></td>}
+              {(mode === "records" || mode === "accept") && onPrintRecords && <td className="px-3 py-2"><input type="checkbox" aria-label={`Chọn phiếu ${t.so_phieu}`} checked={batchPick.includes(t.id)} onChange={(e) => setBatchPick(e.target.checked ? [...batchPick, t.id] : batchPick.filter((id) => id !== t.id))} /></td>}
               <td className="px-3 py-2 font-mono text-slate-500">{i + 1}</td>
               <td className="px-3 py-2 font-bold">{t.so_phieu}</td>
               {kind === "hinh-hoc" && <td className="whitespace-nowrap px-3 py-2 font-mono">{dateLabel(t.ngay_moi)}{t.thong_tin?.gio_bat_dau ? ` ${t.thong_tin.gio_bat_dau}` : ""}</td>}
@@ -710,7 +717,10 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
     {!detail && sub === "accept" && <div className="space-y-3 rounded-xl border-2 border-slate-300 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-lg font-extrabold text-slate-900">Phiếu chờ nghiệm thu {kindName(kind)}</h3>
-        <button className={button} disabled={busy} onClick={() => run(refresh)}>Tải lại</button>
+        <div className="flex flex-wrap gap-2">
+          {onPrintRecords && <button className={primary} disabled={busy || !batchPick.length} onClick={() => void printBatch()}>In mẫu trống hàng loạt ({batchPick.length} phiếu)</button>}
+          <button className={button} disabled={busy} onClick={() => run(refresh)}>Tải lại</button>
+        </div>
       </div>
       <p className="text-sm text-slate-600">{kind === "hinh-hoc" ? "Ghi kết quả từng mối rồi chốt nghiệm thu để lập biên bản và chuyển các mối Đạt sang siêu âm." : "Mở phiếu siêu âm, ghi kết quả từng mối rồi chốt. Ký biên bản trong mục Hồ sơ nghiệm thu."}</p>
       {renderTicketTable(pendingTickets, "accept")}
@@ -722,6 +732,8 @@ export default function SplitWeldAcceptance({ project, projectName, kind, stage 
         <h3 className="text-lg font-extrabold text-slate-900">Hồ sơ nghiệm thu {kindName(kind)}</h3>
         <div className="flex flex-wrap gap-2">
           {onPrintRecords && <button className={primary} disabled={busy || !batchPick.length} onClick={() => void printBatch()}>In hàng loạt ({batchPick.length} phiếu)</button>}
+          <button className={button} disabled={busy || !batchPick.length} onClick={() => void bulkSign(true)}>Đánh dấu đã ký ({batchPick.length})</button>
+          <button className={button} disabled={busy || !batchPick.length} onClick={() => void bulkSign(false)}>Đặt lại chờ ký</button>
           <button className={button} disabled={busy} onClick={() => { setHeldTick((n) => n + 1); void run(refresh); }}>Tải lại</button>
         </div>
       </div>

@@ -12,7 +12,7 @@ const savedNo = (row: RecordSet) => (row.sua_doi ?? []).map((r) => (r.thong_tin 
   || (row.ho_so.map((h) => (h as { thong_tin?: Record<string, string> | null }).thong_tin?.so_bb?.trim()).find(Boolean)) || "";
 
 /** In hàng loạt hồ sơ nghiệm thu: xếp nối nhiều bộ biên bản trong một lần in; số BBNTCV chưa có thì cấp liên tiếp. */
-export default function WeldAcceptanceBatchPrint({ records, onClose }: { records: RecordSet[]; onClose: () => void }) {
+export default function WeldAcceptanceBatchPrint({ records, onClose, onPrinted }: { records: RecordSet[]; onClose: () => void; onPrinted?: () => void }) {
   const projectId = projectIdOf(records[0]);
   const [kinds, setKinds] = useState<RecordKind[]>(() => defaultAcceptancePrintKinds((records[0].dot.phieu_yeu_cau_nghiem_thu?.thong_tin ?? {}) as Record<string, unknown>));
   const [start, setStart] = useState(() => nextBbntcvSeq(projectId));
@@ -35,6 +35,7 @@ export default function WeldAcceptanceBatchPrint({ records, onClose }: { records
   function print() {
     const nums = [...document.querySelectorAll<HTMLElement>("[data-bb-no]")].map((el) => Number(/\/(\d+)\/BBNTCV/i.exec(el.dataset.bbNo ?? "")?.[1])).filter((n) => n >= 1);
     void printOrPdfAcceptance("Ho-so-nghiem-thu-hang-loat");
+    onPrinted?.();
     const last = Math.max(0, ...nums);
     if (!kinds.includes("giai-doan") || !last || !projectId) return;
     advanceBbntcvSeq(`FBW/${last}/BBNTCV`, projectId);
