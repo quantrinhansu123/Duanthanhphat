@@ -34,6 +34,7 @@ import { notifyOilReport } from "@/lib/notificationsDb";
 import Pager, { usePaged } from "@/components/Pager";
 import MachineRunReportPrint, {
   buildMachineRunReportRows,
+  engineOilWarnings,
   type MachineRunReportRow,
 } from "@/components/MachineRunReportPrint";
 
@@ -54,18 +55,22 @@ function emptyOilForm(date: string, machineId: string, personId = ""): DailyFuel
     machineId,
     added: 0,
     actual: 0,
+    engineOilLiters: 0,
+    generatorHours: 0,
     unit: "lít",
     personId,
     note: "",
   };
 }
 
-function oilFormFromRow(row: Pick<DailyFuelRow, "date" | "machineId" | "added" | "liters" | "unit" | "personId" | "note">): DailyFuelFormValues {
+function oilFormFromRow(row: Pick<DailyFuelRow, "date" | "machineId" | "added" | "liters" | "unit" | "personId" | "note" | "engineOilLiters" | "generatorHours">): DailyFuelFormValues {
   return {
     date: row.date,
     machineId: row.machineId,
     added: row.added,
     actual: row.liters,
+    engineOilLiters: row.engineOilLiters ?? 0,
+    generatorHours: row.generatorHours ?? 0,
     unit: row.unit || "lít",
     personId: row.personId,
     note: row.note,
@@ -253,7 +258,7 @@ export default function MachineAssignmentList() {
     const codeToMachineId = new Map(
       machineOptions.map((item) => [item.code.trim().toLowerCase(), item.id] as const),
     );
-    const rows = buildMachineRunReportRows(schedules, fuelRows, quotaMap, codeToMachineId).sort(
+    const rows = buildMachineRunReportRows(schedules, fuelRows, quotaMap, codeToMachineId, { from, to }).sort(
       (a, b) => compareNewestDate(a.date, b.date) || a.machineCode.localeCompare(b.machineCode, "vi"),
     );
     setPrintRows(rows);
@@ -424,7 +429,11 @@ export default function MachineAssignmentList() {
     }
     const refill = fuelDateEditable;
     if (refill ? !Number.isFinite(fuelForm.added) || fuelForm.added <= 0 : !Number.isFinite(fuelForm.actual) || fuelForm.actual < 0) {
-      setFuelFormError(refill ? "Số đã đổ phải lớn hơn 0." : "Số thực tế không hợp lệ.");
+      setFuelFormError(refill ? "Số dầu máy phát đã đổ phải lớn hơn 0." : "Số thực tế không hợp lệ.");
+      return;
+    }
+    if (refill && fuelForm.engineOilLiters > 0 && !(fuelForm.generatorHours > 0)) {
+      setFuelFormError("Đổ dầu động cơ thì nhập số giờ báo trên máy phát.");
       return;
     }
     setFuelSaving(true);
@@ -456,6 +465,8 @@ export default function MachineAssignmentList() {
         remaining: refill ? (prior?.liters ?? 0) : actual,
         added: refill ? addedTotal : (prior?.added ?? 0),
         hasActual: refill ? (prior?.hasActual ?? false) : true,
+        engineOilLiters: refill ? (fuelForm.engineOilLiters > 0 ? fuelForm.engineOilLiters : null) : (prior?.engineOilLiters ?? null),
+        generatorHours: refill ? (fuelForm.generatorHours > 0 ? fuelForm.generatorHours : null) : (prior?.generatorHours ?? null),
         unit: fuelForm.unit.trim() || "lít",
         personId: fuelForm.personId.trim(),
         personName: personnel.find((p) => p.id === fuelForm.personId)?.label || "—",
@@ -1158,8 +1169,8 @@ export default function MachineAssignmentList() {
                 </h3>
                 <p className="mt-0.5 text-xs text-slate-500">
                   {fuelDateEditable
-                    ? "Hai ô: Đã đổ và Thực tế · một máy / một ngày"
-                    : "Nhập Đã đổ và Thực tế · một máy / một ngày"}
+                    ? "Dầu máy phát, dầu động cơ và số giờ máy phát · một máy / một ngày"
+                    : "Chỉ ghi số thực tế · một máy / một ngày"}
                 </p>
               </div>
               <button
@@ -1205,7 +1216,7 @@ export default function MachineAssignmentList() {
               <div className="grid grid-cols-2 gap-3">
                 {fuelDateEditable && (
                 <label className="block text-xs font-semibold text-slate-700">
-                  Đã đổ *
+                  Dầu máy phát (lít) *
                   <input
                     type="number"
                     min="0"
@@ -1233,8 +1244,39 @@ export default function MachineAssignmentList() {
                 </label>
                 )}
                 <p className="col-span-2 text-[11px] text-slate-500">
-                  {fuelDateEditable ? "Mỗi lần đổ được cộng dồn; tổng hiện ở nút Lịch sử cấp phát." : "Chỉ ghi số Thực tế (so với định mức); số đã đổ nhập ở Lịch sử cấp phát."}
+                  {fuelDateEditable ? "Dầu máy phát ghi số lít mỗi lần đổ; tổng hiện ở nút Lịch sử cấp phát." : "Chỉ ghi số Thực tế (so với định mức); số đã đổ nhập ở Lịch sử cấp phát."}
                 </p>
+                {fuelDateEditable && (
+                  <>
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Dầu động cơ (lít)
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={fuelForm.engineOilLiters || ""}
+                        onChange={(e) => setFuelForm((f) => ({ ...f, engineOilLiters: Number(e.target.value) }))}
+                        className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 px-3 font-mono text-sm outline-hidden focus:border-[#0047AB]"
+                        placeholder="Bỏ trống nếu không đổ"
+                      />
+                    </label>
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Số giờ máy phát
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={fuelForm.generatorHours || ""}
+                        onChange={(e) => setFuelForm((f) => ({ ...f, generatorHours: Number(e.target.value) }))}
+                        className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 px-3 font-mono text-sm outline-hidden focus:border-[#0047AB]"
+                        placeholder="Giờ báo khi đổ dầu động cơ"
+                      />
+                    </label>
+                    <p className="col-span-2 text-[11px] text-slate-500">
+                      Dầu động cơ: ghi số lít và số giờ trên máy phát. Thay dầu sau mỗi 275 giờ hoạt động.
+                    </p>
+                  </>
+                )}
                 <label className="block text-xs font-semibold text-slate-700">
                   Đơn vị
                   <select
@@ -1386,7 +1428,8 @@ export default function MachineAssignmentList() {
                   <thead className="sticky top-0 bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-600">
                     <tr className="border-b border-slate-200">
                       <th className="px-4 py-2.5">Ngày</th>
-                      <th className="px-3.5 py-2.5 text-right">Đã đổ</th>
+                      <th className="px-3.5 py-2.5 text-right">Máy phát</th>
+                      <th className="px-3.5 py-2.5 text-right">Động cơ</th>
                       <th className="px-3.5 py-2.5 text-right">Thực tế</th>
                       <th className="px-3.5 py-2.5">Người cấp</th>
                       <th className="px-3.5 py-2.5">Ghi chú</th>
@@ -1402,6 +1445,11 @@ export default function MachineAssignmentList() {
                         <td className="whitespace-nowrap px-3.5 py-2.5 text-right font-mono font-semibold tabular-nums text-slate-900">
                           {row.added.toLocaleString("vi-VN")}{" "}
                           <span className="font-sans font-medium text-slate-500">{row.unit}</span>
+                        </td>
+                        <td className="whitespace-nowrap px-3.5 py-2.5 text-right font-mono text-slate-800">
+                          {row.engineOilLiters
+                            ? `${row.engineOilLiters.toLocaleString("vi-VN")} lít${row.generatorHours ? ` · ${row.generatorHours.toLocaleString("vi-VN")} giờ` : ""}`
+                            : "—"}
                         </td>
                         <td className="whitespace-nowrap px-3.5 py-2.5 text-right font-mono font-semibold tabular-nums text-emerald-800">
                           {row.hasActual ? (
@@ -1456,6 +1504,7 @@ export default function MachineAssignmentList() {
         dateTo={printTo}
         projectLabel={printProjectLabel}
         autoPrint={printAuto}
+        oilWarnings={engineOilWarnings(list, fuelRows, new Map(machines.map((item) => [item.code.trim().toLowerCase(), item.id]))).filter((item) => printRows.some((row) => row.machineId === item.machineId))}
         onClose={() => {
           setPrintOpen(false);
           setPrintAuto(false);

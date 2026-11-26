@@ -17,6 +17,10 @@ export type DailyFuelRow = {
   added: number;
   /** Đã có báo cáo «Thực tế» (nhập ở «Sửa báo cáo»); false = chỉ có lần đổ dầu. */
   hasActual: boolean;
+  /** Lít dầu động cơ đổ trong ngày. Null = không đổ. */
+  engineOilLiters: number | null;
+  /** Số giờ báo trên máy phát khi đổ dầu động cơ. */
+  generatorHours: number | null;
   unit: string;
   personId: string;
   personName: string;
@@ -31,6 +35,10 @@ export type DailyFuelFormValues = {
   added: number;
   /** Mức dầu thực tế (sau khi đổ) — dùng so sánh định mức. */
   actual: number;
+  /** Lít dầu động cơ. 0 hoặc bỏ trống = không đổ. */
+  engineOilLiters: number;
+  /** Số giờ trên máy phát lúc đổ dầu động cơ. */
+  generatorHours: number;
   unit: string;
   personId: string;
   note: string;
@@ -48,6 +56,8 @@ type FuelTableRow = {
   so_lit: number | string;
   con_lai?: number | string | null;
   do_them?: number | string | null;
+  dau_dong_co?: number | string | null;
+  gio_may_phat?: number | string | null;
   don_vi?: string | null;
   nguoi_cap: string | null;
   ghi_chu: string | null;
@@ -62,6 +72,16 @@ function isMissingSplitColumn(message: string) {
   return /con_lai|do_them/i.test(message) && /schema cache|column|does not exist|42703/i.test(message);
 }
 
+function isMissingEngineColumn(message: string) {
+  return /dau_dong_co|gio_may_phat/i.test(message) && /schema cache|column|does not exist|42703/i.test(message);
+}
+
+function optionalNumber(value: number | string | null | undefined) {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export async function loadDailyFuelRows(): Promise<{ rows: DailyFuelRow[]; error?: string }> {
   if (!isSupabaseConfigured()) {
     return { rows: [], error: "Chưa cấu hình Supabase" };
@@ -69,10 +89,17 @@ export async function loadDailyFuelRows(): Promise<{ rows: DailyFuelRow[]; error
   const supabase = createClient();
   let withUnit = await supabase
     .from("cap_dau_hang_ngay")
-    .select("id,ngay,may,so_lit,con_lai,do_them,don_vi,nguoi_cap,ghi_chu,created_at")
+    .select("id,ngay,may,so_lit,con_lai,do_them,dau_dong_co,gio_may_phat,don_vi,nguoi_cap,ghi_chu,created_at")
     .order("ngay", { ascending: false })
     .order("id", { ascending: false });
   // Chưa chạy migration con_lai / do_them → đọc như cũ (còn lại = mức dầu, đổ thêm = 0).
+  if (withUnit.error && isMissingEngineColumn(formatSupabaseError(withUnit.error))) {
+    withUnit = (await supabase
+      .from("cap_dau_hang_ngay")
+      .select("id,ngay,may,so_lit,con_lai,do_them,don_vi,nguoi_cap,ghi_chu,created_at")
+      .order("ngay", { ascending: false })
+      .order("id", { ascending: false })) as unknown as typeof withUnit;
+  }
   if (withUnit.error && isMissingSplitColumn(formatSupabaseError(withUnit.error))) {
     withUnit = (await supabase
       .from("cap_dau_hang_ngay")
@@ -125,6 +152,8 @@ export async function loadDailyFuelRows(): Promise<{ rows: DailyFuelRow[]; error
         remaining: row.con_lai == null ? Number(row.so_lit) || 0 : Number(row.con_lai) || 0,
         added: row.do_them == null ? 0 : Number(row.do_them) || 0,
         hasActual: row.con_lai === undefined ? true : row.con_lai !== null,
+        engineOilLiters: optionalNumber(row.dau_dong_co),
+        generatorHours: optionalNumber(row.gio_may_phat),
         unit: row.don_vi?.trim() || "lít",
         personId: row.nguoi_cap?.trim() || "",
         personName: (row.nguoi_cap && personById.get(row.nguoi_cap)?.trim()) || "—",
@@ -147,7 +176,11 @@ export async function upsertDailyFuel(values: DailyFuelFormValues, id?: string, 
     may: values.machineId,
     ...(mode === "report"
       ? { so_lit: Math.max(0, fuelLevelAfter(values)), con_lai: Math.max(0, fuelLevelAfter(values)) }
-      : { do_them: Math.max(0, Number(values.added) || 0) }),
+      : {
+          do_them: Math.max(0, Number(values.added) || 0),
+          dau_dong_co: values.engineOilLiters > 0 ? values.engineOilLiters : null,
+          gio_may_phat: values.generatorHours > 0 ? values.generatorHours : null,
+        }),
     don_vi: values.unit.trim() || "lít",
     bom_mo: false,
     nguoi_cap: values.personId.trim() || null,
@@ -160,6 +193,13 @@ export async function upsertDailyFuel(values: DailyFuelFormValues, id?: string, 
   };
 
   let { data, error } = await write(payload);
+  if (error && isMissingEngineColumn(formatSupabaseError(error))) {
+    if ((Number(values.engineOilLiters) || 0) > 0 || (Number(values.generatorHours) || 0) > 0) {
+      throw new Error("Cần chạy migration_20261126_dau_dong_co.sql trên Supabase để ghi dầu động cơ và số giờ máy phát.");
+    }
+    const { dau_dong_co: _oil, gio_may_phat: _hours, ...withoutEngine } = payload;
+    ({ data, error } = await write(withoutEngine));
+  }
   if (error && mode === "refill" && isMissingSplitColumn(formatSupabaseError(error))) {
     throw new Error("Cần chạy migration_20261123_cap_dau_con_lai_do_them.sql trên Supabase để ghi số đã đổ.");
   }
