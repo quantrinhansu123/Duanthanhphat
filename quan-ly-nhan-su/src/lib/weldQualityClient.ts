@@ -33,7 +33,7 @@ async function response<T>(res: Response): Promise<T> {
 }
 
 // Các thao tác chỉ đọc: nếu cùng một yêu cầu đang chạy thì dùng chung kết quả (tránh gọi trùng khi nhiều khối cùng mở / React chạy hiệu ứng hai lần).
-const READ_ONLY_ACTIONS = new Set(["list", "payment-map", "rfi-overview", "rfi-list", "rfi-number", "rfi-candidates", "split-list", "split-detail", "report-weather", "diary-defaults", "rules-list"]);
+const READ_ONLY_ACTIONS = new Set(["list", "payment-map", "rfi-overview", "rfi-list", "rfi-number", "rfi-candidates", "split-list", "split-detail", "rfi-summary-table", "report-weather", "diary-defaults", "rules-list"]);
 const inFlight = new Map<string, Promise<unknown>>();
 
 export function qualityRequest<T>(body: Record<string, unknown>): Promise<T> {

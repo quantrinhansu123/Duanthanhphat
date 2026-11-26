@@ -15,6 +15,7 @@ import SplitWeldAcceptance, { type SplitKind } from "@/components/SplitWeldAccep
 import WeldAcceptanceDocument, { type DocKind } from "@/components/WeldAcceptanceDocument";
 import WeldAcceptancePrintPack from "@/components/WeldAcceptancePrintPack";
 import RfiIssuedListDocument from "@/components/RfiIssuedListDocument";
+import RfiSummaryTableDocument from "@/components/RfiSummaryTableDocument";
 import ThuBaoDocument from "@/components/ThuBaoDocument";
 import { fieldWeldCode, parseCoordinateCode } from "@/lib/weldCode";
 
@@ -263,6 +264,7 @@ function RfiPanel({
   const [kind, setKind] = useState<"nghiem-thu" | "theo-doi" | "ca-hai">("nghiem-thu");
   const [gtusPrint, setGtusPrint] = useState<RfiSummary | null>(null);
   const [pendingOnly, setPendingOnly] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
   const [pendingDlg, setPendingDlg] = useState<RfiSummary | null>(null);
   const [gtusManage, setGtusManage] = useState<RfiSummary | null>(null);
   const monitoring = kind === "theo-doi";
@@ -825,6 +827,7 @@ function RfiPanel({
       <div role="tabpanel" id="rfi-panel-issued" aria-labelledby="rfi-tab-issued" hidden={rfiTab !== "issued"} className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
         <h3 className="text-sm font-bold">Danh sách phiếu yêu cầu nghiệm thu đã phát</h3>
+        <span className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           className={secondary}
@@ -834,6 +837,14 @@ function RfiPanel({
         >
           Xem / In danh sách
         </button>
+        <button type="button" className={secondary} onClick={() => setSummaryOpen(true)} title="Bảng tổng hợp nghiệm thu mối hàn: phiếu HH và SA trong một bảng">
+          Tổng hợp HH + SA
+        </button>
+        </span>
+        {summaryOpen && createPortal(
+          <RfiSummaryTableDocument projectId={projectId} projectName={projects?.find((p) => p.id === projectId)?.name ?? ""} onClose={() => setSummaryOpen(false)} />,
+          document.body,
+        )}
       </div>
       {unassigned.length > 0 && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
         Có <b>{unassigned.length} mối sẵn sàng chưa có RFI</b>. Mở “Xem / In danh sách” để đối soát mã mối và KM, hoặc sang tab “Phát phiếu” để chọn mối.
