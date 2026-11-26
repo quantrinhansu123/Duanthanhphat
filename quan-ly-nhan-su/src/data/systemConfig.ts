@@ -174,22 +174,29 @@ export const initialAccounts: InitialAccount[] = [
   },
 ];
 
-/** Đang test: chỉ các SĐT này được thấy / thao tác menu Kiểm toán CWR. */
-export const KIEM_TOAN_CWR_TEST_PHONES = ["0965310233"] as const;
+/** Đang test: chỉ các SĐT này mở được Kiểm toán CWR / tính toán đường ray không mối nối. */
+export const KIEM_TOAN_CWR_TEST_PHONES = ["0965310233", "0904426889"] as const;
 
 export function isKiemToanCwrTab(tabId: string): boolean {
   return tabId === "kiem-toan-cwr" || tabId.startsWith("kiem-toan-cwr-");
 }
 
-export function canAccessKiemToanCwrTest(phone: unknown): boolean {
-  const digits = normalizePhone(phone);
+/** Tab vẫn hiện trên menu; người không đủ SĐT bấm vào → «Đang phát triển». */
+export function isUnderDevelopmentTab(tabId: string): boolean {
+  return tabId === "lwr-cong-thuc-tb10015";
+}
+
+export function canAccessKiemToanCwrTest(phone: unknown, email?: unknown): boolean {
+  const fromPhone = normalizePhone(phone);
+  const fromEmail = normalizePhone(typeof email === "string" ? email.split("@")[0] : "");
+  const digits = fromPhone || fromEmail;
   return (KIEM_TOAN_CWR_TEST_PHONES as readonly string[]).includes(digits);
 }
 
 /**
  * Quyền của email trên một chức năng — dùng chung cho giao diện và máy chủ.
  * Email chưa có trong danh sách tài khoản → không hạn chế; tài khoản Khóa → không có quyền nào.
- * Tab Kiểm toán CWR (đang test) → chỉ SĐT trong KIEM_TOAN_CWR_TEST_PHONES.
+ * Tab Kiểm toán CWR + «Kiểm toán đường ray không mối nối» (đang test) → chỉ SĐT trong KIEM_TOAN_CWR_TEST_PHONES.
  */
 export function checkPermission(
   config: Pick<StoredSystemConfiguration, "accounts" | "permissions">,
@@ -198,8 +205,8 @@ export function checkPermission(
   action: PermissionAction,
 ): boolean {
   const account = email ? config.accounts.find((a) => a.email.toLowerCase() === email.toLowerCase()) : undefined;
-  if (isKiemToanCwrTab(tabId)) {
-    if (!account || account.status === "Khóa" || !canAccessKiemToanCwrTest(account.phone)) return false;
+  if (isKiemToanCwrTab(tabId) || isUnderDevelopmentTab(tabId)) {
+    if (!account || account.status === "Khóa" || !canAccessKiemToanCwrTest(account.phone, email)) return false;
   }
   if (!account) return true;
   if (account.status === "Khóa") return false;

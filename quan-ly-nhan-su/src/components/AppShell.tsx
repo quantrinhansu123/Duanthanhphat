@@ -16,6 +16,7 @@ import ReportTabBar from "@/components/ReportTabBar";
 import DeleteGuard from "@/components/DeleteGuard";
 import { initials, useAccess } from "@/lib/useAccess";
 import { findNavMeta, isValidTab, navigation } from "@/data/navigation";
+import { isUnderDevelopmentTab } from "@/data/systemConfig";
 import { isReportTab } from "@/data/reportTabs";
 import { ReportFilterProvider } from "@/contexts/ReportFilterContext";
 import UserMenu from "@/components/UserMenu";
@@ -250,20 +251,22 @@ export default function AppShell({ tab }: AppShellProps) {
   const { ready: accessReady, can, userName, email, birthDate } = useAccess();
   // Trang chủ luôn xem được; các mục trong menu nhanh tự lọc theo quyền.
   const canView = atHome || can(current, "view");
+  const underDevLocked = !atHome && isUnderDevelopmentTab(current) && !canView;
   const canEdit = atHome ? false : can(current, "edit");
   const canDelete = atHome ? false : can(current, "delete");
   const firstAllowed = navigation.flatMap((g) => g.children).find((c) => can(c.id, "view"))?.id;
   const content = !canView
     ? null
     : atHome
-      ? <HomeDashboard onNavigate={go} canView={(id) => can(id, "view")} />
+      ? <HomeDashboard onNavigate={go} canView={(id) => can(id, "view") || isUnderDevelopmentTab(id)} />
       : viewRenderers[current]?.() ?? null;
 
   // Không có quyền xem tab hiện tại → chuyển sang chức năng đầu tiên được phép.
+  // Tab «đang phát triển» giữ lại để hiện thông báo, không đẩy sang tab khác.
   useEffect(() => {
-    if (accessReady && !canView && firstAllowed && firstAllowed !== current) go(firstAllowed);
+    if (accessReady && !canView && !underDevLocked && firstAllowed && firstAllowed !== current) go(firstAllowed);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessReady, canView, firstAllowed, current]);
+  }, [accessReady, canView, underDevLocked, firstAllowed, current]);
 
   function go(id: string, search = "") {
     const targetId = !id || id === HOME_TAB ? HOME_TAB : id === "bc-san-luong" ? "bc-tong-quan" : id;
@@ -468,6 +471,15 @@ export default function AppShell({ tab }: AppShellProps) {
 
           {!accessReady ? (
             <div role="status" className="w-full px-4 sm:px-6 py-16 text-center text-sm text-slate-500">Đang tải quyền truy cập…</div>
+          ) : underDevLocked ? (
+            <div className="w-full px-4 sm:px-6 py-20 text-center">
+              <p className="text-lg font-bold text-slate-800">{lang === "en" ? "Under development" : "Đang phát triển"}</p>
+              <p className="mt-2 text-sm text-slate-500">
+                {lang === "en"
+                  ? "This feature is not available for your account yet."
+                  : "Chức năng này chưa mở cho tài khoản của bạn."}
+              </p>
+            </div>
           ) : !canView ? (
             <div className="w-full px-4 sm:px-6 py-16 text-center text-sm font-semibold text-slate-600">
               Bạn không có quyền xem chức năng này.
@@ -487,7 +499,7 @@ export default function AppShell({ tab }: AppShellProps) {
           ) : (
             <div className="w-full px-4 sm:px-6 pb-8">
               <div className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {(group?.children ?? []).filter((c) => can(c.id, "view")).map((child) => {
+                {(group?.children ?? []).filter((c) => can(c.id, "view") || isUnderDevelopmentTab(c.id)).map((child) => {
                   const active = child.id === current;
                   const childTitle = lang === "en" ? (child.labelEn || child.label) : child.label;
                   const childDesc =

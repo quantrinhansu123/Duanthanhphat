@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { findNavMeta, navigation } from "@/data/navigation";
+import { isUnderDevelopmentTab } from "@/data/systemConfig";
 import { useLanguage } from "@/i18n/LanguageProvider";
 import { CaretDown, GasPump, Path, MagnifyingGlass } from "@/components/icons";
 import { groupIcons, childIcons } from "@/data/navigationIcons";
@@ -107,7 +108,10 @@ export default function HomeDashboard({ onNavigate, canView }: HomeDashboardProp
   const [query, setQuery] = useState("");
   /** Nhóm đang mở; mặc định thu gọn hết cho gọn mobile */
   const [openGroups, setOpenGroups] = useState<string[]>([]);
-  const allowed = (id: string) => (canView ? canView(id) : true);
+  const allowed = (id: string) => {
+    if (isUnderDevelopmentTab(id)) return true; // luôn hiện; vào tab → «Đang phát triển» nếu không đủ quyền
+    return canView ? canView(id) : true;
+  };
   const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase();
   const taskGroups = [
     { id: "du-an", code: "02", label: "Nhóm 2 · Quản lý & tra cứu", labelEn: "Group 2 · Management & lookup",

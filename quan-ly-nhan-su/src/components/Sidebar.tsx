@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { navigation } from "@/data/navigation";
 import { groupIcons, childIcons } from "@/data/navigationIcons";
+import { isUnderDevelopmentTab } from "@/data/systemConfig";
 import { initials, useAccess } from "@/lib/useAccess";
 import { prefetchTabModule } from "@/lib/tabModules";
 import { useLanguage } from "@/i18n/LanguageProvider";
@@ -38,7 +39,10 @@ export default function Sidebar({
   const { lang } = useLanguage();
   const { can, userName } = useAccess();
   const visibleGroups = navigation
-    .map((g) => ({ ...g, children: g.children.filter((c) => can(c.id, "view")) }))
+    .map((g) => ({
+      ...g,
+      children: g.children.filter((c) => can(c.id, "view") || isUnderDevelopmentTab(c.id)),
+    }))
     .filter((g) => g.children.length > 0);
   const activeGroup = navigation.find((g) => g.children.some((c) => c.id === activeId));
 
