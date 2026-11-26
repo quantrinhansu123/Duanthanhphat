@@ -192,7 +192,7 @@ function GtusPage({ line, layout, printRange, joints, symbols, projectName, rows
   const pq = /phú quốc/i.test(projectName ?? "");
   const totalMetres = rows.reduce((sum, row) => sum + Math.max(0, rowLength(row)), 0);
   const defaults = loadSignerDefaults();
-  const signerName = (party: string) => defaults[`nguoi_${party}_1_ten`] || DEFAULT_SIGNERS[`nguoi_${party}_1_ten`] || "";
+  const signerName = (party: string) => (defaults[`nguoi_${party}_1_ten`] || DEFAULT_SIGNERS[`nguoi_${party}_1_ten`] || "").replace("Nguyễn Tất Đạt", "Nguyễn Minh Đức");
   const today = new Date().toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", year: "numeric" });
 
   return (

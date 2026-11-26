@@ -192,7 +192,9 @@ export function loadSignerDefaults(): Record<string, string> {
   try {
     if (typeof window === "undefined") return {};
     const raw = JSON.parse(window.localStorage.getItem(SIGNER_STORAGE) ?? "{}") as Record<string, unknown>;
-    return Object.fromEntries(ALL_SIGNER_KEYS.flatMap((k) => (typeof raw[k] === "string" && raw[k] ? [[k, raw[k] as string]] : [])));
+    // Tên cũ còn nhớ trong localStorage của máy → đổi sang tên mới.
+    const fix = (s: string) => s.replace("Nguyễn Tất Đạt", "Nguyễn Minh Đức");
+    return Object.fromEntries(ALL_SIGNER_KEYS.flatMap((k) => (typeof raw[k] === "string" && raw[k] ? [[k, fix(raw[k] as string)]] : [])));
   } catch { return {}; }
 }
 export function saveSignerDefaults(values: Record<string, string | undefined>) {

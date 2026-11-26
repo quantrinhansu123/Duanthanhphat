@@ -239,7 +239,7 @@ function resolveSigner(t: Record<string, string>, defaults: Record<string, strin
   const pick = (field: "ten" | "cv") => {
     const key = `${prefix}nguoi_${party}_${i}_${field}`;
     const base = `nguoi_${party}_${i}_${field}`;
-    return t[key]?.trim() || defaults[key] || DEFAULT_SIGNERS[key] || DEFAULT_SIGNERS[base] || "";
+    return (t[key]?.trim() || defaults[key] || DEFAULT_SIGNERS[key] || DEFAULT_SIGNERS[base] || "").replace("Nguyễn Tất Đạt", "Nguyễn Minh Đức");
   };
   return { ten: pick("ten"), cv: pick("cv") };
 }
