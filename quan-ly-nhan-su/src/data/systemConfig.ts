@@ -177,6 +177,7 @@ export const initialAccounts: InitialAccount[] = [
 /** Đang test: chỉ các SĐT này mở được Kiểm toán CWR / tính toán đường ray không mối nối. */
 export const KIEM_TOAN_CWR_TEST_PHONES = ["0965310233", "0904426889"] as const;
 
+/** Bảng danh mục TB10015 vẫn mang mã cũ; quyền lấy theo màn Kiểm toán đường ray không mối nối. */
 export function isKiemToanCwrTab(tabId: string): boolean {
   return tabId === "kiem-toan-cwr" || tabId.startsWith("kiem-toan-cwr-");
 }
@@ -197,6 +198,7 @@ export function canAccessKiemToanCwrTest(phone: unknown, email?: unknown): boole
  * Quyền của email trên một chức năng — dùng chung cho giao diện và máy chủ.
  * Email chưa có trong danh sách tài khoản → không hạn chế; tài khoản Khóa → không có quyền nào.
  * Tab Kiểm toán CWR + «Kiểm toán đường ray không mối nối» (đang test) → chỉ SĐT trong KIEM_TOAN_CWR_TEST_PHONES.
+ * Danh mục Kiểm toán CWR dùng quyền của tab lwr-cong-thuc-tb10015.
  */
 export function checkPermission(
   config: Pick<StoredSystemConfiguration, "accounts" | "permissions">,
@@ -205,12 +207,13 @@ export function checkPermission(
   action: PermissionAction,
 ): boolean {
   const account = email ? config.accounts.find((a) => a.email.toLowerCase() === email.toLowerCase()) : undefined;
-  if (isKiemToanCwrTab(tabId) || isUnderDevelopmentTab(tabId)) {
+  const resolved = isKiemToanCwrTab(tabId) ? "lwr-cong-thuc-tb10015" : tabId;
+  if (isKiemToanCwrTab(tabId) || isUnderDevelopmentTab(resolved)) {
     if (!account || account.status === "Khóa" || !canAccessKiemToanCwrTest(account.phone, email)) return false;
   }
   if (!account) return true;
   if (account.status === "Khóa") return false;
-  const stored = config.permissions?.[account.role]?.[tabId];
-  const groupId = navigation.find((g) => g.children.some((c) => c.id === tabId))?.id ?? "";
-  return (stored ?? defaultPermission(account.role, groupId, tabId))[action];
+  const stored = config.permissions?.[account.role]?.[resolved];
+  const groupId = navigation.find((g) => g.children.some((c) => c.id === resolved))?.id ?? "";
+  return (stored ?? defaultPermission(account.role, groupId, resolved))[action];
 }

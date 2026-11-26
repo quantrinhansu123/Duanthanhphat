@@ -130,59 +130,6 @@ export const navigation: NavItem[] = [
     ],
   },
   {
-    id: "kiem-toan-cwr",
-    code: "15",
-    label: "Kiểm toán CWR",
-    labelEn: "CWR Audit",
-    children: [
-      {
-        id: "kiem-toan-cwr-nhiet-do-vung",
-        label: "Nhiệt độ vùng (khí hậu VN)",
-        labelEn: "Regional climate (VN)",
-      },
-      {
-        id: "kiem-toan-cwr-loai-ray",
-        label: "Loại ray & mặt cắt",
-        labelEn: "Rail type & section",
-      },
-      {
-        id: "kiem-toan-cwr-mac-thep",
-        label: "Mác thép ray",
-        labelEn: "Rail steel grade",
-      },
-      {
-        id: "kiem-toan-cwr-ket-cau-duong",
-        label: "Kết cấu đường / tà vẹt",
-        labelEn: "Track structure / sleepers",
-      },
-      {
-        id: "kiem-toan-cwr-do-cung-goi-ray",
-        label: "Độ cứng gối ray D",
-        labelEn: "Rail seat stiffness D",
-      },
-      {
-        id: "kiem-toan-cwr-on-dinh-nen-da",
-        label: "Ổn định nền đá",
-        labelEn: "Ballast stability params",
-      },
-      {
-        id: "kiem-toan-cwr-mo-men-can",
-        label: "Mô men cản phụ kiện",
-        labelEn: "Fastener resistance moment",
-      },
-      {
-        id: "kiem-toan-cwr-he-so-van-toc-luc-ngang",
-        label: "Hệ số vận tốc / lực ngang",
-        labelEn: "Speed / lateral factors",
-      },
-      {
-        id: "kiem-toan-cwr-so-do-tai-banh-xe",
-        label: "Sơ đồ tải bánh xe",
-        labelEn: "Axle-load schemes",
-      },
-    ],
-  },
-  {
     id: "lwr-han-ray",
     code: "14",
     label: "Quản lý hàn ray LWR",

@@ -581,6 +581,8 @@ select:not([multiple]):focus {
 .print-frame > thead > tr, .print-frame > tfoot > tr, .print-frame > tbody > tr { break-inside: auto !important; page-break-inside: auto !important; }
 .print-frame-space { height: 0; }
 @media print {
+  body.tb15-printing .tb15-no-print { display: none !important; }
+  body.tb15-printing .tb15-sheet { break-inside: avoid; break-after: page; }
   .print-frame > thead { display: table-header-group; }
   .print-frame > tfoot { display: table-footer-group; }
   .print-frame-space.top { height: var(--pf-top, 15mm); }

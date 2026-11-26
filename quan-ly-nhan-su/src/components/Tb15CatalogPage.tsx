@@ -68,7 +68,7 @@ function fmtTemp(v: unknown) {
     : "—";
 }
 
-export default function Tb15CatalogPage({ tabId }: { tabId: string }) {
+export default function Tb15CatalogPage({ tabId, embedded = false }: { tabId: string; embedded?: boolean }) {
   const meta = catalogByTabId(tabId);
   const { can } = useAccess();
   const [rows, setRows] = useState<Tb15Row[]>([]);
@@ -300,7 +300,13 @@ export default function Tb15CatalogPage({ tabId }: { tabId: string }) {
   }
 
   return (
-    <div className="space-y-4 px-4 pb-8 sm:px-6">
+    <div className={embedded ? "space-y-4" : "space-y-4 px-4 pb-8 sm:px-6"}>
+      {embedded && meta && (
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">{meta.title}</h2>
+          <p className="mt-1 text-sm text-slate-600">{meta.description}</p>
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-end gap-2">
         {isRay && (
           <label className="mr-auto text-sm font-semibold text-slate-800">

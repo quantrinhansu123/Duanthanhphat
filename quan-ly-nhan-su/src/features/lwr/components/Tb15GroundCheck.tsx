@@ -3,12 +3,16 @@
 import { useEffect, useState } from "react";
 import { catalogByKey, type Tb15Row } from "@/lib/tb15Catalogs";
 import { checkTb15Ground, type IrregularInput, type RiseMethod } from "../lib/tb15-ground";
+import { GAUGE_STANDARD, gaugeNumbers, type GaugeDraft } from "../lib/tb15-gauge";
+import { Tb15AxleDiagram } from "./Tb15AxleDiagram";
+import { Tb15GaugeTable } from "./Tb15GaugeTable";
+import { Tb15SheetPrint, type Tb15PrintPage } from "./Tb15SheetPrint";
 
 const catalogs = [
   ["khi_hau", "Trạm khí hậu", (r: Tb15Row) => `${r.ten_tram} · ${r.tinh ?? ""}`],
   ["loai_ray", "Mặt cắt ray", (r: Tb15Row) => `${r.loai_kg_m} kg/m · mòn ${r.do_mon_mm} mm`],
   ["mac_thep", "Mác thép", (r: Tb15Row) => String(r.mac_thep)],
-  ["ket_cau_duong", "Kết cấu có ba lát", (r: Tb15Row) => String(r.ten)],
+  ["ket_cau_duong", "Kết cấu đường", (r: Tb15Row) => String(r.ten)],
   ["do_cung_goi", "Độ cứng gối", (r: Tb15Row) => String(r.phuong_an)],
   ["so_do_tai", "Sơ đồ tải một ray", (r: Tb15Row) => String(r.ten)],
   ["he_so_tai", "Hệ số lực ngang", (r: Tb15Row) => `${r.nhan} · f = ${r.he_so}`],
@@ -21,7 +25,6 @@ type Catalog = { rows: Tb15Row[]; backend?: string };
 // E, α, K và l₀, i₀, ΔP lấy từ mặt cắt ray; đệm D lấy từ độ cứng gối. Không nhập tay.
 const fields = [
   ["speed", "Tốc độ thiết kế (km/h)", ""],
-  ["radius", "Bán kính cong (m, 0 nếu thẳng)", ""],
   ["cant", "Siêu cao thiếu hoặc thừa Δh (mm)", ""],
   ["tolerance", "Biên độ khóa ± (3 hoặc 5 °C)", "5"],
   ["adjustment", "Hiệu chỉnh tâm khóa (−5 đến +5 °C)", "0"],
@@ -39,6 +42,15 @@ export default function Tb15GroundCheck() {
   const [result, setResult] = useState<ReturnType<typeof checkTb15Ground> | null>(null);
   const [sourceLines, setSourceLines] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [ballast, setBallast] = useState<"co" | "khong">("co");
+  const [place, setPlace] = useState<"nen" | "cau">("nen");
+  const [alignment, setAlignment] = useState<"thang" | "cong">("thang");
+  const [gauge, setGauge] = useState<GaugeDraft>(GAUGE_STANDARD);
+  const [deltaH, setDeltaH] = useState(0);
+  const [schemeId, setSchemeId] = useState("");
+  const [printPages, setPrintPages] = useState<Tb15PrintPage[] | null>(null);
+
+  useEffect(() => { setSchemeId(""); }, [ballast, place]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -47,9 +59,7 @@ export default function Tb15GroundCheck() {
         const response = await fetch(`/api/tb15-catalogs/${key}`, { signal: controller.signal, cache: "no-store" });
         const value = await response.json();
         if (!response.ok || !Array.isArray(value.rows)) throw new Error(String(response.status));
-        const rows = (value.rows as Tb15Row[]).filter((r) =>
-          (key !== "ket_cau_duong" || r.loai_duong === "co_ba_lat") &&
-          (key !== "he_so_tai" || r.loai === "luc_ngang"));
+        const rows = (value.rows as Tb15Row[]).filter((r) => key !== "he_so_tai" || r.loai === "luc_ngang");
         return { key, value: { rows, backend: value.backend } };
       } catch {
         return { key, title };
@@ -75,25 +85,36 @@ export default function Tb15GroundCheck() {
       const rail = getRow("loai_ray");
       const track = getRow("ket_cau_duong");
       const climate = getRow("khi_hau");
-      const lateral = getRow("he_so_tai");
-      const radius = read("radius");
+      const selectedSeat = getRow("do_cung_goi");
+      const moMenPicked = getRow("mo_men_can");
+      const geometry = gaugeNumbers(gauge);
+      if ("error" in geometry) throw new Error(geometry.error);
+      const caseLine = `Trường hợp: ${ballast === "co" ? "có ba lát" : "không ba lát"}, ${place === "cau" ? "trên cầu" : "trên nền đường"}, ${alignment === "thang" ? "đường thẳng" : "đường cong"}. Phụ kiện: ${moMenPicked?.loai_phu_kien ?? "chưa chọn"}. Kết cấu: ${track?.ten ?? "chưa chọn"}.`;
+      if (place === "cau" || ballast === "khong") {
+        setSourceLines([
+          caseLine,
+          `Khổ ${gauge.gauge} mm, H = ${geometry.cgHeightMm} mm, S = ${geometry.railCenterMm} mm.`,
+        ]);
+        throw new Error(place === "cau"
+          ? "Đã gắn dữ liệu trên cầu. Sheet này kiểm cường độ và ổn định nền có ba lát, chưa tính lực tương tác ray–cầu."
+          : "Đã gắn dữ liệu không ba lát. Ổn định B.0.3 / B.0.4 của sheet này dùng sức cản nền đá của đường có ba lát.");
+      }
+      const radius = alignment === "thang" ? 0 : read("radius");
       const matchingFactor = data.he_so_tai?.rows
         .filter((r) => radius === 0 ? r.r_tu_m === 0 : number(r.r_tu_m) >= 300 && number(r.r_tu_m) <= radius)
         .sort((a, b) => number(b.r_tu_m) - number(a.r_tu_m))[0];
-      if (!lateral || matchingFactor?.id !== lateral.id) {
-        throw new Error("Chọn hệ số lực ngang tương ứng bán kính theo bảng danh mục. Đường cong dưới 300 m cần phương pháp riêng.");
+      if (!matchingFactor) {
+        throw new Error("Không có hệ số lực ngang cho bán kính này. Đường cong dưới 300 m cần phương pháp riêng.");
       }
-      const selectedSeat = getRow("do_cung_goi");
       const seatName = String(selectedSeat?.phuong_an ?? "");
-      const seatSleeper = seatName.match(/tà vẹt (III|II)\b/i)?.[1];
-      if (!seatSleeper || seatSleeper !== track?.loai_ta_vet) {
+      const seatSleeper = seatName.match(/(?:tà vẹt|loại)\s+(III|II)\b/i)?.[1]?.toUpperCase();
+      if (!seatSleeper || seatSleeper !== String(track?.loai_ta_vet ?? "").toUpperCase()) {
         throw new Error("Chọn độ cứng gối phù hợp với loại tà vẹt của kết cấu có ba lát.");
       }
 
       const riseMethod = (String(values.get("riseMethod") || "irregular")) as RiseMethod;
-      // B.0.4-1 theo loại tà vẹt của kết cấu; B.0.4-2 theo phụ kiện đàn hồi loại II (Excel 2_Ổn định, H = 22 000).
       const onDinh = data.on_dinh_nen?.rows.find((r) => r.loai_ta_vet === track?.loai_ta_vet);
-      const moMen = data.mo_men_can?.rows.find((r) => r.loai_phu_kien === "Loại đàn hồi II");
+      const moMen = moMenPicked;
       let irregular: IrregularInput | undefined;
       if (riseMethod !== "uniform") {
         if (!onDinh || !moMen || !rail) {
@@ -109,8 +130,11 @@ export default function Tb15GroundCheck() {
       const railE = number(rail?.e_mpa);
       const railAlpha = number(rail?.alpha);
       const railK = number(rail?.k_an_toan);
+      const steel = getRow("mac_thep");
       setSourceLines([
-        `Ray ${rail?.loai_kg_m} kg/m, mòn ${rail?.do_mon_mm} mm (Kiểm toán CWR): E = ${railE} MPa, α = ${railAlpha} /°C, K = ${railK}.`,
+        caseLine,
+        `Khổ ${gauge.gauge} mm, H = ${geometry.cgHeightMm} mm (${gauge.vehicle === "dau_may" ? "đầu máy" : "toa xe"}), S = ${geometry.railCenterMm} mm. Hệ số lực ngang f = ${matchingFactor.he_so} (${matchingFactor.nhan}).`,
+        `Ray ${rail?.loai_kg_m} kg/m, mòn ${rail?.do_mon_mm} mm: E = ${railE} MPa, α = ${railAlpha} /°C, K = ${railK}. Mác ${steel?.mac_thep}: σ_s = ${number(steel?.sigma_s_mpa)} MPa.`,
         `Gối ${selectedSeat?.phuong_an} (${selectedSeat?.loai_duong === "co_ba_lat" ? "có ba lát" : "không ba lát"}): đệm D = ${number(selectedSeat?.d_kn_mm)} kN/mm.`,
         `Kết cấu ${track?.ten}: tà vẹt ${track?.loai_ta_vet || "—"}, nút ${track?.cu_ly_nut_a_m} m, sức cản dọc ${track?.r_khong_tai} kN/(m·ray).`,
         ...(irregular ? [
@@ -122,11 +146,12 @@ export default function Tb15GroundCheck() {
       setResult(checkTb15Ground({
         area: number(rail?.f_mm2), ix: number(rail?.i_x_mm4), iy: number(rail?.i_y_mm4),
         headModulus: number(rail?.w_dau_mm3), baseModulus: number(rail?.w_day_mm3),
-        steelModulus: railE, expansion: railAlpha, yieldStress: number(getRow("mac_thep")?.sigma_s_mpa),
+        steelModulus: railE, expansion: railAlpha, yieldStress: number(steel?.sigma_s_mpa),
         safety: railK, seatStiffness: number(selectedSeat?.d_kn_mm), spacing: number(track?.cu_ly_nut_a_m),
         resistance: number(track?.r_khong_tai), lateralResistance: number(track?.q_kn_m),
         speed: read("speed"), speedCoefficient: values.get("traction") === "electric" ? 0.6 : 0.4,
-        lateralFactor: number(lateral.he_so), radius, cantDeficiency: read("cant"),
+        lateralFactor: number(matchingFactor.he_so), radius, cantDeficiency: read("cant"),
+        cgHeightMm: geometry.cgHeightMm, railCenterMm: geometry.railCenterMm,
         minRailTemperature: number(climate?.t_kk_min),
         maxRailTemperature: number(climate?.t_kk_max) + 20, lockTolerance: read("tolerance"), lockAdjustment: read("adjustment"),
         gapLimit: read("gap"), additionalStress: read("extra"), brakingStress: read("braking"),
@@ -139,22 +164,127 @@ export default function Tb15GroundCheck() {
     }
   }
 
+  function rowsFor(key: CatalogKey) {
+    const rows = data[key]?.rows ?? [];
+    const bridge = (row: Tb15Row) => /cầu|cau/i.test(`${row.ten ?? ""} ${row.ghi_chu ?? ""}`);
+    if (key === "ket_cau_duong") {
+      return rows.filter((row) => place === "cau"
+        ? bridge(row)
+        : !bridge(row) && (ballast === "co" ? row.loai_duong === "co_ba_lat" : row.loai_duong === "khong_ba_lat"));
+    }
+    if (key === "do_cung_goi") {
+      const kind = ballast === "khong" && place !== "cau" ? "khong_ba_lat" : "co_ba_lat";
+      return rows.filter((row) => row.loai_duong === kind);
+    }
+    return rows;
+  }
+
+  function openPrint() {
+    if (!result) {
+      setPrintPages([{
+        kicker: "Sheet kiểm toán",
+        title: "SHEET KIỂM TOÁN NỀN ĐƯỜNG",
+        subtitle: "TB 10015-2012",
+        sections: [{ heading: "I. Kết quả", note: "Chưa có kết quả. Bấm Tính kiểm toán rồi in lại." }],
+      }]);
+      return;
+    }
+    const text = (value: number | string | null) => typeof value === "string" ? value : format(value);
+    setPrintPages([{
+      kicker: "Sheet kiểm toán",
+      title: "SHEET KIỂM TOÁN NỀN ĐƯỜNG CÓ BA LÁT",
+      subtitle: result.lockTemperature === null ? "KHÔNG ĐẠT" : `ĐẠT — nhiệt độ khóa ${format(result.lockTemperature)} °C`,
+      sections: [
+        {
+          heading: "I. Dữ liệu gắn vào sheet",
+          table: { headers: ["Nội dung"], rows: sourceLines.map((line) => [line]) },
+        },
+        {
+          heading: "II. Kết quả",
+          pairs: [
+            ["Khoảng tâm khóa khả dụng (°C)", `${format(result.lockMin)} đến ${format(result.lockMax)}`],
+            ["[ΔT_d] theo cường độ (°C)", text(result.dropStrength)],
+            ["[ΔT_u] B.0.3 (°C)", text(result.riseUniform)],
+            ["[ΔT_u] B.0.4 (°C)", text(result.riseIrregular)],
+            ["[ΔT_u] đã chọn (°C)", text(result.riseLimit)],
+            ["[ΔT] theo khe đứt (°C)", text(result.dropGap)],
+            ["Giảm nhiệt tại tâm khóa (°C)", text(result.drop)],
+            ["Tăng nhiệt tại tâm khóa (°C)", text(result.rise)],
+            ["Mô đun nền u (N/mm²)", text(result.foundation)],
+            ["Hệ số k (1/m)", text(result.k * 1000)],
+            ["Hệ số vận tốc αv", text(result.alphaSpeed)],
+            [result.betaStandard ? "β = 0,002·Δh" : "β = 2·Δh·H/S²", text(result.betaLoad)],
+            ["Ứng suất đầu ray (MPa)", text(result.headStress)],
+            ["Ứng suất đáy ray (MPa)", text(result.baseStress)],
+            ["Tổng ứng suất / cho phép (MPa)", `${format(result.totalStress)} / ${format(result.stressLimit)}`],
+            ["Khe đứt tính toán (mm)", text(result.gap)],
+            ["Nửa bước sóng B.0.3 (cm)", text(result.halfWave)],
+            ["P_min B.0.4 (kN) / l (cm)", result.irregularMinP === null ? "—" : `${format(result.irregularMinP / 1000)} / ${format(result.irregularHalfWave)}`],
+            ["Lực nén cho phép hai ray (kN)", text(result.allowedForce / 1000)],
+          ],
+        },
+        {
+          heading: "III. Nội lực tại từng bánh",
+          table: {
+            headers: ["Vị trí (m)", "P động (kN)", "M tĩnh (kN·m)", "Độ lún (mm)", "Phản lực gối (kN)"],
+            rows: result.sections.map((section) => [
+              format(section.position), format(section.dynamicLoad), format(section.moment / 1e6), format(section.settlement), format(section.seatLoad),
+            ]),
+          },
+        },
+      ],
+    }]);
+  }
+
   return (
-    <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
-      <header>
-        <h2 className="text-lg font-bold text-slate-900">Tính thử kiểm toán nền đường có ba lát</h2>
-        <p className="mt-1 text-sm text-slate-600">Phạm vi thiết kế khổ 1.435 mm, Phụ lục A, B.0.3 và B.0.4. E, α, K và l₀, i₀, ΔP lấy theo mặt cắt ray; đệm D theo độ cứng gối; B.0.4-1/B.0.4-2 theo tà vẹt và phụ kiện. Nhiệt độ ray lấy theo phương án slide: Tmin bằng Tmin không khí, Tmax bằng Tmax không khí + 20 °C. Kết quả cần thẩm tra theo hồ sơ đoạn tuyến, mặt cắt và tải đoàn tàu áp dụng.</p>
+    <section className="tb15-print-root space-y-4 rounded-lg border border-slate-200 bg-white p-4">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">Tính thử kiểm toán nền đường có ba lát</h2>
+          <p className="mt-1 text-sm text-slate-600">E, α, K, σ_s và l₀, i₀, ΔP lấy theo danh mục. Đệm D theo độ cứng gối. B.0.4-1 theo tà vẹt, B.0.4-2 theo phụ kiện đã chọn. Hệ số lực ngang tra theo đường thẳng hoặc bán kính. Nhiệt độ ray: Tmin bằng Tmin không khí, Tmax bằng Tmax không khí + 20 °C. Sheet này chạy cho nền có ba lát. Trên cầu và không ba lát được gắn dữ liệu, chưa có mô hình lực tương tác.</p>
+        </div>
+        <button type="button" onClick={openPrint} className="tb15-no-print h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800">In sheet kiểm toán</button>
       </header>
       {loading && <p role="status" className="text-sm">Đang tải danh mục…</p>}
       {failures.length > 0 && <p role="alert" className="text-sm text-red-800">Không tải được danh mục hoặc tài khoản thiếu quyền xem: {failures.join(", ")}.</p>}
       <form onChange={() => { setResult(null); setSourceLines([]); setError(""); }} onSubmit={(event) => { event.preventDefault(); run(event.currentTarget); }}>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {catalogs.map(([key, title, rowLabel]) => (
+        <fieldset className="grid gap-3 rounded-lg border border-slate-200 p-3 sm:grid-cols-2 lg:grid-cols-4">
+          <legend className="px-1 text-sm font-semibold text-slate-900">Trường hợp tính</legend>
+          <label className="text-sm font-medium text-slate-800">Kết cấu
+            <select value={ballast} onChange={(e) => setBallast(e.target.value as "co" | "khong")} className={control}>
+              <option value="co">Có ba lát</option>
+              <option value="khong">Không ba lát</option>
+            </select>
+          </label>
+          <label className="text-sm font-medium text-slate-800">Vị trí
+            <select value={place} onChange={(e) => setPlace(e.target.value as "nen" | "cau")} className={control}>
+              <option value="nen">Trên nền đường</option>
+              <option value="cau">Trên cầu</option>
+            </select>
+          </label>
+          <label className="text-sm font-medium text-slate-800">Tuyến
+            <select value={alignment} onChange={(e) => setAlignment(e.target.value as "thang" | "cong")} className={control}>
+              <option value="thang">Đường thẳng</option>
+              <option value="cong">Đường cong</option>
+            </select>
+          </label>
+          {alignment === "cong" && (
+            <label className="text-sm font-medium text-slate-800">Bán kính cong R (m)
+              <input name="radius" type="number" min={300} step="any" required className={control} />
+            </label>
+          )}
+        </fieldset>
+        <div className="mt-3 rounded-lg border border-slate-200">
+          <p className="border-b border-slate-200 px-3 py-2 text-sm font-semibold text-slate-900">Khổ ray và chiều cao trọng tâm</p>
+          <Tb15GaugeTable draft={gauge} onChange={setGauge} deltaH={deltaH} />
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {catalogs.filter(([key]) => key !== "he_so_tai" && key !== "on_dinh_nen").map(([key, title, rowLabel]) => (
             <label key={key} className="text-sm font-medium text-slate-800">
               {title} {data[key]?.backend && <span className="text-xs font-normal text-slate-500">· {data[key]?.backend === "supabase" ? "Supabase" : "JSON dự phòng"}</span>}
-              <select name={key} defaultValue="" required className={control}>
+              <select key={`${key}-${ballast}-${place}`} name={key} defaultValue="" required className={control} onChange={key === "so_do_tai" ? (e) => setSchemeId(e.target.value) : undefined}>
                 <option value="">Chọn {catalogByKey(key)?.title.toLowerCase()}</option>
-                {data[key]?.rows.map((row) => <option key={row.id} value={row.id}>{rowLabel(row)}</option>)}
+                {rowsFor(key).map((row) => <option key={row.id} value={row.id}>{rowLabel(row)}</option>)}
               </select>
             </label>
           ))}
@@ -174,17 +304,32 @@ export default function Tb15GroundCheck() {
           </label>
           {fields.map(([name, label, value]) => (
             <label key={name} className="text-sm font-medium text-slate-800">{label}
-              <input name={name} type="number" step="any" required defaultValue={value} className={control} />
+              {name === "cant" ? (
+                <input name="cant" type="number" step="any" required value={deltaH} onChange={(e) => setDeltaH(Number(e.target.value))} className={control} />
+              ) : (
+                <input name={name} type="number" step="any" required defaultValue={value} className={control} />
+              )}
             </label>
           ))}
         </div>
+        {(() => {
+          const scheme = data.so_do_tai?.rows.find((row) => row.id === schemeId);
+          const wheels = scheme && Array.isArray(scheme.wheels) ? scheme.wheels : [];
+          return wheels.length > 0 ? <Tb15AxleDiagram title={String(scheme?.ten ?? "")} wheels={wheels} /> : null;
+        })()}
         <label className="mt-4 flex gap-2 text-sm text-slate-800">
           <input type="checkbox" required className="mt-0.5 self-start" />
-          Đã đối chiếu trạm khí hậu, mặt cắt, sức cản dọc, tải bánh và ứng suất phụ với giả thiết dùng để tính. Phạm vi là nền đường có ba lát, khổ 1.435 mm, ngoài cầu và ghi.
+          Đã đối chiếu trạm khí hậu, mặt cắt, mác thép, sức cản dọc, phụ kiện, tải bánh và ứng suất phụ. Sheet này tính nền có ba lát, ngoài ghi.
         </label>
         <button type="submit" disabled={loading || failures.length > 0} className="mt-4 rounded bg-[#0047AB] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Tính kiểm toán</button>
       </form>
       {error && <p role="alert" className="rounded bg-red-50 p-3 text-sm text-red-900">{error}</p>}
+      {sourceLines.length > 0 && (
+        <div className="rounded bg-slate-50 p-3 text-sm text-slate-700">
+          <p className="font-semibold text-slate-900">Dữ liệu gắn vào sheet</p>
+          <ul className="mt-1 list-disc space-y-1 pl-5">{sourceLines.map((line) => <li key={line}>{line}</li>)}</ul>
+        </div>
+      )}
       {result && (
         <div className="space-y-3" aria-live="polite">
           <p className="flex flex-wrap items-center gap-2 font-semibold">
@@ -197,12 +342,6 @@ export default function Tb15GroundCheck() {
                 ? `Tâm khóa tính được ${format(result.candidate)} °C nằm ngoài khoảng khả dụng.`
                 : `Nhiệt độ khóa tính thử ${format(result.lockTemperature)} °C`}
           </p>
-          {sourceLines.length > 0 && (
-            <div className="rounded bg-slate-50 p-3 text-sm text-slate-700">
-              <p className="font-semibold text-slate-900">Dữ liệu đồng bộ từ Kiểm toán CWR</p>
-              <ul className="mt-1 list-disc space-y-1 pl-5">{sourceLines.map((line) => <li key={line}>{line}</li>)}</ul>
-            </div>
-          )}
           <dl className="grid gap-2 text-sm sm:grid-cols-2">
             {([
               ["Khoảng tâm khóa khả dụng (°C)", `${format(result.lockMin)} đến ${format(result.lockMax)}`],
@@ -216,7 +355,7 @@ export default function Tb15GroundCheck() {
               ["Mô đun nền u (N/mm²)", result.foundation],
               ["Hệ số nền–ray k (1/m)", result.k * 1000],
               ["Hệ số vận tốc αv", result.alphaSpeed],
-              ["Hệ số lệch tải β = 0,002·Δh", result.betaLoad],
+              [result.betaStandard ? "Hệ số lệch tải β = 0,002·Δh" : "Hệ số lệch tải β = 2·Δh·H/S²", result.betaLoad],
               ["Ứng suất động đầu ray (MPa)", result.headStress],
               ["Ứng suất động đáy ray (MPa)", result.baseStress],
               ["Tổng ứng suất đáy / cho phép (MPa)", `${format(result.totalStress)} / ${format(result.stressLimit)}`],
@@ -237,6 +376,7 @@ export default function Tb15GroundCheck() {
           </div>
         </div>
       )}
+      {printPages && <Tb15SheetPrint pages={printPages} onClose={() => setPrintPages(null)} />}
     </section>
   );
 }

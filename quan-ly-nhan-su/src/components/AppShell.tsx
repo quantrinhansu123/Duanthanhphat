@@ -81,8 +81,6 @@ const SystemConfiguration = dynamic(
   () => import("@/components/SystemConfiguration"), { loading: TabLoading, ssr: false });
 const LwrModuleEmbed = dynamic(() => import("@/components/LwrModuleEmbed"), { loading: TabLoading, ssr: false });
 const CwrFormulaReference = dynamic(() => import("@lwr/components/CwrFormulaReference"), { loading: TabLoading, ssr: false });
-const Tb15CatalogPage = dynamic(() => import("@/components/Tb15CatalogPage"), { loading: TabLoading, ssr: false });
-
 /** Trang chủ `/` — menu nhập liệu nhanh (không nằm trong navigation). */
 const HOME_TAB = "home";
 const NAV_STACK_KEY = "app-nav-stack";
@@ -126,15 +124,6 @@ const viewRenderers: Record<string, () => React.ReactNode> = {
   ),
   "lwr-track-map": () => <LwrModuleEmbed path="/" title="Bố trí tổng quan ray hàn dài/hàn liền" />,
   "lwr-cong-thuc-tb10015": () => <CwrFormulaReference />,
-  "kiem-toan-cwr-nhiet-do-vung": () => <Tb15CatalogPage tabId="kiem-toan-cwr-nhiet-do-vung" />,
-  "kiem-toan-cwr-loai-ray": () => <Tb15CatalogPage tabId="kiem-toan-cwr-loai-ray" />,
-  "kiem-toan-cwr-mac-thep": () => <Tb15CatalogPage tabId="kiem-toan-cwr-mac-thep" />,
-  "kiem-toan-cwr-ket-cau-duong": () => <Tb15CatalogPage tabId="kiem-toan-cwr-ket-cau-duong" />,
-  "kiem-toan-cwr-do-cung-goi-ray": () => <Tb15CatalogPage tabId="kiem-toan-cwr-do-cung-goi-ray" />,
-  "kiem-toan-cwr-on-dinh-nen-da": () => <Tb15CatalogPage tabId="kiem-toan-cwr-on-dinh-nen-da" />,
-  "kiem-toan-cwr-mo-men-can": () => <Tb15CatalogPage tabId="kiem-toan-cwr-mo-men-can" />,
-  "kiem-toan-cwr-he-so-van-toc-luc-ngang": () => <Tb15CatalogPage tabId="kiem-toan-cwr-he-so-van-toc-luc-ngang" />,
-  "kiem-toan-cwr-so-do-tai-banh-xe": () => <Tb15CatalogPage tabId="kiem-toan-cwr-so-do-tai-banh-xe" />,
   "lwr-cong-trinh": () => <LwrModuleEmbed path="/cong-trinh" title="Ký hiệu công trình" />,
   "lwr-nhap-bao-cao": () => <RailReportEntry />,
   "thu-vien-loi-moi-han": () => <ErrorLibrary mode="ndt" />,
@@ -324,7 +313,7 @@ export default function AppShell({ tab }: AppShellProps) {
     <div className="app-workspace flex h-dvh overflow-hidden bg-[#f4f6fa] text-[#0f172a]">
       <a href="#main-content" className="skip-link print:hidden">{lang === "en" ? "Skip to content" : "Đi đến nội dung chính"}</a>
       {/* Desktop Sidebar */}
-      <div className="hidden lg:block shrink-0">
+      <div className="hidden lg:block shrink-0 print:hidden">
         <Sidebar
           activeId={current}
           collapsed={collapsed}
@@ -354,7 +343,7 @@ export default function AppShell({ tab }: AppShellProps) {
       )}
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 backdrop-blur-md px-3.5 sm:px-6 py-2.5 sm:py-3 gap-2 z-10">
+        <header className="flex shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 backdrop-blur-md px-3.5 sm:px-6 py-2.5 sm:py-3 gap-2 z-10 print:hidden">
           <div className="flex min-w-0 items-center gap-2 text-xs sm:text-sm text-slate-500">
             {/* Mobile Hamburger Toggle */}
             <button

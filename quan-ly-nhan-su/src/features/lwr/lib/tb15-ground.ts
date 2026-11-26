@@ -38,6 +38,13 @@ export type GroundCheckInput = {
   additionalStress: number;
   brakingStress: number;
   wheels: { position: number; load: number }[];
+  /**
+   * Chiều cao trọng tâm H và khoảng cách tim hai ray S, mm.
+   * Bỏ trống: β = 0,002·Δh. Cặp H = 2.300, S = 1.500 cũng dùng 0,002·Δh (A.0.2-3).
+   * Cặp khác dùng β = 2·Δh·H/S².
+   */
+  cgHeightMm?: number;
+  railCenterMm?: number;
   /** Phương pháp ổn định dùng cho [ΔT_u]; mặc định "irregular" như sheet Nhập liệu của Excel. */
   riseMethod?: RiseMethod;
   /** Bắt buộc khi riseMethod là "irregular" hoặc "min". */
@@ -104,6 +111,21 @@ function irregularRise(input: GroundCheckInput, p: IrregularInput) {
   return { pMin, lMin, deltaT, riseLimit, psi, G, K };
 }
 
+/** β lệch tải. Cặp chuẩn H = 2.300 mm, S = 1.500 mm khớp β = 0,002·Δh của Excel (A.0.2-3). */
+export function cantBeta(cantDeficiencyMm: number, cgHeightMm?: number, railCenterMm?: number) {
+  const dh = Math.abs(cantDeficiencyMm);
+  const named = cgHeightMm !== undefined || railCenterMm !== undefined;
+  if (!named) return { beta: 0.002 * dh, standard: true };
+  if (!(typeof cgHeightMm === "number" && cgHeightMm > 0) || !(typeof railCenterMm === "number" && railCenterMm > 0)) {
+    throw new Error("Chiều cao trọng tâm H và khoảng cách tim ray S phải lớn hơn 0.");
+  }
+  const standard = cgHeightMm === 2300 && railCenterMm === 1500;
+  return {
+    beta: standard ? 0.002 * dh : (2 * dh * cgHeightMm) / (railCenterMm * railCenterMm),
+    standard,
+  };
+}
+
 /** TB 10015 Appendix A and B.0.3, for standard-gauge ballasted track on formation. */
 export function checkTb15Ground(input: GroundCheckInput) {
   const { wheels, area, ix, iy, steelModulus: E, expansion, minRailTemperature, maxRailTemperature } = input;
@@ -132,8 +154,7 @@ export function checkTb15Ground(input: GroundCheckInput) {
   const spacingMm = input.spacing * 1000;
   const foundation = input.seatStiffness * 1000 / spacingMm;
   const k = (foundation / (4 * E * ix)) ** 0.25;
-  // Excel: β = 0,002·Δh (A.0.2-3).
-  const betaLoad = 0.002 * Math.abs(input.cantDeficiency);
+  const { beta: betaLoad, standard: betaStandard } = cantBeta(input.cantDeficiency, input.cgHeightMm, input.railCenterMm);
   const alphaSpeed = input.speed > 160 ? 1 : input.speedCoefficient * input.speed / 100;
   const sections = wheels.map((wheel) => {
     let settlementLoad = 0;
@@ -199,7 +220,7 @@ export function checkTb15Ground(input: GroundCheckInput) {
     throw new Error("Kết quả vượt miền số của phép tính. Kiểm tra đơn vị và đầu vào.");
   }
   return {
-    sections, foundation, k, alphaSpeed, betaLoad, staticMoment, dynamicMoment, headStress, baseStress,
+    sections, foundation, k, alphaSpeed, betaLoad, betaStandard, staticMoment, dynamicMoment, headStress, baseStress,
     stressLimit, dropStrength, halfWave: Math.sqrt(halfWaveSquared), criticalForce, allowedForce, riseLimit,
     riseUniform, riseIrregular, irregularHalfWave: irregular?.lMin ?? null, irregularMinP: irregular?.pMin ?? null,
     riseMethod: method, dropGap, lockMin, lockMax, candidate, lockTemperature, drop, rise, gap, totalStress,

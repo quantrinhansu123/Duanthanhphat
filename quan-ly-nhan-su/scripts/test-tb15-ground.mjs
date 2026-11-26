@@ -35,7 +35,14 @@ close(result.riseUniform, 96.15745848362717);
 
 // β = 0.002·Δh (A.0.2-3): Δh = 100 mm → β = 0,2.
 close(checkTb15Ground({ ...input, cantDeficiency: 100, riseMethod: "uniform" }).betaLoad, 0.2);
+const standardGauge = checkTb15Ground({ ...input, cantDeficiency: 100, riseMethod: "uniform", cgHeightMm: 2300, railCenterMm: 1500 });
+close(standardGauge.betaLoad, 0.2);
+assert.equal(standardGauge.betaStandard, true);
+const meter = checkTb15Ground({ ...input, cantDeficiency: 100, riseMethod: "uniform", cgHeightMm: 2000, railCenterMm: 1100 });
+close(meter.betaLoad, (2 * 100 * 2000) / (1100 * 1100));
+assert.equal(meter.betaStandard, false);
 close(result.betaLoad, 0);
+assert.throws(() => checkTb15Ground({ ...input, cgHeightMm: 2300, riseMethod: "uniform" }));
 
 // Method B (B.0.4 irregular) — Excel 2_Ổn định: P_min 3.82809e6 N at l = 385 cm, ΔT 91.7066, [ΔT_u](B) 83.7066.
 close(result.irregularMinP, 3828090, 1e-5);
