@@ -33,7 +33,23 @@ const fields = [
   ["braking", "Ứng suất kéo/hãm σz (MPa)", ""],
 ] as const;
 const control = "mt-1 block w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm";
+const locked = "mt-1 block w-full rounded border border-slate-200 bg-slate-50 px-2 py-2 text-sm text-slate-800";
 const format = (n: number | null) => n === null ? "—" : n.toLocaleString("vi-VN", { maximumFractionDigits: 4 });
+
+function matchLateralFactor(rows: Tb15Row[] | undefined, radius: number) {
+  return (rows ?? [])
+    .filter((row) => radius === 0 ? row.r_tu_m === 0 : Number(row.r_tu_m) >= 300 && Number(row.r_tu_m) <= radius)
+    .sort((a, b) => Number(b.r_tu_m) - Number(a.r_tu_m))[0];
+}
+
+/** Loại II/III đọc từ tên hiện trên form hoặc từ cột loại tà vẹt. */
+function sleeperType(value: unknown): "II" | "III" | "" {
+  const text = String(value ?? "").replace(/\u2162/g, "III").replace(/\u2161/g, "II");
+  const labeled = text.match(/(?:tà\s*vẹt|loại)\s*(III|II)\b/i)?.[1]?.toUpperCase();
+  if (labeled === "II" || labeled === "III") return labeled;
+  const bare = text.trim().toUpperCase().match(/^(III|II)\b/)?.[1];
+  return bare === "II" || bare === "III" ? bare : "";
+}
 
 export default function Tb15GroundCheck() {
   const [data, setData] = useState<Partial<Record<CatalogKey, Catalog>>>({});
@@ -48,9 +64,30 @@ export default function Tb15GroundCheck() {
   const [gauge, setGauge] = useState<GaugeDraft>(GAUGE_STANDARD);
   const [deltaH, setDeltaH] = useState(0);
   const [schemeId, setSchemeId] = useState("");
+  const [trackId, setTrackId] = useState("");
+  const [radiusDraft, setRadiusDraft] = useState("");
+  const [factorId, setFactorId] = useState("");
+  const [ballastRowId, setBallastRowId] = useState("");
   const [printPages, setPrintPages] = useState<Tb15PrintPage[] | null>(null);
+  const radiusValue = alignment === "thang" ? 0 : Number(radiusDraft);
 
-  useEffect(() => { setSchemeId(""); }, [ballast, place]);
+  useEffect(() => { setSchemeId(""); setTrackId(""); }, [ballast, place]);
+
+  useEffect(() => {
+    if (alignment === "cong" && !(radiusValue >= 300)) {
+      setFactorId("");
+      return;
+    }
+    const match = matchLateralFactor(data.he_so_tai?.rows, radiusValue);
+    setFactorId(match?.id ? String(match.id) : "");
+  }, [alignment, radiusValue, data.he_so_tai]);
+
+  useEffect(() => {
+    const track = data.ket_cau_duong?.rows.find((row) => row.id === trackId);
+    const type = sleeperType(track?.ten) || sleeperType(track?.loai_ta_vet);
+    const match = data.on_dinh_nen?.rows.find((row) => sleeperType(row.loai_ta_vet) === type);
+    setBallastRowId(match?.id ? String(match.id) : "");
+  }, [trackId, data.ket_cau_duong, data.on_dinh_nen]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -100,20 +137,22 @@ export default function Tb15GroundCheck() {
           : "Đã gắn dữ liệu không ba lát. Ổn định B.0.3 / B.0.4 của sheet này dùng sức cản nền đá của đường có ba lát.");
       }
       const radius = alignment === "thang" ? 0 : read("radius");
-      const matchingFactor = data.he_so_tai?.rows
-        .filter((r) => radius === 0 ? r.r_tu_m === 0 : number(r.r_tu_m) >= 300 && number(r.r_tu_m) <= radius)
-        .sort((a, b) => number(b.r_tu_m) - number(a.r_tu_m))[0];
+      const matchingFactor = data.he_so_tai?.rows.find((row) => String(row.id) === factorId)
+        ?? matchLateralFactor(data.he_so_tai?.rows, radius);
       if (!matchingFactor) {
         throw new Error("Không có hệ số lực ngang cho bán kính này. Đường cong dưới 300 m cần phương pháp riêng.");
       }
-      const seatName = String(selectedSeat?.phuong_an ?? "");
-      const seatSleeper = seatName.match(/(?:tà vẹt|loại)\s+(III|II)\b/i)?.[1]?.toUpperCase();
-      if (!seatSleeper || seatSleeper !== String(track?.loai_ta_vet ?? "").toUpperCase()) {
-        throw new Error("Chọn độ cứng gối phù hợp với loại tà vẹt của kết cấu có ba lát.");
+      const seatType = sleeperType(selectedSeat?.phuong_an);
+      const trackType = sleeperType(track?.ten) || sleeperType(track?.loai_ta_vet);
+      if (!seatType || seatType !== trackType) {
+        throw new Error(seatType && trackType
+          ? `Độ cứng gối là tà vẹt loại ${seatType}, kết cấu là tà vẹt loại ${trackType}. Hai ô phải cùng loại.`
+          : "Chọn độ cứng gối cùng loại tà vẹt II hoặc III với kết cấu đường.");
       }
 
       const riseMethod = (String(values.get("riseMethod") || "irregular")) as RiseMethod;
-      const onDinh = data.on_dinh_nen?.rows.find((r) => r.loai_ta_vet === track?.loai_ta_vet);
+      const onDinh = data.on_dinh_nen?.rows.find((row) => String(row.id) === ballastRowId)
+        ?? data.on_dinh_nen?.rows.find((row) => sleeperType(row.loai_ta_vet) === trackType);
       const moMen = moMenPicked;
       let irregular: IrregularInput | undefined;
       if (riseMethod !== "uniform") {
@@ -268,26 +307,46 @@ export default function Tb15GroundCheck() {
               <option value="cong">Đường cong</option>
             </select>
           </label>
-          {alignment === "cong" && (
-            <label className="text-sm font-medium text-slate-800">Bán kính cong R (m)
-              <input name="radius" type="number" min={300} step="any" required className={control} />
-            </label>
-          )}
+          <label className="text-sm font-medium text-slate-800">Bán kính cong R (m)
+            {alignment === "thang" ? (
+              <input value="0" readOnly aria-readonly="true" className={locked} />
+            ) : (
+              <input name="radius" type="number" min={300} step="any" required value={radiusDraft} onChange={(e) => setRadiusDraft(e.target.value)} className={control} />
+            )}
+          </label>
         </fieldset>
         <div className="mt-3 rounded-lg border border-slate-200">
           <p className="border-b border-slate-200 px-3 py-2 text-sm font-semibold text-slate-900">Khổ ray và chiều cao trọng tâm</p>
           <Tb15GaugeTable draft={gauge} onChange={setGauge} deltaH={deltaH} />
         </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {catalogs.filter(([key]) => key !== "he_so_tai" && key !== "on_dinh_nen").map(([key, title, rowLabel]) => (
+          {catalogs.map(([key, title, rowLabel]) => {
+            if (key === "he_so_tai" || key === "on_dinh_nen") {
+              const hint = key === "he_so_tai" ? "tự chọn theo bán kính" : "tự chọn theo loại tà vẹt của kết cấu";
+              const selected = key === "he_so_tai" ? factorId : ballastRowId;
+              const empty = key === "he_so_tai"
+                ? (alignment === "cong" && !(radiusValue >= 300) ? "Nhập bán kính cong để tra hệ số" : "Chưa có hệ số cho bán kính này")
+                : "Chọn kết cấu đường để lấy B.0.4-1";
+              return (
+                <label key={key} className="text-sm font-medium text-slate-800">
+                  {title} <span className="text-xs font-normal text-slate-500">· {hint}</span>
+                  <select name={key} value={selected} required className={control} onChange={(e) => key === "he_so_tai" ? setFactorId(e.target.value) : setBallastRowId(e.target.value)}>
+                    <option value="">{empty}</option>
+                    {(data[key]?.rows ?? []).map((row) => <option key={row.id} value={String(row.id)}>{rowLabel(row)}</option>)}
+                  </select>
+                </label>
+              );
+            }
+            return (
             <label key={key} className="text-sm font-medium text-slate-800">
               {title} {data[key]?.backend && <span className="text-xs font-normal text-slate-500">· {data[key]?.backend === "supabase" ? "Supabase" : "JSON dự phòng"}</span>}
-              <select key={`${key}-${ballast}-${place}`} name={key} defaultValue="" required className={control} onChange={key === "so_do_tai" ? (e) => setSchemeId(e.target.value) : undefined}>
+              <select key={`${key}-${ballast}-${place}`} name={key} defaultValue="" required className={control} onChange={key === "so_do_tai" ? (e) => setSchemeId(e.target.value) : key === "ket_cau_duong" ? (e) => setTrackId(e.target.value) : undefined}>
                 <option value="">Chọn {catalogByKey(key)?.title.toLowerCase()}</option>
                 {rowsFor(key).map((row) => <option key={row.id} value={row.id}>{rowLabel(row)}</option>)}
               </select>
             </label>
-          ))}
+            );
+          })}
           <label className="text-sm font-medium text-slate-800">Loại sức kéo
             <select name="traction" defaultValue="" required className={control}>
               <option value="">Chọn loại sức kéo</option>
