@@ -10,7 +10,7 @@ export function rfiScope(info: Record<string, unknown> = {}) {
 export function rfiAcceptanceTitle(info: Record<string, unknown> = {}) {
   const scope = rfiScope(info);
   return scope.geometry && scope.ultrasound ? "Nghiệm thu kích thước hình học và siêu âm mối hàn"
-    : scope.geometry ? "Nghiệm thu kích thước hình học mối hàn" : "Nghiệm thu siêu âm mối hàn";
+    : scope.geometry ? "Nghiệm thu kích thước hình học mối hàn" : "Nghiệm thu mối hàn";
 }
 
 export function rfiChildSigning(children: { loai: string; ngay_nghiem_thu: string | null; da_ky: boolean | null }[]) {
@@ -177,18 +177,22 @@ export const SIGNER_KEYS: string[] = SIGNER_PARTIES.flatMap(([party]) => [1, 2].
 /** Người ký BBNTCV (tờ 2) — tách riêng khỏi khung ký Phụ lục; nhớ trên máy, đổi khi cần. */
 export const BBNTCV_SIGNER_KEYS: string[] = SIGNER_PARTIES.flatMap(([party]) => [1, 2].flatMap((i) => [`bbntcv_nguoi_${party}_${i}_ten`, `bbntcv_nguoi_${party}_${i}_cv`]));
 const ALL_SIGNER_KEYS = [...SIGNER_KEYS, ...BBNTCV_SIGNER_KEYS];
-/** Người ký mặc định khi chưa có bản sửa / chưa nhớ: nhà thầu phụ (Thành Phát) người 1 = Trần Công Tiến; nhà thầu chính người 1 = Nguyễn Tất Đạt. Sửa ở «Sửa thông tin in». */
-export const DEFAULT_SIGNERS: Record<string, string> = { nguoi_ntp_1_ten: "Trần Công Tiến", nguoi_ntc_1_ten: "Nguyễn Tất Đạt" };
+/** Người ký mặc định khi chưa có bản sửa / chưa nhớ. Sửa ở «Sửa thông tin in» trước khi in. */
+export const DEFAULT_SIGNERS: Record<string, string> = {
+  nguoi_ntc_1_ten: "Nguyễn Minh Đức",
+  nguoi_ntp_1_ten: "Trần Công Tiến",
+  bbntcv_nguoi_ntc_1_ten: "Nguyễn Minh Đức",
+  bbntcv_nguoi_ntp_1_ten: "Trần Công Tiến",
+};
 const SIGNER_STORAGE = "weld-acceptance-signers";
+const BB_SEQ_KEY = "bbntcv-print-seq";
 
 /** Người ký nhập gần nhất (nhớ trên máy này) — tự điền cho các lần in sau; người khác ký thì nhập lại ở «Sửa thông tin in». */
-/** ponytail: đổi người ký NTC từ Nguyễn Minh Đức → Nguyễn Tất Đạt cho tên đã nhớ / đã lưu trong biên bản; bỏ khi không còn bản nào mang tên cũ. */
-export const fixSignerName = (name: string) => name.replace(/^Nguyễn Minh Đức$/, "Nguyễn Tất Đạt");
 export function loadSignerDefaults(): Record<string, string> {
   try {
     if (typeof window === "undefined") return {};
     const raw = JSON.parse(window.localStorage.getItem(SIGNER_STORAGE) ?? "{}") as Record<string, unknown>;
-    return Object.fromEntries(ALL_SIGNER_KEYS.flatMap((k) => (typeof raw[k] === "string" && raw[k] ? [[k, fixSignerName(raw[k] as string)]] : [])));
+    return Object.fromEntries(ALL_SIGNER_KEYS.flatMap((k) => (typeof raw[k] === "string" && raw[k] ? [[k, raw[k] as string]] : [])));
   } catch { return {}; }
 }
 export function saveSignerDefaults(values: Record<string, string | undefined>) {
@@ -197,6 +201,40 @@ export function saveSignerDefaults(values: Record<string, string | undefined>) {
     const next = { ...loadSignerDefaults(), ...Object.fromEntries(ALL_SIGNER_KEYS.flatMap((k) => (values[k]?.trim() ? [[k, values[k]!.trim()]] : []))) };
     window.localStorage.setItem(SIGNER_STORAGE, JSON.stringify(next));
   } catch { /* bỏ qua khi không lưu được */ }
+}
+
+function bbSeqStorageKey(scope: string) {
+  return `${BB_SEQ_KEY}:${scope.trim() || "chung"}`;
+}
+
+/** Số thứ tự BBNTCV kế tiếp trên máy này (bắt đầu từ 1). Mỗi dự án một dãy. */
+export function nextBbntcvSeq(scope: string): number {
+  try {
+    if (typeof window === "undefined") return 1;
+    const n = Number(window.localStorage.getItem(bbSeqStorageKey(scope)));
+    return Number.isInteger(n) && n >= 1 ? n : 1;
+  } catch { return 1; }
+}
+
+export function formatBbntcvNo(tech: "FBW" | "ATW", seq: number) {
+  return `${tech}/${String(seq).padStart(2, "0")}/BBNTCV`;
+}
+
+/** Số BBNTCV đang in: đã gõ hoặc đã lưu thì giữ; chưa có thì FBW/01, FBW/02… theo số kế tiếp (cơ sở dữ liệu). */
+export function bbntcvSo(saved: string, tech: "FBW" | "ATW", seq: number) {
+  const custom = saved.trim();
+  if (custom) return custom;
+  const n = Number.isInteger(seq) && seq >= 1 ? seq : 1;
+  return formatBbntcvNo(tech, n);
+}
+
+/** Sau mỗi lần in tờ BBNTCV: lần sau lấy số vừa in + 1. In lại số cũ nhỏ hơn thì không lùi dãy. */
+export function advanceBbntcvSeq(printed: string, scope: string) {
+  const matched = /\/(\d+)\/BBNTCV/i.exec(printed.trim()) ?? /(\d+)\s*$/.exec(printed.trim());
+  if (!matched || typeof window === "undefined") return;
+  const n = Number(matched[1]);
+  if (!Number.isInteger(n) || n < 1) return;
+  try { window.localStorage.setItem(bbSeqStorageKey(scope), String(Math.max(nextBbntcvSeq(scope), n + 1))); } catch { /* bỏ qua khi không lưu được */ }
 }
 
 /** Tờ in mặc định hàn ray: HH → chỉ Phụ lục; SA → Phụ lục + BBNTCV. Tờ 3 (hoàn thành tổng hợp) không mặc định — vẫn chọn được khi cần. */

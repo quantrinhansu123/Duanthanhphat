@@ -200,12 +200,15 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
       const range = from && to ? ` (Km${from} – Km${to})` : "";
       return [withResult ? `- Nghiệm thu giải toả ứng suất ray ${names}${range}. Kết quả: ${result}.` : `- Giải toả ứng suất ray ${names}${range}.`];
     }));
-  const acceptanceLines = (loai: "hinh-hoc" | "sieu-am", rows: DiarySplitWeld[]) => ["Đạt", "Không đạt"].map((result) => {
-    const text = diaryWorkText(select(rows.filter((w) => w.loai === loai && w.ket_qua === result).map((w) => w.moi_han_id)), "accept", `Nghiệm thu ${loai === "sieu-am" ? "siêu âm" : "kích thước hình học, trực quan"} mối hàn`);
+  const acceptanceLines = (loai: "hinh-hoc" | "sieu-am", rows: DiarySplitWeld[], title?: string) => ["Đạt", "Không đạt"].map((result) => {
+    const label = title ?? `Nghiệm thu ${loai === "sieu-am" ? "siêu âm" : "kích thước hình học, trực quan"} mối hàn`;
+    const text = diaryWorkText(select(rows.filter((w) => w.loai === loai && w.ket_qua === result).map((w) => w.moi_han_id)), "accept", label);
     return text ? text.split(/\n(?=- )/).map((block) => `${block.replace(/\.\s*$/, "")}. Kết quả: ${result}.`).join("\n") : "";
   });
   const geometry = acceptanceLines("hinh-hoc", splitDone);
   const stressRelease = gtusLines(true);
+  // Mặc định chỉ ghi phiếu siêu âm (đuôi SA) với câu «Nghiệm thu mối hàn». Bật ghi_nhan_hh thì ghép thêm nghiệm thu hình học.
+  const includeGeometry = body.ghi_nhan_hh === true || body.ghi_nhan_hh === "1" || body.ghi_nhan_hh === "true";
   const legacyUltrasound = splitDone.filter((w) => {
     const ticket = Array.isArray(w.phieu_nt_tach) ? w.phieu_nt_tach[0] : w.phieu_nt_tach;
     // A weld accepted on an earlier day must not appear again when its ticket closes.
@@ -232,6 +235,13 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
       ...gtusLines(false),
     ].filter(Boolean).join("\n") || "Chuẩn bị mặt bằng thi công.",
     nghiemThuHangNgay: [
+      ...(includeGeometry ? geometry : []),
+      ...acceptanceLines("sieu-am", legacyUltrasound, "Nghiệm thu mối hàn"),
+      diaryWorkText(select([...ultrasoundIds]), "accept", "Nghiệm thu mối hàn"),
+      ...stressRelease,
+    ].filter(Boolean).join("\n"),
+    // Bản chữ cũ (có hình học + «siêu âm») để nhật ký còn đúng dòng tự điền trước đây được cập nhật khi mở lại.
+    nghiemThuHangNgayBanCu: [
       ...geometry,
       ...acceptanceLines("sieu-am", legacyUltrasound),
       diaryWorkText(select([...ultrasoundIds]), "accept", "Siêu âm mối hàn"),
@@ -1651,4 +1661,29 @@ export async function rfiSummaryTable(body: Record<string, unknown>) {
     tickets,
     welds: welds.map((w) => ({ ...w, ma_diem: where.get(w.moi_han_id)?.ma_diem ?? null, ly_trinh: where.get(w.moi_han_id)?.ly_trinh ?? null })),
   };
+}
+
+const missingBbntSeq = (message: string) => /bbnt_so_in|schema cache|does not exist|42883/i.test(message);
+
+/** Số BBNTCV kế tiếp của dự án. Chưa chạy migration thì so_tiep = 0 để máy in nhớ tạm. */
+export async function loadBbntPrintSeq(projectId: string) {
+  const { data, error } = await db().rpc("bbnt_so_in_tiep", { p_du_an: projectId, p_so: null });
+  if (error) {
+    if (missingBbntSeq(error.message)) return { so_tiep: 0 };
+    throw error;
+  }
+  const n = Number(data);
+  return { so_tiep: Number.isInteger(n) && n >= 1 ? n : 1 };
+}
+
+/** Sau mỗi lần in: lưu số kế tiếp vào cơ sở dữ liệu. Không lùi nếu in lại số cũ nhỏ hơn. */
+export async function advanceBbntPrintSeq(projectId: string, printed: number) {
+  if (!Number.isInteger(printed) || printed < 1) throw new QualityApiError("Số biên bản không hợp lệ.");
+  const { data, error } = await db().rpc("bbnt_so_in_tiep", { p_du_an: projectId, p_so: printed });
+  if (error) {
+    if (missingBbntSeq(error.message)) return { so_tiep: 0 };
+    throw error;
+  }
+  const n = Number(data);
+  return { so_tiep: Number.isInteger(n) && n >= 1 ? n : printed + 1 };
 }

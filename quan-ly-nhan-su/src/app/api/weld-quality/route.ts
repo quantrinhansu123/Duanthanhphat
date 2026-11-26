@@ -3,7 +3,7 @@ import { authenticateWeldQuality, authenticateWeldQualityLimited, QualityApiErro
 import { object, qualityUuid, parseQualityFilters, parseQualityInspection, loadQualityJournalPage,
   loadQualityJournalRows, loadQualityDetail, markQualityBatch, resetQualityToWaitingGrind, importQualityBatch, createQualityRuleForWeld, listQualityRules } from "@/lib/server/weldQualityJournal";
 import { gtusDetail, gtusSave } from "@/lib/server/gtusServer";
-import { rfiSummaryTable, listGtusCandidates, loadRfiOverview, deleteRfi, setRfiPending, saveBbntScan, splitAcceptance, loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, updateRfi, completeRfi, saveRfiPrintInfo, completeRfiGeometry, loadGeometryRecord, listSplitRecords, listHeldWelds, loadHeldRecord, markHeldIssued, signSplitRecord, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
+import { rfiSummaryTable, listGtusCandidates, loadRfiOverview, deleteRfi, setRfiPending, saveBbntScan, splitAcceptance, loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, updateRfi, completeRfi, saveRfiPrintInfo, completeRfiGeometry, loadGeometryRecord, listSplitRecords, listHeldWelds, loadHeldRecord, markHeldIssued, signSplitRecord, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus, loadBbntPrintSeq, advanceBbntPrintSeq } from "@/lib/server/weldAcceptanceServer";
 import { listPayments, paymentsOf, ultrasoundPaymentRates, weldsOfTicket, setPayments, clearPayments } from "@/lib/server/weldPayment";
 import { saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
 import { formatSupabaseError } from "@/lib/supabase/env";
@@ -126,6 +126,11 @@ export async function POST(request: Request) {
     if (body.action === "record-set") return NextResponse.json(await loadRecordSet(qualityUuid(body.id)));
     if (body.action === "record-revise") return NextResponse.json(await reviseRecord(body, actor));
     if (body.action === "record-sign") return NextResponse.json(await setSignStatus(body, actor));
+    if (body.action === "bbnt-seq") {
+      const projectId = qualityUuid(body.du_an_id);
+      const printed = body.so == null || body.so === "" ? null : Number(body.so);
+      return NextResponse.json(printed == null ? await loadBbntPrintSeq(projectId) : await advanceBbntPrintSeq(projectId, printed));
+    }
     throw new QualityApiError("Thao tác không hợp lệ.");
   } catch (error) { return failure(error); }
 }

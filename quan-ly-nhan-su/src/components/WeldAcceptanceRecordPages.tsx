@@ -3,7 +3,7 @@
 import type { CSSProperties, FocusEvent } from "react";
 import type { RecordSet } from "@/lib/weldQualityClient";
 import PrintFrame from "@/components/PrintFrame";
-import { rfiScope, SIGNER_PARTIES, DEFAULT_SIGNERS, loadSignerDefaults, fixSignerName } from "@/lib/weldAcceptance";
+import { rfiScope, SIGNER_PARTIES, DEFAULT_SIGNERS, loadSignerDefaults, bbntcvSo } from "@/lib/weldAcceptance";
 import { fieldWeldCode } from "@/lib/weldCode";
 import { GEOMETRY_CRITERIA, evaluateGeometry, evaluateGeometryCriterion, type GeometryLimits, type GeometryMeasurements } from "@/lib/weldQuality";
 
@@ -146,9 +146,9 @@ const timeText = (v: unknown) => {
 const labels = ["TƯ VẤN GIÁM SÁT", "NHÀ THẦU CHÍNH", "NHÀ THẦU PHỤ"];
 const PARTY_KEYS = SIGNER_PARTIES.map(([key]) => key);
 
-/** Số phiếu như in trên phiếu YCNT: bỏ chữ «RFI-» ở đầu, giữ đuôi -HH / -SA (vd 004-HH). */
+/** Số phiếu như in trên phiếu YCNT: bỏ chữ «RFI-» ở đầu, đưa HH/SA xuống đuôi (RFI-SA-004 → 004-SA). */
 function pycNumber(rfi: Record<string, unknown>) {
-  return String(rfi.so_phieu ?? "").replace(/^RFI-/i, "");
+  return stripRfiPrefix(String(rfi.so_phieu ?? ""));
 }
 /** Chỉnh sửa trực tiếp trên bản xem trước: `draft` là các ô đã sửa chưa lưu, `set` ghi một ô. Không truyền = chỉ xem/in. */
 export type RecordEditor = { draft: Record<string, string>; set: (key: string, value: string) => void };
@@ -208,20 +208,35 @@ function EdLines({ k, v, lines, editor }: { k: string; v: string; lines: number;
 }
 /** «004-HH, 004-SA»: gộp số phiếu con hình học + siêu âm (bỏ chữ RFI-, không lặp). */
 function pycList(values: string[]) {
-  return [...new Set(values.flatMap((v) => v.split(",")).map((v) => v.trim().replace(/^RFI-/i, "")).filter(Boolean))].join(", ");
+  return [...new Set(values.flatMap((v) => v.split(",")).map((v) => stripRfiPrefix(v)).filter(Boolean))].join(", ");
+}
+/**
+ * Phụ lục của phiếu SA chỉ ghi số SA của phiếu đang in.
+ * Ô đã lưu đúng cặp tự sinh «HH, SA» được in lại chỉ còn SA; số người gõ khác thì giữ.
+ */
+function annexPycSo(saved: string, geometryRfi: string, ultrasoundRfi: string, ticketNo: string, saTicket: boolean) {
+  const sa = pycList([ultrasoundRfi]) || (saTicket ? ticketNo : "");
+  const combined = pycList([geometryRfi, ultrasoundRfi]) || ticketNo;
+  const savedNorm = saved ? pycList([saved]) : "";
+  const stalePair = Boolean(saTicket && sa && savedNorm && savedNorm === combined && combined !== sa);
+  if (saved && !stalePair) return saved;
+  return saTicket ? (sa || ticketNo) : combined;
 }
 
 /** Người ký i (1–2) của một bên: bản sửa của biên bản → người đã nhớ → mặc định. prefix = "bbntcv_" cho tờ BBNTCV (tách khỏi Phụ lục). */
 function resolveSigner(t: Record<string, string>, defaults: Record<string, string>, party: string, i: number, prefix = "") {
   const pick = (field: "ten" | "cv") => {
     const key = `${prefix}nguoi_${party}_${i}_${field}`;
-    return t[key]?.trim() || fixSignerName(defaults[key] || (!prefix ? DEFAULT_SIGNERS[key] : "") || ""); // tên gõ tay giữ nguyên, chỉ tên nhớ sẵn mới được chuẩn hoá
+    const base = `nguoi_${party}_${i}_${field}`;
+    return t[key]?.trim() || defaults[key] || DEFAULT_SIGNERS[key] || DEFAULT_SIGNERS[base] || "";
   };
   return { ten: pick("ten"), cv: pick("cv") };
 }
-/** Bỏ tiền tố RFI- khi in số phiếu (vd RFI-004-HH → 004-HH). */
+/** Bỏ tiền tố RFI- khi in số phiếu. RFI-SA-004 và RFI-004-SA đều in 004-SA. */
 function stripRfiPrefix(value: string) {
-  return value.replace(/^RFI-/i, "").trim();
+  const raw = value.replace(/^RFI-/i, "").trim();
+  const prefixed = /^(HH|SA)-(\d+)$/i.exec(raw);
+  return prefixed ? `${prefixed[2]}-${prefixed[1].toUpperCase()}` : raw;
 }
 /** Nhiều số phiếu → «đầu đến cuối» (đã bỏ RFI-); một số thì in như PYC. */
 function rfiRange(value: string) {
@@ -288,7 +303,7 @@ export function skippedWeldIds(record: RecordSet, draft?: Record<string, string>
 /** «bo_moi_rieng» = 1: chỉ in các mối đã bỏ → biên bản riêng cho mối treo (sau khi TVGS đồng ý ký). */
 export const onlySkippedWelds = (record: RecordSet, draft?: Record<string, string>) => printKey(record, "bo_moi_rieng", draft) === "1";
 
-export default function WeldAcceptanceRecordPages({ record, kind, kinds, editor }: { record: RecordSet; kind?: RecordKind; kinds?: RecordKind[]; editor?: RecordEditor }) {
+export default function WeldAcceptanceRecordPages({ record, kind, kinds, editor, bbSeq = 1 }: { record: RecordSet; kind?: RecordKind; kinds?: RecordKind[]; editor?: RecordEditor; bbSeq?: number }) {
   const rfi = record.dot.phieu_yeu_cau_nghiem_thu;
   const project = rfi.du_an ?? {};
   const projectName = String(project.du_an ?? project.ten_du_an ?? project.name ?? "");
@@ -303,6 +318,8 @@ export default function WeldAcceptanceRecordPages({ record, kind, kinds, editor 
     const revision = record.sua_doi?.filter((r) => r.ho_so_id === hoSo?.id).sort((a, b) => a.phien_ban - b.phien_ban).at(-1);
     const t = { ...base, ...(revision?.thong_tin ?? {}), ...(editor?.draft ?? {}) };
     const scope = rfiScope(rfi.thong_tin as Record<string, unknown>);
+    const ticketNo = pycNumber(rfi);
+    const saTicket = (scope.ultrasound && !scope.geometry) || /-SA$/i.test(ticketNo) || /^SA-/i.test(ticketNo);
     const geometryRfi = t.rfi_hinh_hoc_so || (scope.geometry ? String(rfi.so_phieu ?? "") : "");
     // Biên bản chỉ nghiệm thu HÌNH HỌC (chưa có kết quả siêu âm): PYC chỉ hiện số phiếu hình học, không kèm số phiếu siêu âm.
     const hasUltrasound = rows.some((row) => Boolean(String(((row.du_lieu_chot.kiem_tra ?? row.du_lieu_chot) as Record<string, unknown>).ket_qua_ndt ?? "").trim()));
@@ -374,7 +391,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, kinds, editor 
                         <td><b>CA HÀN:</b> {mark(dayOn)} Ngày &nbsp; {mark(nightOn)} Đêm</td>
                       </tr>
                       <tr>
-                        <td colSpan={2}><b>PYC số:</b> <Ed k="pyc_so" v={t.pyc_so?.trim() || pycList([geometryRfi, ultrasoundRfi]) || pycNumber(rfi)} editor={editor} /></td>
+                        <td colSpan={2}><b>PYC số:</b> <Ed k="pyc_so" v={annexPycSo(t.pyc_so?.trim() ?? "", geometryRfi, ultrasoundRfi, ticketNo, saTicket)} editor={editor} /></td>
                         <td><b>BIỆN PHÁP HÀN:</b> {mark(fixed)} Hàn cố định &nbsp; {mark(mobile)} Hàn di động</td>
                       </tr>
                       <tr>
@@ -571,12 +588,12 @@ export default function WeldAcceptanceRecordPages({ record, kind, kinds, editor 
       // Tháng / năm tự lấy hiện tại; ngày để trống cho người dùng tự chọn (chọn ở «Sửa thông tin in» thì in đủ ngày).
       const nowDate = new Date();
       const wp = acceptanceDate ? parts : { d: "……", m: String(nowDate.getMonth() + 1).padStart(2, "0"), y: String(nowDate.getFullYear()) };
-      // Số biên bản: FBW/01/BBNTCV (01 = số thứ tự lấy từ số RFI; sửa được ở «Sửa thông tin in»).
-      const seq = /(\d+)\s*$/.exec(String(rfi.so_phieu ?? ""))?.[1];
-      const bbNo = t.so_bb?.trim() || `${pointRows.some((w) => w.cong_nghe_han === "ATW") ? "ATW" : "FBW"}/${seq ? String(Number(seq)).padStart(2, "0") : "01"}/BBNTCV`;
-      // Người ký BBNTCV: tách khỏi Phụ lục — bản sửa / đã nhớ (prefix bbntcv_), không dùng tên ký Phụ lục.
+      // Số biên bản: FBW/01/BBNTCV, tăng 1 sau mỗi lần in. Đã sửa hoặc đã lưu thì giữ số đó.
+      const bbTech = pointRows.some((w) => w.cong_nghe_han === "ATW") ? "ATW" : "FBW";
+      const bbNo = bbntcvSo(t.so_bb ?? "", bbTech, bbSeq);
+      // Người ký BBNTCV: bản sửa / đã nhớ, chưa có thì Nguyễn Minh Đức (nhà thầu chính) và Trần Công Tiến (nhà thầu phụ).
       const signerDefaults = loadSignerDefaults();
-      const signer = (key: string) => t[`bbntcv_${key}`]?.trim() || fixSignerName(signerDefaults[`bbntcv_${key}`] || "");
+      const signer = (key: string) => t[`bbntcv_${key}`]?.trim() || signerDefaults[`bbntcv_${key}`] || DEFAULT_SIGNERS[`bbntcv_${key}`] || DEFAULT_SIGNERS[key] || "";
       const objectText = pointRows.some((w) => w.cong_nghe_han === "ATW")
         ? "Nghiệm thu mối hàn ray"
         : "Nghiệm thu mối hàn chảy giáp mép - Hàn trên tuyến";
@@ -592,8 +609,8 @@ export default function WeldAcceptanceRecordPages({ record, kind, kinds, editor 
             {pq ? "Phú Quốc" : (location.split(",")[0]?.trim() || "…………")}, <EdViDate k="ngay_nghiem_thu" iso={acceptanceDate.slice(0, 10)} fallback={wp} editor={editor} />
           </p>
           <h2>{doc.title}</h2>
-          <p className="doc-no">Số: {bbNo}</p>
-          <p>PYC hình học: {rfiRange(geometryRfi)} · PYC siêu âm: {rfiRange(ultrasoundRfi)}</p>
+          <p className="doc-no" data-bb-no={bbNo} data-bb-scope={projectName}>Số: <Ed key={bbNo} k="so_bb" v={bbNo} editor={editor} ph="" /></p>
+          <p>PYC số: {saTicket ? (pycList([ultrasoundRfi]) || ticketNo) : ticketNo}</p>
 
           <p className="field-row"><span className="field-label">Dự án</span>: {show(projectName)}</p>
           <p className="field-row"><span className="field-label">Gói thầu</span>: <Ed k="goi_thau" v={packageName} editor={editor} /></p>
@@ -604,8 +621,8 @@ export default function WeldAcceptanceRecordPages({ record, kind, kinds, editor 
           <p>- {objectText}</p>
 
           <h3>2. Thời gian nghiệm thu:</h3>
-          <p>Bắt đầu&nbsp;&nbsp;: <Ed k="gio_bat_dau" v={t.gio_bat_dau?.slice(0, 5) ?? ""} editor={editor} ph="………" /> ngày {wp.d} tháng {wp.m} năm {wp.y}</p>
-          <p>Kết thúc&nbsp;: <Ed k="gio_ket_thuc" v={t.gio_ket_thuc?.slice(0, 5) ?? ""} editor={editor} ph="………" /> ngày {wp.d} tháng {wp.m} năm {wp.y}</p>
+          <p>Bắt đầu&nbsp;&nbsp;: <Ed k="gio_bat_dau" v={t.gio_bat_dau?.slice(0, 5) || "08:00"} editor={editor} ph="………" /> ngày {wp.d} tháng {wp.m} năm {wp.y}</p>
+          <p>Kết thúc&nbsp;: <Ed k="gio_ket_thuc" v={t.gio_ket_thuc?.slice(0, 5) || "17:00"} editor={editor} ph="………" /> ngày {wp.d} tháng {wp.m} năm {wp.y}</p>
 
           <h3>3. Vị trí nghiệm thu:</h3>
           <p>Lý trình: Từ : Km <Ed k="kmFrom" v={kmRaw(kmFrom)} editor={editor} ph="…………" /> đến Km <Ed k="kmTo" v={kmRaw(kmTo)} editor={editor} ph="…………" />.</p>
@@ -677,7 +694,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, kinds, editor 
     const signerDefaultsHt = loadSignerDefaults();
     const who = (code: string, i: number, field: "ten" | "cv") => {
       const key = `nguoi_${code}_${i}_${field}`;
-      return t[key]?.trim() || fixSignerName(signerDefaultsHt[key] || DEFAULT_SIGNERS[key] || "");
+      return t[key]?.trim() || signerDefaultsHt[key] || DEFAULT_SIGNERS[key] || "";
     };
     // Phần tự nhập (lưu qua "Sửa thông tin in"): có nội dung thì in ra, chưa có thì để dòng chấm.
     const field = (key: string, lines: number) => <EdLines k={key} v={str((t as Record<string, unknown>)[key]).trim()} lines={lines} editor={editor} />;

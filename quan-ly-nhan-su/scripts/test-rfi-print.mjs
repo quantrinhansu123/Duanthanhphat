@@ -52,7 +52,7 @@ assert.match(monitoring,/hàn ray tuyến hạ</);
 assert.match(monitoring.replace(/<!--.*?-->/g,""),/Km0\+020-Km1\+500/);
 for (const [scope, title] of [
   [{nt_hinh_hoc:"1",nt_sieu_am:""},"Nghiệm thu kích thước hình học mối hàn"],
-  [{nt_hinh_hoc:"",nt_sieu_am:"1"},"Nghiệm thu siêu âm mối hàn"],
+  [{nt_hinh_hoc:"",nt_sieu_am:"1"},"Nghiệm thu mối hàn"],
   [{nt_hinh_hoc:"1",nt_sieu_am:"1"},"Nghiệm thu kích thước hình học và siêu âm mối hàn"],
 ]) {
   const html=renderToStaticMarkup(React.createElement(Document,{onClose(){},view:{kind:"rfi",rfi:{projectName:"Phú Quốc",

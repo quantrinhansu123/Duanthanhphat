@@ -7,16 +7,18 @@ import { EMPTY_DIARY, averageDayTemperature, deleteDiary, listDiaries, loadDiary
 import { fixDiarySentenceEnd } from "@/lib/constructionDiaryAuto";
 import { loadReportWeather, qualityRequest } from "@/lib/weldQualityClient";
 
+const DIARY_HH_KEY = "nhat-ky-ghi-nhan-hh";
 type DiaryDefaults = Pick<ConstructionDiary, "noiDungCongViec" | "nghiemThuHangNgay" | "thietBi" | "banChiHuy" | "canBoKyThuat" | "congNhan" | "nhanLucNguon"> & {
   nghiemThuHangNgayTheoNgayChot: string;
+  nghiemThuHangNgayBanCu?: string;
 };
-async function loadDefaults(projectId: string, date: string) {
+async function loadDefaults(projectId: string, date: string, ghiNhanHh: boolean) {
   const [work, weather] = await Promise.allSettled([
-    qualityRequest<DiaryDefaults>({ action: "diary-defaults", du_an_id: projectId, date }),
+    qualityRequest<DiaryDefaults>({ action: "diary-defaults", du_an_id: projectId, date, ghi_nhan_hh: ghiNhanHh }),
     loadReportWeather(projectId, date),
   ]);
   const workResult: Partial<DiaryDefaults> = work.status === "fulfilled" ? work.value : {};
-  const { nghiemThuHangNgayTheoNgayChot, ...workValues } = workResult;
+  const { nghiemThuHangNgayTheoNgayChot, nghiemThuHangNgayBanCu, ...workValues } = workResult;
   const values: Partial<ConstructionDiary> = { ...workValues, ...(weather.status === "fulfilled" ? weather.value : {}) };
   if (values.nghiemThuHangNgay !== undefined) values.nghiemThuHangNgayTuDong = values.nghiemThuHangNgay;
   const avg = averageDayTemperature(values.sang ?? "", values.chieu ?? "", values.toi ?? "");
@@ -24,6 +26,7 @@ async function loadDefaults(projectId: string, date: string) {
   return {
     values,
     nghiemThuHangNgayTheoNgayChot,
+    nghiemThuHangNgayBanCu,
     warning: [work, weather].flatMap((r) => r.status === "rejected" ? [r.reason instanceof Error ? r.reason.message : "Chưa tải được dữ liệu tự điền; có thể nhập tay."] : []).join(" "),
   };
 }
@@ -95,6 +98,12 @@ export default function ConstructionDiaryForm() {
   const [projects, setProjects] = useState<{ id: string; name: string; startDate: string }[]>([]);
   const [projectId, setProjectId] = useState("");
   const [date, setDate] = useState(today());
+  const [includeHh, setIncludeHh] = useState(false);
+  const [hhReady, setHhReady] = useState(false);
+  useEffect(() => {
+    try { setIncludeHh(window.localStorage.getItem(DIARY_HH_KEY) === "1"); } catch { /* bỏ qua */ }
+    setHhReady(true);
+  }, []);
   const [d, setD] = useState<ConstructionDiary>(EMPTY_DIARY);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
@@ -164,7 +173,7 @@ export default function ConstructionDiaryForm() {
   }, []);
 
   useEffect(() => {
-    if (!projectId || !date) return;
+    if (!projectId || !date || !hhReady) return;
     let live = true;
     setLoading(true);
     setStatus("Đang tải…");
@@ -172,14 +181,14 @@ export default function ConstructionDiaryForm() {
       let diary = r.diary;
       let warning = "";
       if (!r.saved) {
-        const defaults = await loadDefaults(projectId, date);
+        const defaults = await loadDefaults(projectId, date, includeHh);
         diary = { ...diary, ...defaults.values };
         warning = defaults.warning;
       } else {
         // Nhật ký đã lưu: (1) bản cũ bị cắt «… (+N)» → điền lại mục 3; (2) danh sách thiết bị đã lưu thiếu máy / vật tư đang gán cho dự án → cập nhật mục 2.2 cho đủ.
         // Bấm Lưu để lưu bản mới; sửa tay vẫn giữ nếu danh sách đã đủ.
         try {
-          const defaults = await loadDefaults(projectId, date);
+          const defaults = await loadDefaults(projectId, date, includeHh);
           const notes: string[] = [];
           // Dòng «Báo RFI số …» (bản cũ ghi vào mục 3) không thuộc nhật ký thi công: nội dung RFI chỉ nằm ở mục 3.2.
           const withoutRfi = diary.noiDungCongViec.split("\n").filter((line) => !/^\s*-?\s*Báo RFI số/i.test(line)).join("\n");
@@ -209,6 +218,7 @@ export default function ConstructionDiaryForm() {
           const savedAccept = diary.nghiemThuHangNgay.trim();
           const previousAuto = diary.nghiemThuHangNgayTuDong?.trim();
           const oldAuto = defaults.nghiemThuHangNgayTheoNgayChot?.trim();
+          const oldWording = defaults.nghiemThuHangNgayBanCu?.trim();
           const wantedLines = wantedAccept?.trim().split("\n").map((line) => line.trim()).filter(Boolean) ?? [];
           const incompleteOldAuto = wantedAccept?.trim() === oldAuto && (
             wantedLines.some((line) => !savedAccept.includes(line.slice(0, 60))) ||
@@ -216,7 +226,7 @@ export default function ConstructionDiaryForm() {
           );
           // Bản cũ lưu mục 3.2 theo ngày chốt phiếu. Đối chiếu nội dung tự điền trước khi cập nhật.
           const canRefreshAccept = previousAuto !== undefined ? savedAccept === previousAuto :
-            !savedAccept || savedAccept === "Không có công tác nghiệm thu" || savedAccept === oldAuto || savedAccept === wantedAccept?.trim() || incompleteOldAuto;
+            !savedAccept || savedAccept === "Không có công tác nghiệm thu" || savedAccept === oldAuto || savedAccept === oldWording || savedAccept === wantedAccept?.trim() || incompleteOldAuto;
           if (wantedAccept !== undefined && canRefreshAccept) {
             diary = { ...diary, nghiemThuHangNgay: wantedAccept, nghiemThuHangNgayTuDong: wantedAccept };
             if (savedAccept !== wantedAccept.trim()) notes.push("Mục 3.2 đã được cập nhật theo công việc trong ngày.");
@@ -241,7 +251,7 @@ export default function ConstructionDiaryForm() {
       }
     });
     return () => { live = false; };
-  }, [projectId, date, reloadDiary]);
+  }, [projectId, date, reloadDiary, includeHh, hhReady]);
 
   const mark = weatherMark(d.thoiTiet);
   const set = (k: keyof ConstructionDiary) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setD((cur) => ({ ...cur, [k]: e.target.value }));
@@ -249,7 +259,7 @@ export default function ConstructionDiaryForm() {
   async function autofill() {
     setBusy(true);
     try {
-      const defaults = await loadDefaults(projectId, date);
+      const defaults = await loadDefaults(projectId, date, includeHh);
       const { thietBi, noiDungCongViec, nghiemThuHangNgay, nghiemThuHangNgayTuDong } = defaults.values;
       setD((cur) => ({ ...cur, thietBi: thietBi ?? cur.thietBi, noiDungCongViec: noiDungCongViec ?? cur.noiDungCongViec, nghiemThuHangNgay: nghiemThuHangNgay ?? cur.nghiemThuHangNgay, nghiemThuHangNgayTuDong: nghiemThuHangNgayTuDong ?? cur.nghiemThuHangNgayTuDong }));
       setStatus(defaults.warning || "Đã tự điền lại thiết bị (2.2) và mục 3; thời tiết, nhân lực giữ nguyên. Có thể sửa nội dung rồi bấm Lưu.");
@@ -336,7 +346,7 @@ Nội dung thiết bị (2.2) và mục 3 đã sửa tay trong các ngày này s
     for (const [i, day] of days.entries()) {
       setStatus(`Đang tự điền ${i + 1}/${days.length}: ${day.split("-").reverse().join("/")}…`);
       try {
-        const [r, defaults] = await Promise.all([loadDiary(projectId, day), loadDefaults(projectId, day)]);
+        const [r, defaults] = await Promise.all([loadDiary(projectId, day), loadDefaults(projectId, day, includeHh)]);
         const base = r.saved ? r.diary : { ...r.diary, ...defaults.values };
         const { thietBi, noiDungCongViec, nghiemThuHangNgay, nghiemThuHangNgayTuDong } = defaults.values;
         const next = { ...base, thietBi: thietBi ?? base.thietBi, noiDungCongViec: noiDungCongViec ?? base.noiDungCongViec, nghiemThuHangNgay: nghiemThuHangNgay ?? base.nghiemThuHangNgay, nghiemThuHangNgayTuDong: nghiemThuHangNgayTuDong ?? base.nghiemThuHangNgayTuDong };
@@ -472,8 +482,16 @@ Nội dung thiết bị (2.2) và mục 3 đã sửa tay trong các ngày này s
           <Card title="3. Nội dung công việc thực hiện" wide>
             <textarea aria-label="Nội dung công việc thực hiện" className={inp} rows={6} value={d.noiDungCongViec} onChange={set("noiDungCongViec")} />
             <label className={lbl}>Nghiệm thu công việc xây dựng hàng ngày
-              <span className="font-normal text-slate-500"> (mục 3.2 tự điền nghiệm thu đã chốt và các mối siêu âm theo ngày thực tế đã ghi)</span>
+              <span className="font-normal text-slate-500"> (mục 3.2 mặc định chỉ ghi «Nghiệm thu mối hàn» từ phiếu đuôi SA)</span>
               <textarea aria-label="Nghiệm thu công việc xây dựng hàng ngày" className={inp} rows={8} value={d.nghiemThuHangNgay} onChange={set("nghiemThuHangNgay")} />
+            </label>
+            <label className="mt-2 flex items-start gap-2 text-xs font-semibold text-slate-700">
+              <input type="checkbox" className="mt-0.5" checked={includeHh} onChange={(e) => {
+                const on = e.target.checked;
+                setIncludeHh(on);
+                try { window.localStorage.setItem(DIARY_HH_KEY, on ? "1" : "0"); } catch { /* bỏ qua */ }
+              }} />
+              <span>Ghi nhận nghiệm thu hình học (HH)<span className="font-normal text-slate-500"> — tắt thì nhật ký không ghi nghiệm thu HH; bật lại nếu sau này cần.</span></span>
             </label>
           </Card>
           {TEXT_SECTIONS.map(([k, title, hint, rows]) => (

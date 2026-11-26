@@ -1,17 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { printOrPdfAcceptance } from "@/lib/pdfExport";
-import { reloadRecordSet, reviseRecord, notifyWeldQualityChanged, type RecordSet } from "@/lib/weldQualityClient";
+import { isTouchDevice, printOrPdfAcceptance } from "@/lib/pdfExport";
+import { reloadRecordSet, reviseRecord, notifyWeldQualityChanged, loadBbntPrintSeq, advanceBbntPrintSeq, type RecordSet } from "@/lib/weldQualityClient";
 import WeldAcceptanceRecordPages, { ACCEPTANCE_DOCS, acceptancePrintCss, skippedWeldIds, onlySkippedWelds, type RecordKind } from "@/components/WeldAcceptanceRecordPages";
 import { fieldWeldCode } from "@/lib/weldCode";
-import { SIGNER_PARTIES, BBNTCV_SIGNER_KEYS, DEFAULT_SIGNERS, loadSignerDefaults, saveSignerDefaults, defaultAcceptancePrintKinds } from "@/lib/weldAcceptance";
+import { SIGNER_PARTIES, BBNTCV_SIGNER_KEYS, DEFAULT_SIGNERS, loadSignerDefaults, saveSignerDefaults, defaultAcceptancePrintKinds, advanceBbntcvSeq, nextBbntcvSeq } from "@/lib/weldAcceptance";
 import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
 import { loadJournalMachineOptions } from "@/lib/machineRunSchedulesDb";
 import ComboInput from "@/components/ComboInput";
 
 /** Các mục thông tin trên mẫu dùng chung cho cả bộ — sửa một lần, áp dụng cho 3 biên bản. */
-const SHARED_KEYS = ["dia_diem", "ben_moi", "ben_nhan", "pham_vi", "ngay_nghiem_thu", "ca_han", "bien_phap", "tuyen", "goong", "ten_tho_han", "id_tho_han", "may_han", "kmFrom", "kmTo", "so_bb",
+const SHARED_KEYS = ["dia_diem", "ben_moi", "ben_nhan", "pham_vi", "ngay_nghiem_thu", "gio_bat_dau", "gio_ket_thuc", "ca_han", "bien_phap", "tuyen", "goong", "ten_tho_han", "id_tho_han", "may_han", "kmFrom", "kmTo", "so_bb",
   ...SIGNER_PARTIES.flatMap(([party]) => [`nguoi_${party}_1_ten`, `nguoi_${party}_1_cv`, `ngay_ky_${party}`]),
   ...BBNTCV_SIGNER_KEYS];
 const PRINT_DOC_LABELS: Record<RecordKind, string> = {
@@ -19,6 +19,7 @@ const PRINT_DOC_LABELS: Record<RecordKind, string> = {
   "giai-doan": "(2) BBNTCV",
   "hoan-thanh": "(3) Hoàn thành",
 };
+const projectIdOf = (row: RecordSet) => String((row.dot.phieu_yeu_cau_nghiem_thu.du_an as { id?: string } | undefined)?.id ?? "");
 const input = "mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal";
 const label = "block text-xs font-semibold text-slate-700";
 
@@ -53,6 +54,23 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
   const [printKinds, setPrintKinds] = useState<RecordKind[]>(() =>
     defaultAcceptancePrintKinds((initial.dot.phieu_yeu_cau_nghiem_thu?.thong_tin ?? {}) as Record<string, unknown>),
   );
+  const projectId = projectIdOf(record);
+  const [bbSeq, setBbSeq] = useState(() => nextBbntcvSeq(projectIdOf(initial)));
+  useEffect(() => {
+    if (!projectId) return;
+    let live = true;
+    const local = nextBbntcvSeq(projectId);
+    loadBbntPrintSeq(projectId).then(async (remote) => {
+      if (!live || remote.so_tiep < 1) return;
+      if (local > remote.so_tiep) {
+        const bumped = await advanceBbntPrintSeq(projectId, local - 1);
+        if (live && bumped.so_tiep >= 1) setBbSeq(bumped.so_tiep);
+        return;
+      }
+      setBbSeq(remote.so_tiep);
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [projectId]);
   const missing = ACCEPTANCE_DOCS.filter((d) => !record.ho_so.some((h) => h.loai === d.loai));
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !editing) onClose(); };
@@ -92,6 +110,8 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
       // Địa điểm cũ nhập «Lý trình …» đã có ở mục Vị trí nên không nạp lại vào ô này.
       if (saved && !(k === "dia_diem" && /^s*lý trình/i.test(String(saved)))) return [k, String(saved)];
       if (k === "ngay_nghiem_thu") return [k, String(record.dot.ngay_nghiem_thu ?? "").slice(0, 10)];
+      if (k === "gio_bat_dau") return [k, "08:00"];
+      if (k === "gio_ket_thuc") return [k, "17:00"];
       return [k, String(defaults[k] || DEFAULT_SIGNERS[k] || "")];
     })));
     setError("");
@@ -140,6 +160,28 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
   // Giá trị đang hiển thị trong form = bản chụp lúc mở form, bị đè bởi mọi chỉnh sửa chưa lưu (cả ở form lẫn gõ trực tiếp trên mẫu).
   const formView: Record<string, string> = { ...form, ...draft };
   const set = (key: string, value: string) => setDraft((cur) => ({ ...cur, [key]: value }));
+  const printPack = () => {
+    const printed = document.querySelector<HTMLElement>("[data-bb-no]")?.getAttribute("data-bb-no") ?? "";
+    void printOrPdfAcceptance("Bo-bien-ban-nghiem-thu");
+    if (!printKinds.includes("giai-doan") || !printed) return;
+    const matched = /\/(\d+)\/BBNTCV/i.exec(printed.trim()) ?? /(\d+)\s*$/.exec(printed.trim());
+    const n = matched ? Number(matched[1]) : 0;
+    setDraft((cur) => {
+      if (!("so_bb" in cur)) return { ...cur };
+      const next = { ...cur };
+      delete next.so_bb;
+      return next;
+    });
+    if (!projectId || !Number.isInteger(n) || n < 1) return;
+    void advanceBbntPrintSeq(projectId, n).then((remote) => {
+      if (remote.so_tiep >= 1) { setBbSeq(remote.so_tiep); return; }
+      advanceBbntcvSeq(printed, projectId);
+      setBbSeq(nextBbntcvSeq(projectId));
+    }).catch(() => {
+      advanceBbntcvSeq(printed, projectId);
+      setBbSeq(nextBbntcvSeq(projectId));
+    });
+  };
   const text = (key: string, text: string, placeholder = "", listId?: string) => (
     <label className={label}>{text}
       <input className={input} list={listId} placeholder={placeholder} value={formView[key] ?? ""} onChange={(e) => set(key, e.target.value)} />
@@ -177,7 +219,7 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
         </button>}
         {draftCount > 0 && !local && <button type="button" disabled={busy} onClick={() => void saveDraft()} className="min-h-11 rounded-lg bg-emerald-600 px-5 text-sm font-semibold text-white disabled:opacity-50">Lưu chỉnh sửa ({draftCount})</button>}
         <button type="button" disabled={missing.length > 0} onClick={() => (editing ? setEditing(false) : openEditor())} className="min-h-11 rounded-lg border border-slate-300 bg-white px-5 text-sm font-semibold disabled:opacity-50">{editing ? "Đóng sửa" : "Sửa thông tin in"}</button>
-        <button type="button" disabled={missing.length > 0 || !printKinds.length || busy} onClick={() => void printOrPdfAcceptance("Bo-bien-ban-nghiem-thu")} className="min-h-11 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white disabled:opacity-50">In / Lưu PDF</button>
+        <button type="button" disabled={missing.length > 0 || !printKinds.length || busy} onClick={printPack} className="min-h-11 rounded-lg bg-[#0047AB] px-5 text-sm font-semibold text-white disabled:opacity-50">In / Lưu PDF</button>
         <button type="button" onClick={onClose} className="min-h-11 rounded-lg border border-slate-300 bg-white px-5 text-sm font-semibold">Thoát</button>
       </div>
     </div>
@@ -226,6 +268,12 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
           <label className={label}>Ngày nghiệm thu
             <input type="date" className={input} value={formView.ngay_nghiem_thu ?? ""} onChange={(e) => set("ngay_nghiem_thu", e.target.value)} />
           </label>
+          <label className={label}>Giờ bắt đầu
+            <input type="time" className={input} value={(formView.gio_bat_dau || "08:00").slice(0, 5)} onChange={(e) => set("gio_bat_dau", e.target.value)} />
+          </label>
+          <label className={label}>Giờ kết thúc
+            <input type="time" className={input} value={(formView.gio_ket_thuc || "17:00").slice(0, 5)} onChange={(e) => set("gio_ket_thuc", e.target.value)} />
+          </label>
           <label className={label}>Ca hàn
             <select className={input} value={formView.ca_han ?? ""} onChange={(e) => set("ca_han", e.target.value)}>
               <option value="">Tự động theo nhật ký</option><option value="ngay">Ngày</option><option value="dem">Đêm</option><option value="ngay-dem">Ngày và đêm</option>
@@ -242,7 +290,7 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
             </select>
           </label>
           {text("goong", "Goòng phẳng", "KPS25-L8")}
-          {text("so_bb", "Số biên bản", "FBW/01/BBNTCV")}
+          {text("so_bb", "Số biên bản", "Để trống = tự tăng FBW/01, FBW/02…")}
           <label className={label}>Tên thợ hàn (chọn từ Nhân sự hoặc nhập)
             <ComboInput className={input} value={formView.ten_tho_han ?? ""} options={people.map((p) => ({ value: p.name, hint: p.code }))}
               onChange={(name, match) => setDraft((cur) => ({ ...cur, ten_tho_han: name, ...(match?.hint ? { id_tho_han: match.hint } : {}) }))} />
@@ -292,6 +340,6 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
     <p className="weld-print-pack-actions mx-auto mb-2 max-w-4xl text-xs text-white/90">Bấm trực tiếp vào các ô trống / ô có viền xanh trên mẫu để điền hoặc sửa, rồi bấm «Lưu chỉnh sửa».</p>
     {!printKinds.length
       ? <p role="status" className="weld-print-pack-actions mx-auto max-w-4xl rounded-lg bg-white px-3 py-2 text-sm text-slate-700">Chọn ít nhất một tờ ở trên để xem / in.</p>
-      : <WeldAcceptanceRecordPages record={record} kinds={printKinds} editor={{ draft, set: (k, v) => setDraft((cur) => ({ ...cur, [k]: v })) }} />}
+      : <WeldAcceptanceRecordPages record={record} kinds={printKinds} bbSeq={bbSeq} editor={{ draft, set: (k, v) => setDraft((cur) => ({ ...cur, [k]: v })) }} />}
   </div>;
 }

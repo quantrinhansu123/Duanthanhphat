@@ -221,6 +221,9 @@ export const markHeldIssued = (du_an_id: string, loai: "hinh-hoc" | "sieu-am", m
 export const loadGeometryRecord = (id: string, nhap = false) => qualityRequest<RecordSet>({ action: "geometry-record", id, ...(nhap ? { nhap: true } : {}) });
 export const loadRecords = (du_an_id: string) => qualityRequest<{ records: RecordSummary[] }>({ action: "record-list", du_an_id });
 export const loadRecordSet = (id: string) => qualityRequest<RecordSet>({ action: "record-set", id });
+/** Số BBNTCV kế tiếp của dự án (lưu trong cơ sở dữ liệu). so_tiep = 0 khi chưa có bảng. */
+export const loadBbntPrintSeq = (du_an_id: string) => qualityRequest<{ so_tiep: number }>({ action: "bbnt-seq", du_an_id });
+export const advanceBbntPrintSeq = (du_an_id: string, so: number) => qualityRequest<{ so_tiep: number }>({ action: "bbnt-seq", du_an_id, so });
 /** Tải lại bộ biên bản sau khi sửa: phiếu tách (id hồ sơ ảo `<uuid>-<n>`) đọc qua geometry-record. */
 export const reloadRecordSet = (record: RecordSet) =>
   /^.{36}-\d$/.test(record.ho_so[0]?.id ?? "") ? loadGeometryRecord(String(record.dot.id), (record.dot.thong_tin as Record<string, unknown> | undefined)?.ban_nhap === "1") : loadRecordSet(String(record.dot.id));

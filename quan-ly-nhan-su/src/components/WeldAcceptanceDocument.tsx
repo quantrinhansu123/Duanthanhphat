@@ -103,6 +103,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
     }
     // doi_tuong nhớ chung cũ (không phân HH/SA) chỉ lấy khi khớp loại phiếu hiện tại.
     const doiTuong = [saved.doi_tuong, local.doi_tuong, remembered.doi_tuong, legacy.doi_tuong]
+      .map((value) => normalizeUltrasoundTitle(value))
       .find((value) => doiTuongFitsScope(value, info));
     const tvgsName = saved.nguoi_nhan || local.nguoi_nhan || (/phú quốc/i.test(view.rfi.projectName) ? "Trần Văn Thanh" : "");
     const kinhGuiRaw = sanitizeKinhGui(saved.kinh_gui ?? local.kinh_gui, tvgsName);
@@ -477,6 +478,10 @@ function rfiPrintScopeKey(info: Record<string, unknown> = {}) {
 function rfiPrintDefaultsKey(scopeKey: string) {
   return `${RFI_PRINT_DEFAULTS}:${scopeKey}`;
 }
+/** Bản in cũ ghi «Nghiệm thu siêu âm mối hàn» — phiếu SA nay in «Nghiệm thu mối hàn». */
+function normalizeUltrasoundTitle(text: string | undefined) {
+  return (text ?? "").replace(/Nghiệm thu siêu âm mối hàn/g, "Nghiệm thu mối hàn");
+}
 /** Nội dung mục 1 phải khớp loại phiếu: SA không được mang chữ hình học; HH không được mang chữ siêu âm. */
 function doiTuongFitsScope(text: string | undefined, info: Record<string, unknown>) {
   const raw = (text ?? "").trim();
@@ -486,7 +491,7 @@ function doiTuongFitsScope(text: string | undefined, info: Record<string, unknow
   const hasGeo = /hình học|truc quan|trực quan/.test(lower);
   const hasUs = /siêu âm|sieu am/.test(lower);
   const scope = rfiScope(info);
-  if (scope.ultrasound && !scope.geometry) return hasUs && !hasGeo;
+  if (scope.ultrasound && !scope.geometry) return !hasGeo && (hasUs || /nghiệm thu mối hàn|nghiem thu moi han/.test(lower));
   if (scope.geometry && !scope.ultrasound) return hasGeo && !hasUs;
   return true;
 }
@@ -584,11 +589,12 @@ function RfiForm({ rfi, welds, projectName, signatures, o = {}, editor }: { rfi:
   const doiTuongAuto: string[] = [
     ...((monitoring || t.loai_rfi === "ca-hai") ? [`${t.cong_viec === "gtus" ? "Giám sát và nghiệm thu giải toả ứng suất ray" : "Giám sát thi công hàn ray"} ${t.giam_sat?.trim() || tuyen}${t.pham_vi ? ` (${t.pham_vi})` : ""}`] : []),
     ...(!monitoring ? (() => { const s = rfiScope(t), codes = welds.map((w) => fieldWeldCode(w.ma_lich_su)).join(", "), pv = t.pham_vi ? ` (${t.pham_vi})` : "";
-      return [...(s.geometry ? [`Nghiệm thu kích thước hình học, trực quan mối hàn ${codes}${pv}`] : []), ...(s.ultrasound ? [`Nghiệm thu siêu âm mối hàn ${codes}${pv}`] : [])]; })() : []),
+      return [...(s.geometry ? [`Nghiệm thu kích thước hình học, trực quan mối hàn ${codes}${pv}`] : []), ...(s.ultrasound ? [`Nghiệm thu mối hàn ${codes}${pv}`] : [])]; })() : []),
   ];
   // Chỉ dùng bản sửa khi khớp loại phiếu (SA không giữ chữ hình học từ phiếu HH).
-  const doiTuong = doiTuongFitsScope(o.doi_tuong, t)
-    ? lines(o.doi_tuong).map((x) => x.replace(/^-\s*/, ""))
+  const doiTuongSaved = normalizeUltrasoundTitle(o.doi_tuong);
+  const doiTuong = doiTuongFitsScope(doiTuongSaved, t)
+    ? lines(doiTuongSaved).map((x) => x.replace(/^-\s*/, ""))
     : doiTuongAuto;
   const heading = "mt-3 font-bold";
   return (
