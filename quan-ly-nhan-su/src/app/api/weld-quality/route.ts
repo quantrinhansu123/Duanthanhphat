@@ -3,7 +3,7 @@ import { authenticateWeldQuality, authenticateWeldQualityLimited, QualityApiErro
 import { object, qualityUuid, parseQualityFilters, parseQualityInspection, loadQualityJournalPage,
   loadQualityJournalRows, loadQualityDetail, markQualityBatch, resetQualityToWaitingGrind, importQualityBatch, createQualityRuleForWeld, listQualityRules } from "@/lib/server/weldQualityJournal";
 import { gtusDetail, gtusSave } from "@/lib/server/gtusServer";
-import { listGtusCandidates, loadRfiOverview, deleteRfi, setRfiPending, saveBbntScan, splitAcceptance, loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, updateRfi, completeRfi, saveRfiPrintInfo, completeRfiGeometry, loadGeometryRecord, listSplitRecords, listHeldWelds, loadHeldRecord, markHeldIssued, signSplitRecord, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
+import { rfiSummaryTable, listGtusCandidates, loadRfiOverview, deleteRfi, setRfiPending, saveBbntScan, splitAcceptance, loadDiaryDefaults, loadRfiCandidates, nextRfiNumber, publishRfi, listRfis, loadRfiDetail, updateRfi, completeRfi, saveRfiPrintInfo, completeRfiGeometry, loadGeometryRecord, listSplitRecords, listHeldWelds, loadHeldRecord, markHeldIssued, signSplitRecord, listRecords, reviseRecord, acceptedOnDate, loadRecordSet, setSignStatus } from "@/lib/server/weldAcceptanceServer";
 import { listPayments, paymentsOf, ultrasoundPaymentRates, weldsOfTicket, setPayments, clearPayments } from "@/lib/server/weldPayment";
 import { saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
 import { formatSupabaseError } from "@/lib/supabase/env";
@@ -98,6 +98,7 @@ export async function POST(request: Request) {
     }
     // Giai đoạn 4–6: RFI, nghiệm thu, hồ sơ (cùng xác thực với kiểm tra chất lượng).
     if (["split-list", "split-detail", "split-publish", "split-complete", "split-ultrasound-date", "split-forward-ultrasound", "split-update", "split-delete"].includes(String(body.action))) return NextResponse.json(await splitAcceptance(body, actor));
+    if (body.action === "rfi-summary-table") return NextResponse.json(await rfiSummaryTable(body));
     if (body.action === "rfi-overview") return NextResponse.json(await loadRfiOverview(body));
     if (body.action === "gtus-detail") return NextResponse.json(await gtusDetail(body));
     if (body.action === "gtus-save") return NextResponse.json(await gtusSave(body, actor));

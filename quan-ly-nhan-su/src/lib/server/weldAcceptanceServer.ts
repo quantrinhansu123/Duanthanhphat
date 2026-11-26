@@ -1635,3 +1635,20 @@ export async function splitAcceptance(body: Record<string, unknown>, actor: stri
     return { id, so_moi_chuyen: 0, saved: results.length, remaining: 0, canh_bao: `Đã chốt hình học. Bấm «Mở hoặc tạo phiếu siêu âm» để thử lại. ${reason}` };
   }
 }
+
+/** Bảng tổng hợp nghiệm thu mối hàn: mọi phiếu hình học / siêu âm của dự án kèm mối, tuyến, lý trình (RFI tổng không phát). */
+export async function rfiSummaryTable(body: Record<string, unknown>) {
+  const project = qualityUuid(body.du_an_id);
+  const tickets = await fetchAll<{ id: string; loai: string; so_phieu: string; ngay_moi: string; ngay_nghiem_thu: string | null }>((a, b) =>
+    db().from("phieu_nt_tach").select("id,loai,so_phieu,ngay_moi,ngay_nghiem_thu").eq("du_an_id", project)
+      .order("ngay_moi").order("so_phieu").order("id").range(a, b));
+  const welds = await chunkedPages<{ phieu_id: string; moi_han_id: string; ma_lich_su: string }>(tickets.map((t) => t.id), (ids, a, b) =>
+    db().from("phieu_nt_tach_moi").select("phieu_id,moi_han_id,ma_lich_su").in("phieu_id", ids).order("phieu_id").order("moi_han_id").range(a, b));
+  const points = await chunked<{ lich_su_moi_han_id: string; ma_diem: string | null; ly_trinh: string | null }>(
+    [...new Set(welds.map((w) => w.moi_han_id))], (part) => db().from("toa_do").select("lich_su_moi_han_id,ma_diem,ly_trinh").in("lich_su_moi_han_id", part));
+  const where = new Map(points.map((p) => [p.lich_su_moi_han_id, p]));
+  return {
+    tickets,
+    welds: welds.map((w) => ({ ...w, ma_diem: where.get(w.moi_han_id)?.ma_diem ?? null, ly_trinh: where.get(w.moi_han_id)?.ly_trinh ?? null })),
+  };
+}
