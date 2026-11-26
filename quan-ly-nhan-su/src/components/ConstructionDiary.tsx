@@ -343,8 +343,10 @@ export default function ConstructionDiaryForm() {
 Nội dung thiết bị (2.2) và mục 3 đã sửa tay trong các ngày này sẽ bị ghi đè. Tiếp tục?`)) return;
     setBusy(true);
     let ok = 0, fail = 0;
-    for (const [i, day] of days.entries()) {
-      setStatus(`Đang tự điền ${i + 1}/${days.length}: ${day.split("-").reverse().join("/")}…`);
+    let done = 0, cursor = 0;
+    // Chạy song song 6 ngày một lúc (trước đây tuần tự từng ngày nên rất chậm).
+    const worker = async () => { while (cursor < days.length) {
+      const day = days[cursor++];
       try {
         const [r, defaults] = await Promise.all([loadDiary(projectId, day), loadDefaults(projectId, day, includeHh)]);
         const base = r.saved ? r.diary : { ...r.diary, ...defaults.values };
@@ -354,7 +356,10 @@ Nội dung thiết bị (2.2) và mục 3 đã sửa tay trong các ngày này s
         await saveDiary(projectId, day, next);
         ok += 1;
       } catch { fail += 1; }
-    }
+      done += 1;
+      setStatus(`Đang tự điền ${done}/${days.length}…`);
+    } };
+    await Promise.all(Array.from({ length: Math.min(6, days.length) }, worker));
     reloadSaved();
     setReloadDiary((n) => n + 1);
     setStatus(`Đã tự điền và lưu ${ok}/${days.length} ngày${fail ? `, ${fail} ngày lỗi (thử lại)` : ""}.`);

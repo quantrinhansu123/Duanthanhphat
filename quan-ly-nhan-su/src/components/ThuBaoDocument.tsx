@@ -78,7 +78,7 @@ const SHARED = {
   tvgsChucVu: "Tư vấn giám sát trưởng",
   tvgsTen: "Trần Văn Thanh",
   chtChucVu: "Chỉ huy trưởng",
-  chtTen: "Nguyễn Tất Đạt",
+  chtTen: "Nguyễn Minh Đức",
 };
 
 /** Mặc định cột Kỹ sư phụ trách — chức danh + tên, mỗi dòng một. */
