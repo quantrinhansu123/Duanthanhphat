@@ -408,7 +408,7 @@ export default function CwrInputParams({ en = false }: { en?: boolean }) {
               className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800 hover:bg-slate-50">
               {en ? `Print sheet ${section}` : `In sheet ${section}`}
             </button>
-            <button type="button" onClick={() => setPrintPages(["A", "B", "C", "D"].map(pageFor))}
+            <button type="button" onClick={() => setPrintPages(SECTIONS.map((s) => pageFor(s.id)))}
               className="h-9 rounded-lg bg-[#0047AB] px-3 text-xs font-semibold text-white hover:bg-[#00388a]">
               {en ? "Print all input sheets" : "In tất cả sheet đầu vào"}
             </button>
