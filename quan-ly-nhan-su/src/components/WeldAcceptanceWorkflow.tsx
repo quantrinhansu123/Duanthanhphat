@@ -14,6 +14,7 @@ import { rfiScope, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weld
 import SplitWeldAcceptance, { type SplitKind } from "@/components/SplitWeldAcceptance";
 import WeldAcceptanceDocument, { type DocKind } from "@/components/WeldAcceptanceDocument";
 import WeldAcceptancePrintPack from "@/components/WeldAcceptancePrintPack";
+import WeldAcceptanceBatchPrint from "@/components/WeldAcceptanceBatchPrint";
 import RfiIssuedListDocument from "@/components/RfiIssuedListDocument";
 import RfiSummaryTableDocument from "@/components/RfiSummaryTableDocument";
 import ThuBaoDocument from "@/components/ThuBaoDocument";
@@ -136,6 +137,7 @@ export default function WeldAcceptanceWorkflow() {
   const [editRfiId, setEditRfiId] = useState<string | null>(null);
   const [issuedList, setIssuedList] = useState<{ rfis: RfiSummary[]; unassigned: RfiCandidate[] } | null>(null);
   const [printPack, setPrintPack] = useState<RecordSet | null>(null);
+  const [printBatch, setPrintBatch] = useState<RecordSet[] | null>(null);
   const consumeEditRfi = useCallback(() => setEditRfiId(null), []);
 
   useEffect(() => {
@@ -201,7 +203,7 @@ export default function WeldAcceptanceWorkflow() {
           <div className="mb-4">
             {/* Phiếu được phát trong tab RFI; hai tab chuyên môn dùng để duyệt và xem hồ sơ. */}
             <SplitWeldAcceptance key={projectId + mode} project={projectId} projectName={projectName}
-              kind={mode} stage="duyet" onPrintRecord={setPrintPack}
+              kind={mode} stage="duyet" onPrintRecord={setPrintPack} onPrintRecords={setPrintBatch}
               onGoToUltrasound={mode === "hinh-hoc" ? goToUltrasound : undefined}
               initialTicketId={mode === "sieu-am" ? openUltrasoundId : null} onInitialTicketOpened={clearOpenUltrasound} />
           </div>
@@ -234,6 +236,10 @@ export default function WeldAcceptanceWorkflow() {
         <RfiIssuedListDocument projectName={projectName} {...issuedList} onClose={() => setIssuedList(null)} />,
         document.body,
       )}
+      {printBatch?.length ? createPortal(
+        <WeldAcceptanceBatchPrint records={printBatch} onClose={() => setPrintBatch(null)} />,
+        document.body,
+      ) : null}
       {printPack && createPortal(
         <WeldAcceptancePrintPack record={printPack} onClose={() => setPrintPack(null)} />,
         document.body,
