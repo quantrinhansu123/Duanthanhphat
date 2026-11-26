@@ -14,6 +14,7 @@ import {
   formatChainage,
   getPlacementSpan,
   countReleasedLwrSegments,
+  placedShortRailsPerRow,
   isLongRailReleased,
   renumberLongRails,
   longRailsOverlap,
@@ -217,6 +218,10 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
   );
   /** Đếm khớp nút Đạt / chip Giải toả bên dưới (đoạn LWR + thanh Đạt chưa gắn LWR). */
   const releasedLongRailCount = countReleasedLwrSegments(layout.rows, layout.longRails);
+  const placedPerRow = placedShortRailsPerRow(layout.rows, layout.longRails);
+  const placedLwrCount = placedPerRow.reduce((a, b) => a + b, 0);
+  // Mối hàn cần giải toả = số đoạn − 1 trên mỗi dải ray (16 đoạn / 4 dải → 12).
+  const weldsToReleaseCount = placedPerRow.reduce((a, n) => a + Math.max(0, n - 1), 0);
   const sideOpen = detailOpen || Boolean(selectedJoint);
 
   const reloadSymbols = useCallback(async () => {
@@ -426,17 +431,6 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
   );
 
   const jointWithWelds = useMemo(() => joints.filter((j) => j.welds.length > 0).length, [joints]);
-  /** Số mối hàn nhật ký nằm trong các đoạn LWR đã giải toả. */
-  const releasedWeldCount = useMemo(() => {
-    const spans = layout.longRails
-      .filter((rail) => isLongRailReleased(layout.rows, rail))
-      .map((rail) => ({ rowKey: rail.rowKey, span: getPlacementSpan(layout.rows, rail) ?? visibleLongRailSpan(layout.rows, rail) }))
-      .filter((item): item is { rowKey: string; span: NonNullable<typeof item.span> } => item.span !== null);
-    return joints.reduce(
-      (sum, joint) => (spans.some((item) => item.rowKey === joint.rowKey && joint.metres >= item.span.startMetres && joint.metres <= item.span.endMetres) ? sum + joint.welds.length : sum),
-      0,
-    );
-  }, [joints, layout.longRails, layout.rows]);
 
   function commit(next: TrackLayout): boolean {
     if (!ready) {
@@ -925,17 +919,17 @@ function ProjectTrackDashboard({ initialCellId = DEFAULT_CELL_ID, project, proje
   return (
     <div className="w-full min-w-0 max-w-none space-y-3">
       <TrackHeader
-        subtitle={`Tuyến ${((extent.endMetres - extent.startMetres) / 1000).toFixed(2)} km · ${layout.rows.length} dải ray · ${cells.length} thanh ray · ${releasedLongRailCount} đoạn LWR đã giải toả`}
+        subtitle={`Tuyến ${((extent.endMetres - extent.startMetres) / 1000).toFixed(2)} km · ${layout.rows.length} dải ray · ${cells.length} thanh ray · ${placedLwrCount} đoạn LWR đã đặt`}
         rangeLabel={`Km ${formatChainage(extent.startMetres)} – ${formatChainage(extent.endMetres)}`}
         stats={[
           { label: "Tổng chiều dài ray", value: `${(totalLength / 1000).toFixed(2)} km`, tone: "text-slate-900" },
           {
-            label: "Đoạn LWR đã giải toả",
-            value: String(releasedLongRailCount),
+            label: "Đoạn LWR đã đặt",
+            value: String(placedLwrCount),
             tone: "text-teal-700",
           },
-          { label: "Mối hàn (nhật ký)", value: String(weldCount), tone: "text-blue-700" },
-          { label: "Số mối hàn giải toả", value: `${releasedWeldCount} mối`, tone: "text-emerald-700" },
+          { label: "Số mối hàn cần giải toả", value: String(weldsToReleaseCount), tone: "text-blue-700" },
+          { label: "Số mối hàn đã giải toả", value: `${jointWithWelds} mối`, tone: "text-emerald-700" },
         ]}
       />
       <div

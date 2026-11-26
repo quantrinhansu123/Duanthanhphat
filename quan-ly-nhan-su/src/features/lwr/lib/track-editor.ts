@@ -411,6 +411,20 @@ export function countReleasedLwrSegments(rows: RailRow[], longRails: LongRail[])
   return releasedRails + bareReleased;
 }
 
+/** Số thanh ngắn (chip xám) đang nằm trong đoạn LWR, theo từng dải ray — khớp sơ đồ. */
+export function placedShortRailsPerRow(rows: RailRow[], longRails: LongRail[]): number[] {
+  return rows.map((row) => {
+    const items = longRails
+      .filter((rail) => rail.rowKey === railRowKey(row))
+      .flatMap((rail) => { const span = getPlacementSpan(rows, rail) ?? visibleLongRailSpan(rows, rail); return span ? [{ rail, span }] : []; });
+    return row.cells.filter((cell) => {
+      const from = parseChainage(cell.from);
+      const to = parseChainage(cell.to);
+      return from !== null && to !== null && coveringLongRail(items, from, to) !== undefined;
+    }).length;
+  });
+}
+
 export function trackExtent(rows: RailRow[]): { startMetres: number; endMetres: number } {
   const starts = rows.flatMap((row) => {
     const value = row.cells[0] ? parseChainage(row.cells[0].from) : null;
