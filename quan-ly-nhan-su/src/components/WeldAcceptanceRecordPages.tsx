@@ -103,9 +103,18 @@ export const acceptancePrintCss = `
 .acceptance-page .ed-field { outline: none; cursor: text; border-bottom: 1px dashed #60a5fa; background: rgba(96, 165, 250, 0.10); min-width: 1.5em; }
 .acceptance-page .ed-field:focus { background: #fef9c3; }
 .acceptance-page .ed-field:empty::before { content: attr(data-ph); }
+/* Ô họ tên và chức vụ: một đường chấm dài để viết tay. Không kèm chuỗi dấu chấm, kẻo thành hai đường. */
+.acceptance-page .ed-field.ed-write-ten,
+.acceptance-page .ed-field.ed-write-cv { display: inline-block; vertical-align: baseline; background: none; }
+.acceptance-page .ed-field.ed-write-ten,
+.acceptance-page .ed-field.ed-write-cv { min-width: 26ch; }
+.acceptance-page .ed-field.ed-write-ten:empty::before,
+.acceptance-page .ed-field.ed-write-cv:empty::before { content: none; }
 .acceptance-page .ed-block { display: block; white-space: pre-wrap; min-height: 1.4em; }
 @media print {
   .acceptance-page .ed-field { border-bottom: 0; background: none; }
+  .acceptance-page .ed-field.ed-write-ten,
+  .acceptance-page .ed-field.ed-write-cv { border-bottom: 1px dotted #000 !important; background: none !important; }
   body > *:not(.acceptance-print-root) { display: none !important; }
   .acceptance-print-root { position: static !important; overflow: visible !important; padding: 0 !important; background: white !important; }
   .acceptance-print-root .weld-doc-actions, .acceptance-print-root .weld-print-pack-actions { display: none !important; }
@@ -153,14 +162,16 @@ function pycNumber(rfi: Record<string, unknown>) {
 /** Chỉnh sửa trực tiếp trên bản xem trước: `draft` là các ô đã sửa chưa lưu, `set` ghi một ô. Không truyền = chỉ xem/in. */
 export type RecordEditor = { draft: Record<string, string>; set: (key: string, value: string) => void };
 /** Một ô điền được: có `editor` thì gõ trực tiếp (lưu khi rời ô), không thì chỉ in giá trị / dấu chấm. */
-export function Ed({ k, v, editor, ph = "……………………", block, date, time }: { k: string; v: string; editor?: RecordEditor; ph?: string; block?: boolean; date?: boolean; time?: boolean }) {
+export function Ed({ k, v, editor, ph = "……………………", block, date, time, write }: { k: string; v: string; editor?: RecordEditor; ph?: string; block?: boolean; date?: boolean; time?: boolean; write?: "ten" | "cv" }) {
   // date: giá trị lưu dạng ISO yyyy-mm-dd, hiển thị và gõ dạng dd/mm/yyyy.
   // time: giá trị lưu dạng HH:MM, hiển thị và gõ dạng 8h00 (nhận cả 8:00, 8h).
   const shown = date && v ? v.slice(0, 10).split("-").reverse().join("/")
     : time && v.includes(":") ? `${Number(v.split(":")[0])}h${v.split(":")[1] ?? "00"}` : v;
-  if (!editor) return <>{shown || ph}</>;
+  const dots = write ? "" : ph;
+  if (!editor) return <>{shown || (write === "ten" ? "………………………………" : write === "cv" ? "…………………………" : ph)}</>;
+  const fieldClass = ["ed-field", block ? "ed-block" : "", write === "ten" ? "ed-write-ten" : "", write === "cv" ? "ed-write-cv" : ""].filter(Boolean).join(" ");
   return (
-    <span className={block ? "ed-field ed-block" : "ed-field"} contentEditable suppressContentEditableWarning spellCheck={false} data-ph={ph}
+    <span className={fieldClass} contentEditable suppressContentEditableWarning spellCheck={false} data-ph={dots}
       onKeyDown={(e) => { if (e.key === "Enter" && !block) { e.preventDefault(); e.currentTarget.blur(); } }}
       onBlur={(e) => {
         const raw = (e.currentTarget.innerText ?? "").replace(/ /g, " ").trim();
@@ -637,7 +648,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, kinds, editor,
             <div className="party" key={role}>
               <p><b>{role}:</b> {company}</p>
               {[1, 2].map((i) => (
-                <p className="person" key={i}>Ông: <Ed k={`bbntcv_nguoi_${party}_${i}_ten`} v={signer(`nguoi_${party}_${i}_ten`)} editor={editor} /> &nbsp; Chức vụ: <Ed k={`bbntcv_nguoi_${party}_${i}_cv`} v={signer(`nguoi_${party}_${i}_cv`)} editor={editor} /></p>
+                <p className="person" key={i}>Ông: <Ed k={`bbntcv_nguoi_${party}_${i}_ten`} v={signer(`nguoi_${party}_${i}_ten`)} editor={editor} write="ten" /> &nbsp; Chức vụ: <Ed k={`bbntcv_nguoi_${party}_${i}_cv`} v={signer(`nguoi_${party}_${i}_cv`)} editor={editor} write="cv" /></p>
               ))}
             </div>
           ))}
@@ -701,7 +712,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, kinds, editor,
     const personBlock = (code: string) => (
       <>
         {[1, 2].map((i) => (
-          <p className="person" key={i}>Ông: <Ed k={`nguoi_${code}_${i}_ten`} v={who(code, i, "ten")} editor={editor} /> &nbsp; Chức vụ: <Ed k={`nguoi_${code}_${i}_cv`} v={who(code, i, "cv")} editor={editor} /></p>
+          <p className="person" key={i}>Ông: <Ed k={`nguoi_${code}_${i}_ten`} v={who(code, i, "ten")} editor={editor} write="ten" /> &nbsp; Chức vụ: <Ed k={`nguoi_${code}_${i}_cv`} v={who(code, i, "cv")} editor={editor} write="cv" /></p>
         ))}
       </>
     );

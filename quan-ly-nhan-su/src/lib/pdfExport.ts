@@ -10,7 +10,7 @@ export async function exportPagesPdf(pages: HTMLElement[], filename: string, clo
   if (!pages.length) return;
   const host = document.createElement("div");
   host.style.cssText = "position:fixed;left:-10000px;top:0;width:794px;background:#fff";
-  host.innerHTML = "<style>.ed-field,.diary-sig-input{border-bottom:0!important;background:none!important}.diary-sig-input::placeholder{color:transparent}.sig-empty{display:none!important}</style>";
+  host.innerHTML = "<style>.ed-field,.diary-sig-input{border-bottom:0!important;background:none!important}.ed-field.ed-write-ten,.ed-field.ed-write-cv{border-bottom:1px dotted #000!important;background:none!important}.ed-field.ed-write-ten::before,.ed-field.ed-write-cv::before{content:none!important}.diary-sig-input::placeholder{color:transparent}.sig-empty{display:none!important}</style>";
   const clones = pages.map((p) => {
     const c = p.cloneNode(true) as HTMLElement;
     c.style.cssText += `;margin:0;${cloneStyle}`;
