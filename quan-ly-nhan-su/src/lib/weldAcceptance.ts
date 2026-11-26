@@ -183,6 +183,8 @@ export const DEFAULT_SIGNERS: Record<string, string> = {
   nguoi_ntp_1_ten: "Trần Công Tiến",
   bbntcv_nguoi_ntc_1_ten: "Nguyễn Minh Đức",
   bbntcv_nguoi_ntp_1_ten: "Trần Công Tiến",
+  bbntcv_nguoi_ntc_1_cv: "Cán bộ kỹ thuật",
+  bbntcv_nguoi_ntp_1_cv: "Chỉ huy trưởng",
 };
 const SIGNER_STORAGE = "weld-acceptance-signers";
 const BB_SEQ_KEY = "bbntcv-print-seq";
