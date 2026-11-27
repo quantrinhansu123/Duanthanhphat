@@ -34,9 +34,19 @@ import { notifyOilReport } from "@/lib/notificationsDb";
 import Pager, { usePaged } from "@/components/Pager";
 import MachineRunReportPrint, {
   buildMachineRunReportRows,
-  engineOilWarnings,
   type MachineRunReportRow,
 } from "@/components/MachineRunReportPrint";
+import {
+  buildCodeToMachineIdMap,
+  computeEngineOilStatuses,
+  ENGINE_OIL_AVG_WELDS_PER_DAY,
+  ENGINE_OIL_BASE_HOURS,
+  ENGINE_OIL_HOURS_PER_DAY,
+  ENGINE_OIL_MAX_HOURS,
+  ENGINE_OIL_RED_ALERT_WELDS,
+  resolveEngineOilMachineId,
+  type EngineOilMachineStatus,
+} from "@/lib/engineOilAlerts";
 
 const WELD_METHOD_OPTIONS = ["FBW", "ATW"] as const;
 
@@ -224,6 +234,23 @@ export default function MachineAssignmentList() {
     }
     return count;
   }, [filtered, fuelByScheduleKey]);
+  const codeToMachineId = useMemo(() => buildCodeToMachineIdMap(machines), [machines]);
+
+  const engineOilStatuses = useMemo(
+    () => computeEngineOilStatuses(list, fuelRows, codeToMachineId),
+    [list, fuelRows, codeToMachineId],
+  );
+
+  const engineOilStatusByMachine = useMemo(
+    () => new Map(engineOilStatuses.map((item) => [item.machineId, item])),
+    [engineOilStatuses],
+  );
+
+  const activeEngineOilWarnings = useMemo(
+    () => engineOilStatuses.filter((item) => item.level !== "ok"),
+    [engineOilStatuses],
+  );
+
   const hasFilter = Boolean(
     dateFrom || dateTo || machineId || projectId || personId || weldMethod || weldType,
   );
@@ -405,6 +432,27 @@ export default function MachineAssignmentList() {
     setFuelModal("edit");
   }
 
+  function openEngineOilRefill(status: EngineOilMachineStatus) {
+    const today = new Date().toLocaleDateString("sv-SE");
+    const matchedMachine = machines.find(
+      (item) =>
+        item.id === status.machineId ||
+        item.code.trim().toLowerCase() === status.machineCode.trim().toLowerCase(),
+    );
+    const targetMachineId = matchedMachine?.id || status.machineId;
+    const latestSchedule = list.find(
+      (row) =>
+        resolveEngineOilMachineId(row.machineId, row.machineCode, codeToMachineId) ===
+        status.machineId,
+    );
+    setOilHistoryMachine(null);
+    setFuelDateEditable(true);
+    setFuelForm(emptyOilForm(today, targetMachineId, latestSchedule?.personInChargeId || ""));
+    setFuelEditId(null);
+    setFuelFormError("");
+    setFuelModal("add");
+  }
+
   const addedTotalByMachine = useMemo(() => {
     const map = new Map<string, number>();
     for (const r of fuelRows) if (isLiterUnit(r.unit)) map.set(r.machineId, (map.get(r.machineId) ?? 0) + r.added);
@@ -428,32 +476,57 @@ export default function MachineAssignmentList() {
       return;
     }
     const refill = fuelDateEditable;
-    if (refill ? !Number.isFinite(fuelForm.added) || fuelForm.added <= 0 : !Number.isFinite(fuelForm.actual) || fuelForm.actual < 0) {
-      setFuelFormError(refill ? "Số dầu máy phát đã đổ phải lớn hơn 0." : "Số thực tế không hợp lệ.");
+    const addedVal = Number(fuelForm.added) || 0;
+    const engineOilVal = Number(fuelForm.engineOilLiters) || 0;
+    const generatorHoursVal = Number(fuelForm.generatorHours) || 0;
+    if (refill) {
+      if (!Number.isFinite(fuelForm.added) || addedVal < 0 || !Number.isFinite(fuelForm.engineOilLiters) || engineOilVal < 0) {
+        setFuelFormError("Số lít dầu không hợp lệ.");
+        return;
+      }
+      if (addedVal <= 0 && engineOilVal <= 0) {
+        setFuelFormError("Nhập số lít dầu máy phát hoặc dầu động cơ lớn hơn 0.");
+        return;
+      }
+    } else if (!Number.isFinite(fuelForm.actual) || fuelForm.actual < 0) {
+      setFuelFormError("Số thực tế không hợp lệ.");
       return;
     }
-    if (refill && fuelForm.engineOilLiters > 0 && !(fuelForm.generatorHours > 0)) {
+    if (refill && engineOilVal > 0 && !(generatorHoursVal > 0)) {
       setFuelFormError("Đổ dầu động cơ thì nhập số giờ báo trên máy phát.");
       return;
     }
     setFuelSaving(true);
     setFuelFormError("");
     try {
-      // Lần đổ mới trong cùng ngày thì cộng dồn; sửa một lần đổ thì ghi đè đúng số đó.
+      // Lần đổ mới trong cùng ngày thì cộng dồn dầu máy phát; giữ dầu động cơ cũ nếu chỉ đổ thêm dầu máy phát.
       const prior = fuelRows.find((r) => r.id === fuelEditId)
         ?? fuelRows.find((r) => r.machineId === fuelForm.machineId && r.date === fuelForm.date);
       const addedTotal = refill && !fuelEditId
-        ? Math.round(((prior?.added ?? 0) + (Number(fuelForm.added) || 0)) * 100) / 100
-        : Number(fuelForm.added) || 0;
+        ? Math.round(((prior?.added ?? 0) + addedVal) * 100) / 100
+        : addedVal;
+      const mergedEngineOilLiters = refill
+        ? (engineOilVal > 0 ? engineOilVal : (!fuelEditId ? (prior?.engineOilLiters ?? 0) : 0))
+        : (prior?.engineOilLiters ?? 0);
+      const mergedGeneratorHours = refill
+        ? (engineOilVal > 0 ? generatorHoursVal : (!fuelEditId ? (prior?.generatorHours ?? 0) : 0))
+        : (prior?.generatorHours ?? 0);
       const savedId = await upsertDailyFuel(
-        refill ? { ...fuelForm, added: addedTotal } : fuelForm,
+        refill
+          ? {
+              ...fuelForm,
+              added: addedTotal,
+              engineOilLiters: mergedEngineOilLiters,
+              generatorHours: mergedGeneratorHours,
+            }
+          : fuelForm,
         fuelEditId ?? undefined,
         refill ? "refill" : "report",
       );
       setFuelModal(null);
       const machine = machines.find((item) => item.id === fuelForm.machineId);
       const actual = fuelLevelAfter(fuelForm);
-      const added = Number(fuelForm.added) || 0;
+      const added = addedVal;
       // Chỉ thay đúng dòng vừa lưu (cùng máy+ngày bị upsert đè thì bỏ dòng cũ), không tải lại cả danh sách.
       const savedRow: DailyFuelRow = {
         id: savedId,
@@ -465,8 +538,8 @@ export default function MachineAssignmentList() {
         remaining: refill ? (prior?.liters ?? 0) : actual,
         added: refill ? addedTotal : (prior?.added ?? 0),
         hasActual: refill ? (prior?.hasActual ?? false) : true,
-        engineOilLiters: refill ? (fuelForm.engineOilLiters > 0 ? fuelForm.engineOilLiters : null) : (prior?.engineOilLiters ?? null),
-        generatorHours: refill ? (fuelForm.generatorHours > 0 ? fuelForm.generatorHours : null) : (prior?.generatorHours ?? null),
+        engineOilLiters: mergedEngineOilLiters > 0 ? mergedEngineOilLiters : null,
+        generatorHours: mergedEngineOilLiters > 0 && mergedGeneratorHours > 0 ? mergedGeneratorHours : null,
         unit: fuelForm.unit.trim() || "lít",
         personId: fuelForm.personId.trim(),
         personName: personnel.find((p) => p.id === fuelForm.personId)?.label || "—",
@@ -482,13 +555,30 @@ export default function MachineAssignmentList() {
         quota != null && !refill && isLiterUnit(fuelForm.unit) && actual < quota;
       if (machine && !fuelEditId) {
         const level = `${actual.toLocaleString("vi-VN")} ${fuelForm.unit}`;
+        const refillParts: string[] = [];
+        if (added > 0) {
+          refillParts.push(`đổ thêm ${added.toLocaleString("vi-VN")} ${fuelForm.unit} dầu máy phát (tổng ${addedTotal.toLocaleString("vi-VN")})`);
+        }
+        if (engineOilVal > 0) {
+          refillParts.push(`đổ ${engineOilVal.toLocaleString("vi-VN")} lít dầu động cơ (${generatorHoursVal.toLocaleString("vi-VN")} giờ máy phát)`);
+        }
         const message = belowQuota && quota != null
           ? `${machine.code} ngày ${formatFuelDate(fuelForm.date)}: thực tế ${level} dưới định mức ${quota.toLocaleString("vi-VN")} lít.`
-          : `${machine.code} ngày ${formatFuelDate(fuelForm.date)}: ${refill ? `đã đổ thêm ${added.toLocaleString("vi-VN")} ${fuelForm.unit} (tổng đã đổ ${addedTotal.toLocaleString("vi-VN")})` : `thực tế ${level}`}.`;
+          : `${machine.code} ngày ${formatFuelDate(fuelForm.date)}: ${refill ? refillParts.join(" · ") : `thực tế ${level}`}.`;
         await notifyOilReport(message, { belowQuota });
-        showToast(`Đã ghi báo cáo mức dầu — đã báo Tiến · ${machine.code}`);
+        showToast(
+          engineOilVal > 0
+            ? `Đã ghi nhận đổ dầu động cơ — đã xóa cảnh báo · ${machine.code}`
+            : `Đã ghi báo cáo mức dầu — đã báo Tiến · ${machine.code}`,
+        );
       } else {
-        showToast(fuelEditId ? "Đã cập nhật báo cáo mức dầu" : "Đã ghi báo cáo mức dầu");
+        showToast(
+          fuelEditId
+            ? "Đã cập nhật báo cáo mức dầu"
+            : engineOilVal > 0
+              ? "Đã ghi nhận đổ dầu động cơ — đã xóa cảnh báo"
+              : "Đã ghi báo cáo mức dầu",
+        );
       }
     } catch (error) {
       setFuelFormError(error instanceof Error ? error.message : "Không lưu được báo cáo mức dầu");
@@ -498,17 +588,21 @@ export default function MachineAssignmentList() {
   }
 
   async function deleteHistoryEntry(row: DailyFuelRow) {
-    const onlyRefill = row.hasActual && row.added > 0;
+    const onlyRefill = row.hasActual && (row.added > 0 || (row.engineOilLiters ?? 0) > 0);
     const code = row.machineCode || machines.find((m) => m.id === row.machineId)?.code || "";
     const text = onlyRefill
-      ? `Xóa lần đổ ${row.added.toLocaleString("vi-VN")} ${row.unit} của ${code} ngày ${formatFuelDate(row.date)}? (giữ báo cáo Thực tế)`
+      ? `Xóa lần cấp dầu (${row.added > 0 ? `${row.added.toLocaleString("vi-VN")} ${row.unit} máy phát` : ""}${row.added > 0 && row.engineOilLiters ? " + " : ""}${row.engineOilLiters ? `${row.engineOilLiters.toLocaleString("vi-VN")} lít động cơ` : ""}) của ${code} ngày ${formatFuelDate(row.date)}? (giữ báo cáo Thực tế)`
       : `Xóa dòng cấp phát/báo cáo của ${code} ngày ${formatFuelDate(row.date)}?`;
     if (!window.confirm(text)) return;
     setFuelSaving(true);
     try {
       if (onlyRefill) {
         await clearDailyFuelRefill(row.id);
-        setFuelRows((rows) => rows.map((r) => (r.id === row.id ? { ...r, added: 0 } : r)));
+        setFuelRows((rows) =>
+          rows.map((r) =>
+            r.id === row.id ? { ...r, added: 0, engineOilLiters: null, generatorHours: null } : r,
+          ),
+        );
       } else {
         await deleteDailyFuel(row.id);
         setFuelRows((rows) => rows.filter((r) => r.id !== row.id));
@@ -730,6 +824,145 @@ export default function MachineAssignmentList() {
         </div>
       )}
 
+      {activeEngineOilWarnings.length > 0 && (
+        <section
+          role="alert"
+          aria-atomic="true"
+          aria-label="Cảnh báo đổ dầu động cơ"
+          className={`mb-3 rounded-none border border-l-4 bg-white p-3.5 ${
+            activeEngineOilWarnings.some((item) => item.level === "danger")
+              ? "border-rose-300 border-l-rose-600"
+              : "border-amber-300 border-l-amber-600"
+          }`}
+        >
+          <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-200 pb-2.5">
+            <div className="flex items-start gap-2.5">
+              <span
+                className={`mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-none ${
+                  activeEngineOilWarnings.some((item) => item.level === "danger")
+                    ? "bg-rose-600 text-white"
+                    : "bg-amber-600 text-white"
+                }`}
+              >
+                <Warning size={14} weight="bold" aria-hidden />
+              </span>
+              <div>
+                <h3
+                  className={`text-xs font-bold uppercase tracking-wider sm:text-sm ${
+                    activeEngineOilWarnings.some((item) => item.level === "danger")
+                      ? "text-rose-800"
+                      : "text-amber-900"
+                  }`}
+                >
+                  Cảnh báo đổ dầu động cơ · {activeEngineOilWarnings.length} máy
+                </h3>
+                <p className="mt-0.5 font-mono text-[11px] text-slate-600">
+                  Định mức {ENGINE_OIL_BASE_HOURS}h · Tối đa (+10%) {ENGINE_OIL_MAX_HOURS}h ·{" "}
+                  {ENGINE_OIL_AVG_WELDS_PER_DAY} mối/{ENGINE_OIL_HOURS_PER_DAY}h ·{" "}
+                  Cảnh báo đỏ: <strong className="text-rose-700">{ENGINE_OIL_RED_ALERT_WELDS} mối</strong> hoặc{" "}
+                  <strong className="text-rose-700">{ENGINE_OIL_MAX_HOURS}h</strong> · Đổ dầu xong tự tắt cảnh báo
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-2.5 grid grid-cols-1 gap-2 lg:grid-cols-2">
+            {activeEngineOilWarnings.map((item) => {
+              const isDanger = item.level === "danger";
+              const barWidth = Math.min(100, Math.max(6, item.progressPercent));
+              return (
+                <div
+                  key={item.machineId}
+                  className={`flex flex-wrap items-center justify-between gap-3 rounded-none border border-l-2 bg-slate-50/70 px-3 py-2.5 ${
+                    isDanger
+                      ? "border-rose-200 border-l-rose-600"
+                      : "border-amber-200 border-l-amber-500"
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`inline-flex items-center whitespace-nowrap rounded-none px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-white ${
+                          isDanger ? "bg-rose-600" : "bg-amber-600"
+                        }`}
+                      >
+                        {isDanger ? "CẢNH BÁO ĐỎ" : "SẮP ĐẾN HẠN"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const found = machines.find(
+                            (m) =>
+                              m.id === item.machineId ||
+                              m.code.trim().toLowerCase() === item.machineCode.trim().toLowerCase(),
+                          );
+                          if (found) setMachineId(found.id);
+                        }}
+                        className="truncate font-mono text-xs font-bold text-[#0047AB] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0047AB] sm:text-sm"
+                        title="Lọc bảng theo máy này"
+                      >
+                        {item.machineCode}
+                      </button>
+                      {item.machineLabel !== item.machineCode && (
+                        <span className="truncate text-xs text-slate-600">
+                          {item.machineLabel}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-[11px] tabular-nums text-slate-700">
+                      <span>
+                        Mối:{" "}
+                        <strong className={item.reachedRedWelds ? "text-rose-700" : "text-slate-900"}>
+                          {item.welds.toLocaleString("vi-VN")}/{ENGINE_OIL_RED_ALERT_WELDS}
+                        </strong>
+                      </span>
+                      <span className="text-slate-300">|</span>
+                      <span>
+                        Giờ:{" "}
+                        <strong
+                          className={
+                            item.reachedMaxHours
+                              ? "text-rose-700"
+                              : item.reachedBaseHours
+                                ? "text-amber-700"
+                                : "text-slate-900"
+                          }
+                        >
+                          {item.hours.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}/{ENGINE_OIL_MAX_HOURS}h
+                        </strong>
+                      </span>
+                      <span className="text-slate-300">|</span>
+                      <span className="font-sans text-slate-500">
+                        {item.since
+                          ? `Đổ gần nhất: ${formatScheduleDate(item.since)}`
+                          : "Chưa ghi nhận đổ dầu ĐC"}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 w-full rounded-none bg-slate-200">
+                      <div
+                        className={`h-full rounded-none ${isDanger ? "bg-rose-600" : "bg-amber-500"}`}
+                        style={{ width: `${barWidth}%` }}
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openEngineOilRefill(item)}
+                    className={`h-9 shrink-0 cursor-pointer rounded-none border px-3 text-xs font-bold uppercase tracking-wide text-white transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${
+                      isDanger
+                        ? "border-rose-700 bg-rose-600 hover:bg-rose-700 focus-visible:outline-rose-600"
+                        : "border-amber-700 bg-amber-600 hover:bg-amber-700 focus-visible:outline-amber-600"
+                    }`}
+                  >
+                    Đổ dầu động cơ
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       <div className="mb-3 grid grid-cols-2 gap-2 xl:grid-cols-4">
         <div className="rounded-lg border border-slate-200/80 bg-white px-3 py-2 shadow-xs">
           <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Lượt chạy</div>
@@ -793,6 +1026,12 @@ export default function MachineAssignmentList() {
               {paged.rows.map((row) => {
                 const oil = fuelByScheduleKey.get(fuelKey(row.date, row.machineId));
                 const quota = machines.find((item) => item.id === row.machineId)?.oilQuota ?? null;
+                const resolvedMachineId = resolveEngineOilMachineId(
+                  row.machineId,
+                  row.machineCode,
+                  codeToMachineId,
+                );
+                const engineOilStatus = engineOilStatusByMachine.get(resolvedMachineId);
                 const oilLow =
                   oil != null &&
                   oil.hasActual &&
@@ -811,6 +1050,25 @@ export default function MachineAssignmentList() {
                     <div className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-slate-500" title={row.machineName}>
                       {row.machineName}
                     </div>
+                    {engineOilStatus && engineOilStatus.level !== "ok" && (
+                      <button
+                        type="button"
+                        onClick={() => openEngineOilRefill(engineOilStatus)}
+                        title={engineOilStatus.reason}
+                        className={`mt-1 inline-flex max-w-full cursor-pointer items-center gap-1 rounded-none border border-l-2 px-1.5 py-0.5 font-mono text-[10px] font-bold leading-tight transition-colors ${
+                          engineOilStatus.level === "danger"
+                            ? "border-rose-300 border-l-rose-600 bg-rose-50 text-rose-800 hover:bg-rose-100"
+                            : "border-amber-300 border-l-amber-600 bg-amber-50 text-amber-900 hover:bg-amber-100"
+                        }`}
+                      >
+                        <Warning size={11} weight="bold" aria-hidden className="shrink-0" />
+                        <span className="truncate whitespace-nowrap">
+                          {engineOilStatus.level === "danger" ? "ĐỔ DẦU ĐC" : "SẮP THAY DẦU"} ·{" "}
+                          {engineOilStatus.welds.toLocaleString("vi-VN")}m /{" "}
+                          {engineOilStatus.hours.toLocaleString("vi-VN", { maximumFractionDigits: 0 })}h
+                        </span>
+                      </button>
+                    )}
                   </td>
                   <td className="px-2 py-3 text-center font-mono font-semibold text-slate-800">
                     {row.weldMethod || "—"}
@@ -1216,15 +1474,15 @@ export default function MachineAssignmentList() {
               <div className="grid grid-cols-2 gap-3">
                 {fuelDateEditable && (
                 <label className="block text-xs font-semibold text-slate-700">
-                  Dầu máy phát (lít) *
+                  Dầu máy phát (lít)
                   <input
                     type="number"
                     min="0"
                     step="0.1"
-                    value={fuelForm.added}
+                    value={fuelForm.added || ""}
                     onChange={(e) => setFuelForm((f) => ({ ...f, added: Number(e.target.value) }))}
                     className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 px-3 font-mono text-sm outline-hidden focus:border-[#0047AB]"
-                    placeholder="0"
+                    placeholder="Bỏ trống nếu chỉ đổ dầu ĐC"
                   />
                 </label>
                 )}
@@ -1273,7 +1531,7 @@ export default function MachineAssignmentList() {
                       />
                     </label>
                     <p className="col-span-2 text-[11px] text-slate-500">
-                      Dầu động cơ: ghi số lít và số giờ trên máy phát. Thay dầu sau mỗi 275 giờ hoạt động.
+                      Dầu động cơ: ghi số lít và số giờ trên máy phát. Định mức {ENGINE_OIL_BASE_HOURS} giờ (tối đa {ENGINE_OIL_MAX_HOURS} giờ, cảnh báo đỏ ở {ENGINE_OIL_RED_ALERT_WELDS} mối). Sau khi lưu sẽ tự loại bỏ cảnh báo.
                     </p>
                   </>
                 )}
@@ -1504,7 +1762,13 @@ export default function MachineAssignmentList() {
         dateTo={printTo}
         projectLabel={printProjectLabel}
         autoPrint={printAuto}
-        oilWarnings={engineOilWarnings(list, fuelRows, new Map(machines.map((item) => [item.code.trim().toLowerCase(), item.id]))).filter((item) => printRows.some((row) => row.machineId === item.machineId))}
+        oilWarnings={activeEngineOilWarnings.filter((item) =>
+          printRows.some(
+            (row) =>
+              resolveEngineOilMachineId(row.machineId, row.machineCode, codeToMachineId) ===
+              item.machineId,
+          ),
+        )}
         onClose={() => {
           setPrintOpen(false);
           setPrintAuto(false);

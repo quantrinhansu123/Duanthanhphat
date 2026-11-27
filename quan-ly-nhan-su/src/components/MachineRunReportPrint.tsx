@@ -5,11 +5,27 @@ import { createPortal } from "react-dom";
 import { Eye, Printer, X } from "@/components/icons";
 import { formatScheduleDate, type MachineRunSchedule } from "@/data/machineAssignments";
 import type { DailyFuelRow } from "@/lib/dailyFuelDb";
-
-/** Mốc thay dầu động cơ. Cảnh báo khi số giờ hoạt động đạt 90% mốc này. */
-export const ENGINE_OIL_INTERVAL_HOURS = 275;
-export const ENGINE_OIL_WARN_HOURS = ENGINE_OIL_INTERVAL_HOURS * 0.9;
+import {
+  ENGINE_OIL_BASE_HOURS,
+  ENGINE_OIL_INTERVAL_HOURS,
+  ENGINE_OIL_MAX_HOURS,
+  ENGINE_OIL_RED_ALERT_WELDS,
+  ENGINE_OIL_WARN_HOURS,
+  engineOilWarnings,
+  formatEngineOilWarningLine,
+  type EngineOilWarning,
+} from "@/lib/engineOilAlerts";
 import PrintFrame from "@/components/PrintFrame";
+
+export {
+  ENGINE_OIL_BASE_HOURS,
+  ENGINE_OIL_INTERVAL_HOURS,
+  ENGINE_OIL_MAX_HOURS,
+  ENGINE_OIL_RED_ALERT_WELDS,
+  ENGINE_OIL_WARN_HOURS,
+  engineOilWarnings,
+  type EngineOilWarning,
+};
 
 export type MachineRunReportRow = MachineRunSchedule & {
   oilLiters?: number | null;
@@ -34,14 +50,6 @@ type MachineRunReportPrintProps = {
   oilWarnings?: EngineOilWarning[];
   onClose: () => void;
   onPrint: () => void;
-};
-
-export type EngineOilWarning = {
-  machineId: string;
-  machineLabel: string;
-  hours: number;
-  since: string | null;
-  overdue: boolean;
 };
 
 function fuelKey(date: string, machineId: string) {
@@ -175,49 +183,6 @@ export function buildMachineRunReportRows(
   }
 
   return rows.filter(hasReportActivity);
-}
-
-/** Giờ hoạt động kể từ lần đổ dầu động cơ gần nhất. Cảnh báo từ 90% của 275 giờ. */
-export function engineOilWarnings(
-  schedules: MachineRunSchedule[],
-  fuelRows: DailyFuelRow[],
-  codeToMachineId: Map<string, string> = new Map(),
-): EngineOilWarning[] {
-  const hoursByMachine = new Map<string, Map<string, number>>();
-  const labels = new Map<string, string>();
-  for (const row of schedules) {
-    const id = resolveFuelMachineId(row.machineId, row.machineCode, codeToMachineId);
-    const byDate = hoursByMachine.get(id) ?? new Map<string, number>();
-    byDate.set(row.date, (byDate.get(row.date) ?? 0) + (row.operatingHours || 0));
-    hoursByMachine.set(id, byDate);
-    if (!labels.has(id)) labels.set(id, row.machineName || row.machineCode);
-  }
-  const lastFill = new Map<string, string>();
-  for (const oil of fuelRows) {
-    if (!((oil.engineOilLiters ?? 0) > 0)) continue;
-    const id = resolveFuelMachineId(oil.machineId, oil.machineCode, codeToMachineId);
-    const prev = lastFill.get(id);
-    if (!prev || oil.date > prev) lastFill.set(id, oil.date);
-    if (!labels.has(id)) labels.set(id, oil.machineName || oil.machineCode);
-  }
-  const warnings: EngineOilWarning[] = [];
-  for (const [id, byDate] of hoursByMachine) {
-    const since = lastFill.get(id) ?? null;
-    let hours = 0;
-    for (const [date, value] of byDate) {
-      if (since && date <= since) continue;
-      hours += value;
-    }
-    if (hours < ENGINE_OIL_WARN_HOURS) continue;
-    warnings.push({
-      machineId: id,
-      machineLabel: labels.get(id) || id,
-      hours,
-      since,
-      overdue: hours >= ENGINE_OIL_INTERVAL_HOURS,
-    });
-  }
-  return warnings.sort((a, b) => b.hours - a.hours);
 }
 
 function rangeLabel(from: string, to: string) {
@@ -373,13 +338,14 @@ export default function MachineRunReportPrint({
             </div>
 
             {oilWarnings.length > 0 && (
-              <div className="oil-warn" role="status">
+              <div
+                className={oilWarnings.some((item) => item.level === "danger") ? "oil-warn oil-warn-danger" : "oil-warn"}
+                role="status"
+              >
                 {oilWarnings.map((item) => (
-                  <p key={item.machineId}>
-                    {item.machineLabel}: đã chạy {item.hours.toLocaleString("vi-VN", { maximumFractionDigits: 1 })} giờ
-                    {item.since ? ` kể từ lần đổ dầu động cơ ${formatScheduleDate(item.since)}` : " và chưa có lần đổ dầu động cơ"}.
-                    {" "}Mốc thay dầu {ENGINE_OIL_INTERVAL_HOURS} giờ
-                    {item.overdue ? " — đã đến hạn thay dầu động cơ." : " — sắp đến hạn (từ 90%)."}
+                  <p key={item.machineId} className={item.level === "danger" ? "oil-warn-line-danger" : undefined}>
+                    <strong>{item.level === "danger" ? "[CẢNH BÁO ĐỎ] " : "[SẮP ĐẾN HẠN] "}</strong>
+                    {formatEngineOilWarningLine(item)}
                   </p>
                 ))}
               </div>
@@ -498,7 +464,11 @@ const PRINT_CSS = `
   margin: 0 0 10px; padding: 6px 8px; border: 1px solid #f59e0b; background: #fffbeb;
   color: #92400e; font-size: 11px; text-align: left;
 }
+#machine-run-report-print .oil-warn.oil-warn-danger {
+  border-color: #dc2626; background: #fef2f2; color: #991b1b;
+}
 #machine-run-report-print .oil-warn p { margin: 2px 0; }
+#machine-run-report-print .oil-warn .oil-warn-line-danger { color: #b91c1c; font-weight: 600; }
 #machine-run-report-print .meta-line {
   display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: center; font-size: 10.5px;
 }

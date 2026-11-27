@@ -215,13 +215,19 @@ export async function upsertDailyFuel(values: DailyFuelFormValues, id?: string, 
   return String(data.id);
 }
 
-/** Xóa riêng số đã đổ của một dòng (giữ báo cáo Thực tế). */
+/** Xóa riêng số đã đổ (dầu máy phát & dầu động cơ) của một dòng, giữ báo cáo Thực tế. */
 export async function clearDailyFuelRefill(id: string) {
   if (!isSupabaseConfigured()) {
     throw new Error("Chưa cấu hình Supabase");
   }
   const supabase = createClient();
-  const { error } = await supabase.from("cap_dau_hang_ngay").update({ do_them: 0 }).eq("id", id);
+  let { error } = await supabase
+    .from("cap_dau_hang_ngay")
+    .update({ do_them: 0, dau_dong_co: null, gio_may_phat: null })
+    .eq("id", id);
+  if (error && isMissingEngineColumn(formatSupabaseError(error))) {
+    ({ error } = await supabase.from("cap_dau_hang_ngay").update({ do_them: 0 }).eq("id", id));
+  }
   if (error) throw new Error(formatSupabaseError(error));
 }
 
