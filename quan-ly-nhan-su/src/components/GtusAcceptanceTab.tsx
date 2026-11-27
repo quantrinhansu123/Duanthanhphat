@@ -35,6 +35,9 @@ export default function GtusAcceptanceTab({ projectId, projectName }: { projectI
   const [manage, setManage] = useState<RfiSummary | null>(null);
   const [print, setPrint] = useState<RfiSummary | null>(null);
   const [pendingDlg, setPendingDlg] = useState<RfiSummary | null>(null);
+  const [pick, setPick] = useState<string[]>([]);
+  const [bulkPendingOpen, setBulkPendingOpen] = useState(false);
+  const [batchPrint, setBatchPrint] = useState<RfiSummary[] | null>(null);
 
   const load = useCallback(async () => {
     setError("");
@@ -63,7 +66,8 @@ export default function GtusAcceptanceTab({ projectId, projectName }: { projectI
   const waitingRows = rows.filter((r) => !isRecord(r));
   const recordRows = rows.filter(isRecord);
   const shown = sub === "cho" ? waitingRows : recordRows;
-  const cols = sub === "cho" ? 11 : 9;
+  const cols = sub === "cho" ? 12 : 10;
+  const pickedRows = shown.filter((x) => pick.includes(x.rfi.id));
 
   const subButton = (id: "cho" | "ho-so", label: string, count: number) => (
     <button key={id} type="button" aria-pressed={sub === id} onClick={() => setSub(id)}
@@ -81,7 +85,11 @@ export default function GtusAcceptanceTab({ projectId, projectName }: { projectI
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-base font-bold text-slate-900">{sub === "cho" ? "Phiếu giải toả ứng suất chờ nghiệm thu" : "Hồ sơ nghiệm thu giải toả ứng suất"}</h2>
-        <button type="button" onClick={() => { setLoading(true); void load(); }} className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold hover:bg-slate-50">Tải lại</button>
+        <span className="flex flex-wrap gap-2">
+          {sub === "ho-so" && <button type="button" disabled={!pickedRows.length} onClick={() => setBatchPrint(pickedRows.map((x) => x.rfi))} className="h-9 rounded-lg border border-[#0047AB] bg-[#0047AB] px-3 text-sm font-semibold text-white hover:bg-[#00388A] disabled:opacity-50">In BBNT hàng loạt ({pickedRows.length})</button>}
+          {sub === "cho" && <button type="button" disabled={!pickedRows.some((x) => !rfiPendingInfo(x.rfi.thong_tin))} onClick={() => setBulkPendingOpen(true)} className="h-9 rounded-lg border border-orange-300 bg-orange-50 px-3 text-sm font-semibold text-orange-900 hover:bg-orange-100 disabled:opacity-50">Pending hàng loạt ({pickedRows.length})</button>}
+          <button type="button" onClick={() => { setLoading(true); void load(); }} className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold hover:bg-slate-50">Tải lại</button>
+        </span>
       </div>
       <p className="text-xs text-slate-600">
         {sub === "cho"
@@ -94,6 +102,7 @@ export default function GtusAcceptanceTab({ projectId, projectName }: { projectI
         <table className="w-full whitespace-nowrap text-xs sm:text-sm">
           <thead className="bg-slate-50">
             <tr>
+              <th className="w-8 p-2"><input type="checkbox" aria-label="Chọn tất cả phiếu" checked={shown.length > 0 && shown.every((x) => pick.includes(x.rfi.id))} onChange={(e) => setPick(e.target.checked ? shown.map((x) => x.rfi.id) : [])} /></th>
               <th className="w-10 p-2 text-left">STT</th>
               <th className="p-2 text-left">Số phiếu</th>
               <th className="p-2 text-left">Ngày phát</th>
@@ -119,6 +128,7 @@ export default function GtusAcceptanceTab({ projectId, projectName }: { projectI
                 const status = pend ? "Pending" : sub === "ho-so" ? (fail ? "Có thanh không đạt" : "Đã nghiệm thu") : items.some((t) => t.ket_qua) ? "Đang nghiệm thu" : "Chờ nghiệm thu";
                 return (
                   <tr key={rfi.id}>
+                    <td className="p-2"><input type="checkbox" aria-label={`Chọn phiếu ${rfi.so_phieu}`} checked={pick.includes(rfi.id)} onChange={(e) => setPick(e.target.checked ? [...pick, rfi.id] : pick.filter((id) => id !== rfi.id))} /></td>
                     <td className="p-2">{i + 1}</td>
                     <td className="p-2 font-medium">{gtusTicketNo(rfi.so_phieu)}</td>
                     <td className="p-2">{dmy(rfi.ngay_moi)}</td>
@@ -159,7 +169,29 @@ export default function GtusAcceptanceTab({ projectId, projectName }: { projectI
           onClose={() => setPendingDlg(null)}
         />
       )}
+      {bulkPendingOpen && (
+        <PendingDialog
+          mode="hoan"
+          soPhieu={`${pickedRows.filter((x) => !rfiPendingInfo(x.rfi.thong_tin)).length} phiếu đã chọn`}
+          onSubmit={async (input) => {
+            for (const x of pickedRows.filter((y) => !rfiPendingInfo(y.rfi.thong_tin))) await setRfiPending({ id: x.rfi.id, kind: "rfi", hanh_dong: "hoan", ...input });
+            setPick([]);
+            await load();
+          }}
+          onClose={() => setBulkPendingOpen(false)}
+        />
+      )}
       {manage && <GtusRfiDialog rfiId={manage.id} onClose={() => { setManage(null); void load(); }} onPrint={() => setPrint(manage)} />}
+      {batchPrint && (
+        <GtusBbntPrintDialog
+          projectId={projectId}
+          projectName={projectName}
+          cellIds={[]}
+          batch={batchPrint.map((x) => ({ cellIds: String(x.thong_tin?.lwr_ids ?? "").split(",").filter(Boolean), pycSo: gtusTicketNo(x.so_phieu).replace(/^RFI-/i, "") }))}
+          onPrinted={() => setPick([])}
+          onClose={() => setBatchPrint(null)}
+        />
+      )}
       {print && (
         <GtusBbntPrintDialog
           projectId={projectId}

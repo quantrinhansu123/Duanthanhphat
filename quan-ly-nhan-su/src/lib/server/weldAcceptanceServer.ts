@@ -98,8 +98,8 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
       .select("id,so_phieu,loai").eq("du_an_id", projectId).eq("ngay_moi", date).order("so_phieu").range(a, b)),
     Promise.all([
       loadSplitDone(true),
-      fetchAll<{ moi_han_id: string }>((a, b) => db().from("phieu_nt_tach_moi")
-        .select("moi_han_id,phieu_nt_tach!inner(du_an_id)").eq("phieu_nt_tach.du_an_id", projectId)
+      fetchAll<{ moi_han_id: string; ket_qua?: string | null }>((a, b) => db().from("phieu_nt_tach_moi")
+        .select("moi_han_id,ket_qua,phieu_nt_tach!inner(du_an_id)").eq("phieu_nt_tach.du_an_id", projectId)
         .eq("loai", "sieu-am").eq("ngay_sieu_am_thuc_te", date).order("moi_han_id").order("phieu_id").range(a, b)),
     ]).catch(async (error: { code?: string; message?: string } | null) => {
       if (error?.code !== "42703" || !/nhat_ky_theo_ngay_sieu_am|ngay_sieu_am_thuc_te/.test(error.message ?? "")) throw error;
@@ -237,7 +237,11 @@ export async function loadDiaryDefaults(body: Record<string, unknown>) {
     nghiemThuHangNgay: [
       ...(includeGeometry ? geometry : []),
       ...acceptanceLines("sieu-am", legacyUltrasound, "Nghiệm thu mối hàn"),
-      diaryWorkText(select([...ultrasoundIds]), "accept", "Nghiệm thu mối hàn"),
+      ...["Đạt", "Không đạt"].map((result) => {
+        const ids = [...ultrasoundIds].filter((id) => (ultrasound.find((u) => u.moi_han_id === id)?.ket_qua ?? "Đạt") === result);
+        const text = diaryWorkText(select(ids), "accept", "Nghiệm thu mối hàn");
+        return text ? text.split(/\n(?=- )/).map((block) => `${block.replace(/\.\s*$/, "")}. Kết quả: ${result}.`).join("\n") : "";
+      }),
       ...stressRelease,
     ].filter(Boolean).join("\n"),
     // Bản chữ cũ (có hình học + «siêu âm») để nhật ký còn đúng dòng tự điền trước đây được cập nhật khi mở lại.

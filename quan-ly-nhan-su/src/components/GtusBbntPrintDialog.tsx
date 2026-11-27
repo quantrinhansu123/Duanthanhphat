@@ -16,13 +16,16 @@ type Loaded = { layout: TrackLayout; symbols: StructureSymbol[]; joints: RailJoi
  * In «Phụ lục nghiệm thu giải toả ứng suất» (BBNT - GTUS) theo một RFI GTUS:
  * nạp sơ đồ track map của dự án, chỉ lấy các thanh ray đã chọn trong RFI và in đúng đoạn Km của chúng.
  */
-export default function GtusBbntPrintDialog({ projectId, projectName, cellIds, pycSo, onClose }: {
+export default function GtusBbntPrintDialog({ projectId, projectName, cellIds, pycSo, batch, onPrinted, onClose }: {
   projectId: string;
   projectName: string;
   /** Mã các thanh ray (cell) đã chọn trong RFI. */
   cellIds: string[];
   /** Số phiếu yêu cầu (PYC) của RFI, in ở đầu phụ lục. */
   pycSo?: string;
+  /** In hàng loạt: mỗi phần tử một RFI GTUS (bỏ qua cellIds / pycSo ở trên). */
+  batch?: { cellIds: string[]; pycSo?: string }[];
+  onPrinted?: () => void;
   onClose: () => void;
 }) {
   const [data, setData] = useState<Loaded | null>(null);
@@ -64,12 +67,29 @@ export default function GtusBbntPrintDialog({ projectId, projectName, cellIds, p
       </div>
     );
   }
-  const spans = data.layout.rows.flatMap((row) => row.cells.filter((cell) => cellIds.includes(cell.id)).flatMap((cell) => {
-    const from = parseChainage(cell.from), to = parseChainage(cell.to);
-    return from !== null && to !== null && to > from ? [{ from, to }] : [];
-  }));
-  const start = spans.length ? Math.min(...spans.map((x) => x.from)) : undefined;
-  const end = spans.length ? Math.max(...spans.map((x) => x.to)) : undefined;
+  const rangeOf = (ids: string[]) => {
+    const spans = data.layout.rows.flatMap((row) => row.cells.filter((cell) => ids.includes(cell.id)).flatMap((cell) => {
+      const from = parseChainage(cell.from), to = parseChainage(cell.to);
+      return from !== null && to !== null && to > from ? [{ from, to }] : [];
+    }));
+    return spans.length ? { start: Math.min(...spans.map((x) => x.from)), end: Math.max(...spans.map((x) => x.to)) } : undefined;
+  };
+  if (batch) {
+    return (
+      <TrackPrint
+        layout={data.layout}
+        joints={data.joints}
+        symbols={data.symbols}
+        projectName={projectName}
+        batch={batch.map((item) => ({ ...item, range: rangeOf(item.cellIds) }))}
+        onPrinted={onPrinted}
+        onClose={onClose}
+      />
+    );
+  }
+  const range = rangeOf(cellIds);
+  const start = range?.start;
+  const end = range?.end;
   return (
     <TrackPrint
       layout={data.layout}

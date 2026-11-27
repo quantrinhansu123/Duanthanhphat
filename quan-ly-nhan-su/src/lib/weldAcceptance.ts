@@ -178,11 +178,17 @@ export const SIGNER_KEYS: string[] = SIGNER_PARTIES.flatMap(([party]) => [1, 2].
 export const BBNTCV_SIGNER_KEYS: string[] = SIGNER_PARTIES.flatMap(([party]) => [1, 2].flatMap((i) => [`bbntcv_nguoi_${party}_${i}_ten`, `bbntcv_nguoi_${party}_${i}_cv`]));
 const ALL_SIGNER_KEYS = [...SIGNER_KEYS, ...BBNTCV_SIGNER_KEYS];
 /** Người ký mặc định khi chưa có bản sửa / chưa nhớ. Sửa ở «Sửa thông tin in» trước khi in. */
+export const ACCEPTANCE_TECHNICIAN = { ten: "Nguyễn Minh Đức", chucVu: "Cán bộ kỹ thuật" } as const;
+export const SITE_COMMANDER = { ten: "Nguyễn Tất Đạt", chucVu: "Chỉ huy trưởng" } as const;
+
 export const DEFAULT_SIGNERS: Record<string, string> = {
-  nguoi_ntc_1_ten: "Nguyễn Minh Đức",
+  nguoi_ntc_1_ten: ACCEPTANCE_TECHNICIAN.ten,
+  nguoi_ntc_1_cv: ACCEPTANCE_TECHNICIAN.chucVu,
   nguoi_ntp_1_ten: "Trần Công Tiến",
-  bbntcv_nguoi_ntc_1_ten: "Nguyễn Minh Đức",
+  bbntcv_nguoi_ntc_1_ten: ACCEPTANCE_TECHNICIAN.ten,
   bbntcv_nguoi_ntp_1_ten: "Trần Công Tiến",
+  bbntcv_nguoi_ntc_1_cv: ACCEPTANCE_TECHNICIAN.chucVu,
+  bbntcv_nguoi_ntp_1_cv: "Chỉ huy trưởng",
 };
 const SIGNER_STORAGE = "weld-acceptance-signers";
 const BB_SEQ_KEY = "bbntcv-print-seq";
@@ -192,7 +198,12 @@ export function loadSignerDefaults(): Record<string, string> {
   try {
     if (typeof window === "undefined") return {};
     const raw = JSON.parse(window.localStorage.getItem(SIGNER_STORAGE) ?? "{}") as Record<string, unknown>;
-    return Object.fromEntries(ALL_SIGNER_KEYS.flatMap((k) => (typeof raw[k] === "string" && raw[k] ? [[k, raw[k] as string]] : [])));
+    return Object.fromEntries(ALL_SIGNER_KEYS.flatMap((key) => {
+      const value = raw[key];
+      if (typeof value !== "string" || !value) return [];
+      const isTechnicalSigner = key === "nguoi_ntc_1_ten" || key === "bbntcv_nguoi_ntc_1_ten";
+      return [[key, isTechnicalSigner && value.trim() === "Nguyễn Tất Đạt" ? DEFAULT_SIGNERS[key] : value]];
+    }));
   } catch { return {}; }
 }
 export function saveSignerDefaults(values: Record<string, string | undefined>) {

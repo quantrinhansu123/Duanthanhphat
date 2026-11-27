@@ -26,6 +26,7 @@ import {
   Trash,
   TrashSimple,
   UploadSimple,
+  Warning,
   X,
 } from "@/components/icons";
 import {
@@ -60,6 +61,17 @@ import StockSplitsEditor from "@/components/StockSplitsEditor";
 import { describeStockLocation, formatStockMoment, parseStockHistory, parseStockSplits, sumStockSplits } from "@/lib/stockSplits";
 import { equipmentLocationLabel, type EquipmentLocation, type LocationBundle, type LocationProject, type Warehouse } from "@/lib/warehouses";
 import Pager, { usePaged } from "@/components/Pager";
+import { formatScheduleDate } from "@/data/machineAssignments";
+import { loadDailyFuelRows } from "@/lib/dailyFuelDb";
+import {
+  buildCodeToMachineIdMap,
+  computeEngineOilStatuses,
+  ENGINE_OIL_BASE_HOURS,
+  ENGINE_OIL_MAX_HOURS,
+  ENGINE_OIL_RED_ALERT_WELDS,
+  type EngineOilMachineStatus,
+} from "@/lib/engineOilAlerts";
+import { loadMachineRunScheduleBundle } from "@/lib/machineRunSchedulesDb";
 
 
 // window.alert/confirm không đi qua bộ dịch DOM nên chọn ngôn ngữ ngay trong code.
@@ -2048,12 +2060,48 @@ export default function MachineList() {
   const [equipmentTab, setEquipmentTab] = useState<EquipmentGroup>("welding");
   const [locationBundle, setLocationBundle] = useState<LocationBundle>({ warehouses: [], projects: [], locations: [] });
   const [locationError, setLocationError] = useState("");
+  const [engineOilStatuses, setEngineOilStatuses] = useState<EngineOilMachineStatus[]>([]);
   useEffect(() => {
     let live = true;
     const refresh = () => { void loadEquipmentLocations().then((r) => { if (live) { setLocationBundle(r); setLocationError(""); } }).catch((e) => { if (live) setLocationError(e instanceof Error ? e.message : "Không tải được vị trí thiết bị."); }); };
     refresh(); window.addEventListener("focus", refresh);
     return () => { live = false; window.removeEventListener("focus", refresh); };
   }, [list]);
+  useEffect(() => {
+    let live = true;
+    const refreshOilAlerts = () => {
+      void Promise.all([loadMachineRunScheduleBundle(), loadDailyFuelRows()])
+        .then(([bundle, fuel]) => {
+          if (!live) return;
+          const codeMap = buildCodeToMachineIdMap(bundle.machines);
+          setEngineOilStatuses(computeEngineOilStatuses(bundle.schedules, fuel.rows, codeMap));
+        })
+        .catch(() => {
+          /* Không chặn hiển thị danh sách máy nếu chưa tải được dữ liệu dầu. */
+        });
+    };
+    refreshOilAlerts();
+    window.addEventListener("focus", refreshOilAlerts);
+    return () => {
+      live = false;
+      window.removeEventListener("focus", refreshOilAlerts);
+    };
+  }, []);
+  const engineOilAlertList = useMemo(
+    () => engineOilStatuses.filter((item) => item.level !== "ok"),
+    [engineOilStatuses],
+  );
+  const engineOilLookup = useMemo(() => {
+    const byId = new Map<string, EngineOilMachineStatus>();
+    const byCode = new Map<string, EngineOilMachineStatus>();
+    for (const item of engineOilStatuses) {
+      byId.set(item.machineId, item);
+      if (item.machineCode?.trim()) byCode.set(item.machineCode.trim().toLowerCase(), item);
+    }
+    return { byId, byCode };
+  }, [engineOilStatuses]);
+  const getEngineOilStatus = (m: Machine) =>
+    engineOilLookup.byId.get(m.id) ?? engineOilLookup.byCode.get(m.code.trim().toLowerCase());
   const locationLabel = (m: Machine) => {
     const location = locationBundle.locations.find((r) => r.id === m.id);
     return location ? equipmentLocationLabel(location) : m.location || "Đang tải vị trí…";
@@ -2268,6 +2316,82 @@ export default function MachineList() {
           Đang đồng bộ danh sách máy từ Supabase…
         </div>
       )}
+      {engineOilAlertList.length > 0 && (
+        <section
+          role="alert"
+          aria-atomic="true"
+          aria-label="Cảnh báo đổ dầu động cơ"
+          className={`mb-4 rounded-none border border-l-4 bg-white p-3.5 ${
+            engineOilAlertList.some((item) => item.level === "danger")
+              ? "border-rose-300 border-l-rose-600"
+              : "border-amber-300 border-l-amber-600"
+          }`}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
+            <div className="flex items-start gap-2.5">
+              <span
+                className={`mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-none ${
+                  engineOilAlertList.some((item) => item.level === "danger")
+                    ? "bg-rose-600 text-white"
+                    : "bg-amber-600 text-white"
+                }`}
+              >
+                <Warning size={14} weight="bold" aria-hidden />
+              </span>
+              <div>
+                <h2
+                  className={`text-xs font-bold uppercase tracking-wider sm:text-sm ${
+                    engineOilAlertList.some((item) => item.level === "danger")
+                      ? "text-rose-800"
+                      : "text-amber-900"
+                  }`}
+                >
+                  Cảnh báo đổ dầu động cơ · {engineOilAlertList.length} máy
+                </h2>
+                <p className="mt-0.5 font-mono text-[11px] text-slate-600">
+                  Định mức {ENGINE_OIL_BASE_HOURS}h · Tối đa {ENGINE_OIL_MAX_HOURS}h (+10%) · Cảnh báo đỏ:{" "}
+                  <strong className="text-rose-700">{ENGINE_OIL_RED_ALERT_WELDS} mối</strong> · Đổ dầu xong tự tắt cảnh báo
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/phan-cong-may?fuel=1"
+              className="inline-flex h-9 items-center rounded-none border border-rose-700 bg-rose-600 px-3.5 text-xs font-bold uppercase tracking-wide text-white hover:bg-rose-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600"
+            >
+              Ghi nhận đổ dầu
+            </Link>
+          </div>
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            {engineOilAlertList.map((item) => (
+              <Link
+                key={item.machineId}
+                href="/phan-cong-may"
+                className={`inline-flex items-center gap-2 whitespace-nowrap rounded-none border border-l-2 bg-slate-50 px-2.5 py-1.5 text-xs transition-colors hover:bg-slate-100 ${
+                  item.level === "danger"
+                    ? "border-rose-200 border-l-rose-600 text-rose-800"
+                    : "border-amber-200 border-l-amber-600 text-amber-900"
+                }`}
+              >
+                <span
+                  className={`rounded-none px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-white ${
+                    item.level === "danger" ? "bg-rose-600" : "bg-amber-600"
+                  }`}
+                >
+                  {item.level === "danger" ? "ĐỎ" : "SẮP HẠN"}
+                </span>
+                <span className="font-mono font-bold text-[#0047AB]">{item.machineCode}</span>
+                <span className="font-mono font-semibold tabular-nums">
+                  {item.welds.toLocaleString("vi-VN")}/{ENGINE_OIL_RED_ALERT_WELDS} mối
+                </span>
+                <span className="text-slate-300">|</span>
+                <span className="font-mono font-semibold tabular-nums">
+                  {item.hours.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}/{ENGINE_OIL_MAX_HOURS}h
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
       <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
           <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng số bộ thiết bị</div>
@@ -2374,6 +2498,7 @@ export default function MachineList() {
             const selected = activeId === m.id;
             const expanded = expandedId === m.id;
             const coverSrc = m.image || m.weldingUnit?.coverImage || imageForModel(m.model) || defaultMachineImage;
+            const oilStatus = getEngineOilStatus(m);
             return (
               <li
                 key={m.id}
@@ -2454,6 +2579,23 @@ export default function MachineList() {
                           Có thể phân công
                         </span>
                       )}
+                      {oilStatus && oilStatus.level !== "ok" && (
+                        <span
+                          title={oilStatus.reason}
+                          className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-none border border-l-2 px-2 py-0.5 font-mono text-[11px] font-bold ${
+                            oilStatus.level === "danger"
+                              ? "border-rose-300 border-l-rose-600 bg-rose-50 text-rose-800"
+                              : "border-amber-300 border-l-amber-600 bg-amber-50 text-amber-900"
+                          }`}
+                        >
+                          <Warning size={12} weight="bold" aria-hidden />
+                          {oilStatus.level === "danger"
+                            ? "CẢNH BÁO ĐỎ · ĐỔ DẦU ĐC"
+                            : "SẮP ĐẾN HẠN · DẦU ĐC"}{" "}
+                          [{oilStatus.welds.toLocaleString("vi-VN")}/{ENGINE_OIL_RED_ALERT_WELDS}m ·{" "}
+                          {oilStatus.hours.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}/{ENGINE_OIL_MAX_HOURS}h]
+                        </span>
+                      )}
                     </div>
                   </div>
                 </button>
@@ -2515,6 +2657,12 @@ export default function MachineList() {
                     ["Model xe", vehicle?.model || ""],
                     ["Tải trọng xe", String(vehicle?.specs?.weight || "")],
                     ["Định mức dầu", Number(m.specs?.oilQuota) > 0 ? `${Number(m.specs?.oilQuota).toLocaleString("vi-VN")} lít` : ""],
+                    [
+                      "Dầu động cơ (từ lần đổ gần nhất)",
+                      oilStatus
+                        ? `${oilStatus.welds.toLocaleString("vi-VN")}/${ENGINE_OIL_RED_ALERT_WELDS} mối · ${oilStatus.hours.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}/${ENGINE_OIL_MAX_HOURS} giờ${oilStatus.since ? ` (từ ${formatScheduleDate(oilStatus.since)})` : " (chưa ghi nhận đổ)"}`
+                        : "",
+                    ],
                   ];
                   const filledInfo = info.filter(([, value]) => Boolean(value));
                   return (

@@ -14,6 +14,8 @@ import { rfiScope, type RfiCandidate, type RfiCandidateFilter } from "@/lib/weld
 import SplitWeldAcceptance, { type SplitKind } from "@/components/SplitWeldAcceptance";
 import WeldAcceptanceDocument, { type DocKind } from "@/components/WeldAcceptanceDocument";
 import WeldAcceptancePrintPack from "@/components/WeldAcceptancePrintPack";
+import WeldAcceptanceBatchPrint from "@/components/WeldAcceptanceBatchPrint";
+import WeldAcceptanceRfiBatchPrint from "@/components/WeldAcceptanceRfiBatchPrint";
 import RfiIssuedListDocument from "@/components/RfiIssuedListDocument";
 import RfiSummaryTableDocument from "@/components/RfiSummaryTableDocument";
 import ThuBaoDocument from "@/components/ThuBaoDocument";
@@ -136,6 +138,7 @@ export default function WeldAcceptanceWorkflow() {
   const [editRfiId, setEditRfiId] = useState<string | null>(null);
   const [issuedList, setIssuedList] = useState<{ rfis: RfiSummary[]; unassigned: RfiCandidate[] } | null>(null);
   const [printPack, setPrintPack] = useState<RecordSet | null>(null);
+  const [printBatch, setPrintBatch] = useState<{ records: RecordSet[]; onPrinted?: () => void } | null>(null);
   const consumeEditRfi = useCallback(() => setEditRfiId(null), []);
 
   useEffect(() => {
@@ -201,7 +204,7 @@ export default function WeldAcceptanceWorkflow() {
           <div className="mb-4">
             {/* Phiếu được phát trong tab RFI; hai tab chuyên môn dùng để duyệt và xem hồ sơ. */}
             <SplitWeldAcceptance key={projectId + mode} project={projectId} projectName={projectName}
-              kind={mode} stage="duyet" onPrintRecord={setPrintPack}
+              kind={mode} stage="duyet" onPrintRecord={setPrintPack} onPrintRecords={(records, onPrinted) => setPrintBatch({ records, onPrinted })}
               onGoToUltrasound={mode === "hinh-hoc" ? goToUltrasound : undefined}
               initialTicketId={mode === "sieu-am" ? openUltrasoundId : null} onInitialTicketOpened={clearOpenUltrasound} />
           </div>
@@ -234,6 +237,10 @@ export default function WeldAcceptanceWorkflow() {
         <RfiIssuedListDocument projectName={projectName} {...issuedList} onClose={() => setIssuedList(null)} />,
         document.body,
       )}
+      {printBatch?.records.length ? createPortal(
+        <WeldAcceptanceBatchPrint records={printBatch.records} onClose={() => setPrintBatch(null)} onPrinted={printBatch.onPrinted} />,
+        document.body,
+      ) : null}
       {printPack && createPortal(
         <WeldAcceptancePrintPack record={printPack} onClose={() => setPrintPack(null)} />,
         document.body,
@@ -279,6 +286,8 @@ function RfiPanel({
   } | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [rfis, setRfis] = useState<RfiSummary[]>([]);
+  const [rfiPick, setRfiPick] = useState<string[]>([]);
+  const [rfiBatch, setRfiBatch] = useState<RfiSummary[] | null>(null);
   const [unassigned, setUnassigned] = useState<RfiCandidate[]>([]);
   const [soPhieu, setSoPhieu] = useState("");
   const [ngayMoi, setNgayMoi] = useState(today());
@@ -334,6 +343,17 @@ function RfiPanel({
   }, [rfiTab, loadList]);
   const scan = useBbntScan({ onDone: async (m) => { setOkMsg(m); await refresh(true); }, onError: setError });
 
+  async function bulkChildSigning(signed: boolean) {
+    setBusy(true); setError("");
+    try {
+      const todo = rfis.filter((r) => rfiPick.includes(r.id) && r.child_signing?.canSign && Boolean(r.child_signing.allSigned) !== signed);
+      for (const r of todo) await setRfiChildSign(r.id, signed ? "Đã ký" : "Chờ ký");
+      setOkMsg(`Đã ${signed ? "đánh dấu cả bộ đã ký" : "đặt lại chờ ký"} ${todo.length} phiếu.`);
+      setRfiPick([]);
+      await refresh(true);
+    } catch (e) { setError(message(e)); }
+    finally { setBusy(false); }
+  }
   async function toggleChildSigning(rfi: RfiSummary) {
     setBusy(true); setError("");
     try {
@@ -837,10 +857,17 @@ function RfiPanel({
         >
           Xem / In danh sách
         </button>
+        <button type="button" className={secondary} disabled={!rfiPick.length} onClick={() => setRfiBatch(rfis.filter((r) => rfiPick.includes(r.id)))}>In hàng loạt phiếu ({rfiPick.length})</button>
+        <button type="button" className={secondary} disabled={busy || !rfiPick.length} onClick={() => void bulkChildSigning(true)}>Đã ký cả bộ ({rfiPick.length})</button>
+        <button type="button" className={secondary} disabled={busy || !rfiPick.length} onClick={() => void bulkChildSigning(false)}>Đặt lại chờ ký</button>
         <button type="button" className={secondary} onClick={() => setSummaryOpen(true)} title="Bảng tổng hợp nghiệm thu mối hàn: phiếu HH và SA trong một bảng">
           Tổng hợp HH + SA
         </button>
         </span>
+        {rfiBatch && createPortal(
+          <WeldAcceptanceRfiBatchPrint rfis={rfiBatch} projectName={projectName} onClose={() => setRfiBatch(null)} onPrinted={() => setRfiPick([])} />,
+          document.body,
+        )}
         {summaryOpen && createPortal(
           <RfiSummaryTableDocument projectId={projectId} projectName={projects?.find((p) => p.id === projectId)?.name ?? ""} onClose={() => setSummaryOpen(false)} />,
           document.body,
@@ -855,6 +882,7 @@ function RfiPanel({
         <table className="w-full whitespace-nowrap text-xs sm:text-sm">
           <thead className="bg-slate-50">
             <tr>
+              <th className="p-2 w-8"><input type="checkbox" aria-label="Chọn tất cả phiếu" checked={rfis.length > 0 && rfis.every((r) => rfiPick.includes(r.id))} onChange={(e) => setRfiPick(e.target.checked ? rfis.map((r) => r.id) : [])} /></th>
               <th className="p-2 w-10 text-left">STT</th>
               <th className="p-2 text-left">Số phiếu</th>
               <th className="p-2 text-left">Ngày phát</th>
@@ -870,6 +898,7 @@ function RfiPanel({
           <tbody>
             {rfis.filter((r) => !pendingOnly || rfiPendingInfo(r.thong_tin)).map((r, i) => (
               <tr key={r.id} className="border-t border-slate-100">
+                <td className="p-2"><input type="checkbox" aria-label={`Chọn phiếu ${r.so_phieu}`} checked={rfiPick.includes(r.id)} onChange={(e) => setRfiPick(e.target.checked ? [...rfiPick, r.id] : rfiPick.filter((id) => id !== r.id))} /></td>
                 <td className="p-2">{i + 1}</td>
                 <td className="p-2 font-medium">{r.so_phieu}</td>
                 <td className="p-2">{r.ngay_moi}{r.thong_tin?.gio_bat_dau ? ` ${r.thong_tin.gio_bat_dau}` : ""}</td>
@@ -910,7 +939,7 @@ function RfiPanel({
               </tr>
             ))}
             {!rfis.length && (
-              <tr><td colSpan={10} className="p-3 text-slate-500">{listLoading ? "Đang tải danh sách phiếu…" : "Chưa có phiếu. Mở tab “Phát phiếu” để tạo phiếu mới."}</td></tr>
+              <tr><td colSpan={11} className="p-3 text-slate-500">{listLoading ? "Đang tải danh sách phiếu…" : "Chưa có phiếu. Mở tab “Phát phiếu” để tạo phiếu mới."}</td></tr>
             )}
           </tbody>
         </table>
