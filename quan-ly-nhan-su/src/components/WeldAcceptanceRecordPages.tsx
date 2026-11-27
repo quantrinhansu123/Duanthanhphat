@@ -599,9 +599,13 @@ export default function WeldAcceptanceRecordPages({ record, kind, kinds, editor,
       // Tháng / năm tự lấy hiện tại; ngày để trống cho người dùng tự chọn (chọn ở «Sửa thông tin in» thì in đủ ngày).
       const nowDate = new Date();
       const wp = acceptanceDate ? parts : { d: "……", m: String(nowDate.getMonth() + 1).padStart(2, "0"), y: String(nowDate.getFullYear()) };
-      // Số biên bản: FBW/01/BBNTCV, tăng 1 sau mỗi lần in. Đã sửa hoặc đã lưu thì giữ số đó.
+      
       const bbTech = pointRows.some((w) => w.cong_nghe_han === "ATW") ? "ATW" : "FBW";
-      const bbNo = bbntcvSo(t.so_bb ?? "", bbTech, bbSeq);
+      // Số BBNTCV lấy theo số PYC (020-SA → 020-FBW/BBNTCV) để khỏi phải đánh số liên tiếp; số cũ dạng FBW/23/BBNTCV tự đổi sang kiểu mới, số gõ tay khác vẫn giữ.
+      const pycText = saTicket ? (pycList([ultrasoundRfi]) || ticketNo) : ticketNo;
+      const pycDigits = /\d+/.exec(pycText)?.[0];
+      const savedNo = /^[A-Z]+\/\d+\/BBNTCV$/i.test((t.so_bb ?? "").trim()) ? "" : (t.so_bb ?? "");
+      const bbNo = savedNo.trim() || (pycDigits ? `${pycDigits.padStart(3, "0")}-${bbTech}/BBNTCV` : bbntcvSo("", bbTech, bbSeq));
       // Người ký BBNTCV: bản sửa / đã nhớ, chưa có thì Nguyễn Minh Đức (nhà thầu chính) và Trần Công Tiến (nhà thầu phụ).
       const signerDefaults = loadSignerDefaults();
       const signer = (key: string) => t[`bbntcv_${key}`]?.trim() || signerDefaults[`bbntcv_${key}`] || DEFAULT_SIGNERS[`bbntcv_${key}`] || DEFAULT_SIGNERS[key] || "";
