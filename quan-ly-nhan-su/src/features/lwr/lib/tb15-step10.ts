@@ -760,7 +760,7 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
     id: "lock",
     label: "Nhiệt độ khóa Te",
     display: inside
-      ? `ĐẠT — ${num(result.lockTemperature)} °C, khoảng ${num(result.lockMin)} đến ${num(result.lockMax)} °C`
+      ? `ĐẠT — ${num(te)} °C, khoảng ${num(result.lockMin)} đến ${num(result.lockMax)} °C`
       : `KHÔNG ĐẠT — tâm thử ${num(result.candidate)} °C nằm ngoài ${num(result.lockMin)} đến ${num(result.lockMax)} °C`,
     steps: [
       equation("Tmax − [ΔTu]", [
@@ -808,7 +808,7 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
         piece(num(result.riseLimit), "[ΔTu] đã chọn"),
         piece(") / 2 + "),
         piece(num(input.lockAdjustment), "Ô Hiệu chỉnh tâm khóa"),
-      ], inside ? `${num(result.lockTemperature)} °C` : `Không lấy ${num(result.candidate)} °C`),
+      ], inside ? `${num(te)} °C` : `Không lấy ${num(result.candidate)} °C`),
     ],
   });
 
