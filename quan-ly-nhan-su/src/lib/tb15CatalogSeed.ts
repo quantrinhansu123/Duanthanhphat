@@ -19,8 +19,8 @@ export const TB15_SEED: Partial<Record<Tb15CatalogKey, Tb15Row[]>> = {
     { id: "lr-75-9", loai_kg_m: 75, do_mon_mm: 9, f_mm2: 9504, w_dau_mm3: 390000, w_day_mm3: 480000, i_x_mm4: 38980000, i_y_mm4: 6610000, l0_cm: 740, i0_permil: 0.76, dp_kn: 188, k_an_toan: 1.3, e_mpa: 210000, alpha: 0.0000118, pj_kn: 400, khe_ho_mm: 20, ghi_chu: "" },
   ],
   mac_thep: [
-    { id: "mt-u71", mac_thep: "U71Mn / U71MnG", sigma_s_mpa: 457, ghi_chu: "3.2.4" },
-    { id: "mt-u75", mac_thep: "U75V / U75VG / U76CrRE / U77MnCr / U78CrV", sigma_s_mpa: 472, ghi_chu: "3.2.4" },
+    { id: "mt-u71", mac_thep: "U71Mn / U71MnG", sigma_s_mpa: 457, sigma_cho_phep_mpa: 351.54, ghi_chu: "3.2.4" },
+    { id: "mt-u75", mac_thep: "U75V / U75VG / U76CrRE / U77MnCr / U78CrV", sigma_s_mpa: 472, sigma_cho_phep_mpa: 363.08, ghi_chu: "3.2.4" },
   ],
   ket_cau_duong: [
     { id: "kc-iii", ten: "Có ba lát – tà vẹt BT loại III (1 667 thanh/km)", loai_duong: "co_ba_lat", so_thanh_km: 1667, r_khong_tai_hs: 7.5, r_khong_tai: 15, r_dau_may_hs: 11.6, r_co_tai: 23.2, r_toa_xe_hs: 7.5, r_toa_xe: 15, q_kn_m: 11.5, loai_ta_vet: "III", cu_ly_nut_a_m: 0.6, ghi_chu: "3.2.2-1" },

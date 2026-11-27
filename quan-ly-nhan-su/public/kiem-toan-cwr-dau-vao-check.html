@@ -32,11 +32,13 @@
       <tr><td>8</td><td>Mô men cản phụ kiện (B.0.4-2)</td><td>Menu <code>kiem-toan-cwr-mo-men-can</code>. Bảng <code>tb15_mo_men_can</code>: loại phụ kiện, H (N·cm/cm), μ, ψ, ghi chú. Seed: Loại đàn hồi II — H 22000, μ 2, ψ 3,0983. CRUD qua API <code>/api/tb15-catalogs/mo_men_can</code>.</td></tr>
       <tr><td>9</td><td>Loại ray & mặt cắt</td><td>Menu <code>kiem-toan-cwr-loai-ray</code>. Thêm K = 1,3, E = 210 000 MPa, α = 1,18×10⁻⁵, P_j = 400 kN, khe hở 18 mm (50/60 kg/m) hoặc 20 mm (75 kg/m). [σ] = σ_s / K hiện trên danh sách sau khi chọn mác thép, không lưu cột riêng.</td></tr>
       <tr><td>10</td><td>Kết cấu đường / tà vẹt</td><td>Menu <code>kiem-toan-cwr-ket-cau-duong</code>. Đầu bảng theo 3.2.2-1: Có tải gồm Dưới đầu máy và Dưới toa xe, cạnh Không tải. Dưới đầu máy, Dưới toa xe và Không tải đều tách 2 cột con: hệ số (x ≤ 2 mm) và cao nguyên (x &gt; 2 mm). Cần chạy <code>supabase/migration_20261125_ray_ta_vet.sql</code> để có số hệ số và số thanh/km.</td></tr>
+      <tr><td>11</td><td>Sơ đồ trục Y / x</td><td>Mỗi trục một cột đủ rộng cho «Trục n», «Y kN» và «x = … m». Không co theo tỷ lệ mét khi hai trục sát nhau (cặp 2,5 m). Khoảng &gt; 4 m được nới thêm tối đa 40 px. Số x trên hình vẫn là khoảng cách thật kể từ trục 1.</td></tr>
     </tbody>
   </table>
 
   <div class="hist">
     <h2>Lịch sử thay đổi</h2>
+    <p><span class="badge">mới</span> 2026-11-27 — Sơ đồ trục: mỗi trục một cột, nhãn lực và lý trình không còn đè lên nhau khi hai trục chỉ cách 2,5 m.</p>
     <p><span class="badge">mới</span> 2026-11-25 — Bảng tà vẹt chia đầu mục như 3.2.2-1: Có tải (Dưới đầu máy, Dưới toa xe) và Không tải. Dưới đầu máy có hai cột con: hệ số và cao nguyên.</p>
     <p><span class="badge">trước</span> 2026-11-25 — Bảng ray thêm K, E, α, P_j, khe hở; [σ] = σ_s / K. Bảng tà vẹt thêm số thanh/km, ba nhánh r của 3.2.2-1 và dòng phụ kiện sức cản nhỏ. Cần chạy <code>supabase/migration_20261125_ray_ta_vet.sql</code>.</p>
     <p><span class="badge">trước</span> 2026-11-25 — Độ cứng gối ray D khớp A.0.3-1/A.0.3-2: thêm sai số ±, độ cứng tĩnh gối min/max, loại đường; tách WJ-7A/7B/8A/8B-8C. Cần chạy <code>supabase/migration_20261125_do_cung_goi.sql</code>.</p>

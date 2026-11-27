@@ -9,6 +9,30 @@ export type IrregularInput = {
   dpKn: number; // kN — B.0.4-3
 };
 
+/** Các số tại bước sóng cho lực nén nhỏ nhất. Dùng để giải thích, không đổi Pmin. */
+export type IrregularWave = {
+  l: number;
+  phi: number;
+  eta: number;
+  tauI: number;
+  tauQm: number;
+  curve: number;
+  bend: number;
+  ballastPiece: number;
+  fastenerPiece: number;
+  denominator: number;
+  pressure: number;
+  f: number;
+  d: number;
+  i0: number;
+  modulusCm: number;
+  inertiaCm: number;
+  l0: number;
+  psi: number;
+  G: number;
+  K: number;
+};
+
 export type RiseMethod = "uniform" | "irregular" | "min";
 
 export type GroundCheckInput = {
@@ -20,13 +44,20 @@ export type GroundCheckInput = {
   steelModulus: number;
   expansion: number;
   yieldStress: number;
+  /** [σ] đã lưu theo mác thép. Có số này thì không chia σs / K. */
+  allowableStress?: number;
   safety: number;
   seatStiffness: number;
   spacing: number;
   resistance: number;
   lateralResistance: number;
   speed: number;
+  /** Hệ số A.0.2-1 khi v không vượt ngưỡng: điện 0,6 hoặc diesel 0,4, lấy từ danh mục. */
   speedCoefficient: number;
+  /** Ngưỡng km/h. Trên ngưỡng thì α lấy bằng highSpeedFactor. Mặc định 160. */
+  speedCapKmh?: number;
+  /** Hệ số vận tốc khi v vượt ngưỡng. Mặc định 1, lấy từ dòng danh mục v > ngưỡng. */
+  highSpeedFactor?: number;
   lateralFactor: number;
   radius: number;
   cantDeficiency: number;
@@ -88,6 +119,7 @@ function irregularRise(input: GroundCheckInput, p: IrregularInput) {
   const R = input.radius;
   let pMin = Infinity;
   let lMin = 0;
+  let wave: IrregularWave | null = null;
   for (let l = 100; l <= 1500; l += 5) {
     const phi = l < l0
       ? (2 * l0 * l) / (Math.PI * (l0 * l0 - l * l)) * Math.sin((Math.PI * l) / l0)
@@ -95,20 +127,27 @@ function irregularRise(input: GroundCheckInput, p: IrregularInput) {
         ? 1
         : (2 * l0 * l0) / (Math.PI * (l * l - l0 * l0)) * Math.sin((Math.PI * l0) / l);
     const eta = l < l0 ? (phi * l0) / l : l === l0 ? 1 : (phi * l) / l0;
-    const tauI = 8 * E * Iy * Math.PI ** 2 * (f / (l * l) + (d * i0) / l0 * phi);
-    const tauQM = ((l * l) / Math.PI ** 2) * (q0 - 2 * B * G * f ** Z + 2 * C * K * f ** (1 / N))
-      + (2 * psi * H) / Math.PI ** 2 * f ** (1 / mu) * l ** ((mu - 1) / mu);
+    const bend = f / (l * l) + (d * i0) / l0 * phi;
+    const tauI = 8 * E * Iy * Math.PI ** 2 * bend;
+    const ballastPiece = q0 - 2 * B * G * f ** Z + 2 * C * K * f ** (1 / N);
+    const fastenerPiece = (2 * psi * H) / Math.PI ** 2 * f ** (1 / mu) * l ** ((mu - 1) / mu);
+    const tauQM = ((l * l) / Math.PI ** 2) * ballastPiece + fastenerPiece;
     const curve = R === 0 ? 0 : (l * l) / (R * 100 * Math.PI ** 2);
-    const P = (tauI + tauQM) / (f + l * i0 * eta + curve);
+    const denominator = f + l * i0 * eta + curve;
+    const P = (tauI + tauQM) / denominator;
     if (P < pMin) {
       pMin = P;
       lMin = l;
+      wave = {
+        l, phi, eta, tauI, tauQm: tauQM, curve, bend, ballastPiece, fastenerPiece, denominator,
+        pressure: P, f, d, i0, modulusCm: E, inertiaCm: Iy, l0, psi, G, K,
+      };
     }
   }
   const dropN = p.dpKn * 1000;
   const deltaT = (pMin / 2 - dropN) / (input.steelModulus * input.expansion * input.area);
   const riseLimit = R === 0 || R >= 2000 ? deltaT - 8 : deltaT;
-  return { pMin, lMin, deltaT, riseLimit, psi, G, K };
+  return { pMin, lMin, deltaT, riseLimit, psi, G, K, wave };
 }
 
 /** β lệch tải. Cặp chuẩn H = 2.300 mm, S = 1.500 mm khớp β = 0,002·Δh của Excel (A.0.2-3). */
@@ -155,29 +194,40 @@ export function checkTb15Ground(input: GroundCheckInput) {
   const foundation = input.seatStiffness * 1000 / spacingMm;
   const k = (foundation / (4 * E * ix)) ** 0.25;
   const { beta: betaLoad, standard: betaStandard } = cantBeta(input.cantDeficiency, input.cgHeightMm, input.railCenterMm);
-  const alphaSpeed = input.speed > 160 ? 1 : input.speedCoefficient * input.speed / 100;
+  const speedCap = input.speedCapKmh ?? 160;
+  const highSpeedFactor = input.highSpeedFactor ?? 1;
+  const alphaSpeed = input.speed > speedCap ? highSpeedFactor : input.speedCoefficient * input.speed / 100;
   const sections = wheels.map((wheel) => {
     let settlementLoad = 0;
     let bendingLoad = 0;
-    for (const other of wheels) {
-      const z = k * Math.abs(wheel.position - other.position) * 1000;
-      const scaled = other.load * 1000 * Math.exp(-z);
-      settlementLoad += scaled * (Math.cos(z) + Math.sin(z));
-      bendingLoad += scaled * (Math.cos(z) - Math.sin(z));
-    }
+    const terms = wheels.map((other) => {
+      const distanceMm = Math.abs(wheel.position - other.position) * 1000;
+      const z = k * distanceMm;
+      const decay = Math.exp(-z);
+      const eta = decay * (Math.cos(z) + Math.sin(z));
+      const mu = decay * (Math.cos(z) - Math.sin(z));
+      const settlementTerm = other.load * 1000 * eta;
+      const momentTerm = other.load * 1000 * mu;
+      settlementLoad += settlementTerm;
+      bendingLoad += momentTerm;
+      return { position: other.position, load: other.load, distanceMm, z, eta, mu, settlementTerm, momentTerm };
+    });
     return {
       ...wheel,
       dynamicLoad: wheel.load * (1 + alphaSpeed),
       moment: bendingLoad / (4 * k),
       settlement: k * settlementLoad / (2 * foundation),
       seatLoad: k * spacingMm * settlementLoad / 2000,
+      terms,
+      settlementSum: settlementLoad,
+      momentSum: bendingLoad,
     };
   });
   const staticMoment = Math.max(...sections.map(({ moment }) => moment));
   const dynamicMoment = staticMoment * (1 + alphaSpeed + betaLoad);
   const headStress = dynamicMoment * input.lateralFactor / input.headModulus;
   const baseStress = dynamicMoment * input.lateralFactor / input.baseModulus;
-  const stressLimit = input.yieldStress / input.safety;
+  const stressLimit = Number.isFinite(input.allowableStress) ? input.allowableStress as number : input.yieldStress / input.safety;
   const dropStrength = (stressLimit - baseStress - input.additionalStress - input.brakingStress) / (E * expansion);
 
   // Appendix B uses N and cm. The critical force refers to both rails.
@@ -223,6 +273,7 @@ export function checkTb15Ground(input: GroundCheckInput) {
     sections, foundation, k, alphaSpeed, betaLoad, betaStandard, staticMoment, dynamicMoment, headStress, baseStress,
     stressLimit, dropStrength, halfWave: Math.sqrt(halfWaveSquared), criticalForce, allowedForce, riseLimit,
     riseUniform, riseIrregular, irregularHalfWave: irregular?.lMin ?? null, irregularMinP: irregular?.pMin ?? null,
+    irregularWave: irregular?.wave ?? null,
     riseMethod: method, dropGap, lockMin, lockMax, candidate, lockTemperature, drop, rise, gap, totalStress,
   };
 }

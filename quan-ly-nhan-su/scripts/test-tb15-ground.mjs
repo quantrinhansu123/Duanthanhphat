@@ -28,6 +28,7 @@ close(result.staticMoment, 16501915.416280324);
 close(result.sections[3].settlement, 0.8689435396051871);
 close(result.sections[3].seatLoad, 28.675136806971178);
 close(result.baseStress, 104.17875894116365);
+close(result.stressLimit, 472 / 1.3);
 close(result.dropStrength, 104.47867802088756);
 close(result.halfWave, 313.86228758362535);
 close(result.dropGap, 68.09140316539735);

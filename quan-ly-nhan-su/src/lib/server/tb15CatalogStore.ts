@@ -141,9 +141,22 @@ function withSeedMonthly(rows: Tb15Row[]): Tb15Row[] {
   });
 }
 
+/** [σ] đã lưu theo mác thép. Bản Supabase chưa có cột này thì gắn số từ seed, không chia lại σs / K. */
+function withStoredAllowable(rows: Tb15Row[]): Tb15Row[] {
+  const seed = TB15_SEED.mac_thep ?? [];
+  const byName = new Map(seed.map((row) => [String(row.mac_thep), row.sigma_cho_phep_mpa]));
+  const bySigma = new Map(seed.map((row) => [Number(row.sigma_s_mpa), row.sigma_cho_phep_mpa]));
+  return rows.map((row) => {
+    if (Number.isFinite(Number(row.sigma_cho_phep_mpa))) return row;
+    const stored = byName.get(String(row.mac_thep)) ?? bySigma.get(Number(row.sigma_s_mpa));
+    return stored == null ? row : { ...row, sigma_cho_phep_mpa: stored };
+  });
+}
+
 export async function listCatalog(key: Tb15CatalogKey): Promise<{ rows: Tb15Row[]; backend: "supabase" | "json" }> {
   const result = await listCatalogRaw(key);
   if (key === "khi_hau") return { ...result, rows: withSeedMonthly(result.rows) };
+  if (key === "mac_thep") return { ...result, rows: withStoredAllowable(result.rows) };
   return result;
 }
 

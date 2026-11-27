@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { MagnifyingGlass } from "@/components/icons";
+import { useAccess } from "@/lib/useAccess";
 import { TB15_SEED } from "@/lib/tb15CatalogSeed";
 import { TB15_CLIMATE_SEED } from "@/lib/tb15ClimateSeed.generated";
 import type { Tb15Row, Tb15Wheel } from "@/lib/tb15Catalogs";
@@ -15,7 +16,9 @@ const RAIL_MAX_OFFSET = 20;
 const PAGE = 40;
 
 type ClimateRow = {
+  id: string;
   stt: number;
+  ma_tram: string;
   ten_tram: string;
   tinh: string;
   t_kk_min: number;
@@ -26,6 +29,31 @@ type ClimateRow = {
 };
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
+const blankMonths = () => MONTHS.map(() => "");
+
+type ClimateDraft = {
+  id: string;
+  ma_tram: string;
+  ten_tram: string;
+  tinh: string;
+  min: string[];
+  max: string[];
+};
+
+function blankDraft(): ClimateDraft {
+  return { id: "", ma_tram: "", ten_tram: "", tinh: "", min: blankMonths(), max: blankMonths() };
+}
+
+function draftFrom(row: ClimateRow): ClimateDraft {
+  return {
+    id: row.id,
+    ma_tram: row.ma_tram,
+    ten_tram: row.ten_tram,
+    tinh: row.tinh,
+    min: MONTHS.map((month) => (row.t_min_thang?.[month - 1] == null ? "" : String(row.t_min_thang[month - 1]))),
+    max: MONTHS.map((month) => (row.t_max_thang?.[month - 1] == null ? "" : String(row.t_max_thang[month - 1]))),
+  };
+}
 
 function monthList(v: unknown): number[] | null {
   return Array.isArray(v) && v.length === 12 && v.every((x) => Number.isFinite(Number(x))) ? v.map(Number) : null;
@@ -34,7 +62,9 @@ function monthList(v: unknown): number[] | null {
 function toClimate(rows: Tb15Row[]): ClimateRow[] {
   return rows
     .map((row, i) => ({
+      id: String(row.id ?? ""),
       stt: Number(row.ma_tram) || i + 1,
+      ma_tram: String(row.ma_tram ?? "").trim(),
       ten_tram: String(row.ten_tram ?? "").trim(),
       tinh: String(row.tinh ?? "").trim(),
       t_kk_min: Number(row.t_kk_min),
@@ -91,7 +121,7 @@ const A022_COLS = [
 ] as const;
 
 /** Bảng 12 tháng: không khí thấp nhất (A.6) và cao nhất (A.5) cho từng trạm. */
-function ClimateMonthTable({ rows, en }: { rows: ClimateRow[]; en: boolean }) {
+function ClimateMonthTable({ rows, en, actions }: { rows: ClimateRow[]; en: boolean; actions?: (row: ClimateRow) => ReactNode }) {
   const cell = (values: number[] | null, month: number) => {
     const v = values?.[month - 1];
     return v === undefined ? "—" : fmt(v);
@@ -109,6 +139,7 @@ function ClimateMonthTable({ rows, en }: { rows: ClimateRow[]; en: boolean }) {
             <th className="border-l border-slate-200 px-3 py-2 text-center text-rose-700" colSpan={12}>
               {en ? "Air max by month (A.5, °C)" : "Không khí cao nhất theo tháng (A.5, °C)"}
             </th>
+            {actions ? <th className="px-2 py-2" rowSpan={2}>{en ? "Actions" : "Thao tác"}</th> : null}
           </tr>
           <tr className="border-b border-slate-200">
             {MONTHS.map((m) => (
@@ -121,7 +152,7 @@ function ClimateMonthTable({ rows, en }: { rows: ClimateRow[]; en: boolean }) {
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.map((r) => (
-            <tr key={`${r.stt}-${r.ten_tram}`} className="hover:bg-slate-50">
+            <tr key={r.id || `${r.stt}-${r.ten_tram}`} className="hover:bg-slate-50">
               <td className="px-3 py-2 font-medium text-slate-900">{r.stt}. {r.ten_tram}</td>
               <td className="px-3 py-2 text-slate-600">{r.tinh || "—"}</td>
               {MONTHS.map((m) => (
@@ -130,11 +161,12 @@ function ClimateMonthTable({ rows, en }: { rows: ClimateRow[]; en: boolean }) {
               {MONTHS.map((m) => (
                 <td key={`max-${m}`} className={`px-2 py-2 text-right font-mono tabular-nums text-rose-700 ${m === 1 ? "border-l border-slate-100" : ""}`}>{cell(r.t_max_thang, m)}</td>
               ))}
+              {actions ? <td className="px-2 py-2">{actions(r)}</td> : null}
             </tr>
           ))}
           {!rows.length && (
             <tr>
-              <td colSpan={26} className="px-3 py-8 text-center text-slate-500">
+              <td colSpan={actions ? 27 : 26} className="px-3 py-8 text-center text-slate-500">
                 {en ? "No stations match." : "Không có trạm khớp."}
               </td>
             </tr>
@@ -147,12 +179,18 @@ function ClimateMonthTable({ rows, en }: { rows: ClimateRow[]; en: boolean }) {
 
 /** Tab «Thông số đầu vào» — A khí hậu; B ray/tà vẹt; C tải; D tuyến. */
 export default function CwrInputParams({ en = false }: { en?: boolean }) {
+  const { can } = useAccess();
+  const canEdit = can("lwr-cong-thuc-tb10015", "edit");
+  const canDelete = can("lwr-cong-thuc-tb10015", "delete");
   const [rows, setRows] = useState<ClimateRow[]>(() => toClimate(TB15_CLIMATE_SEED));
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
   const [section, setSection] = useState<SectionId>("A");
   const [status, setStatus] = useState("");
   const [monthly, setMonthly] = useState(false);
+  const [draft, setDraft] = useState<ClimateDraft | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<ClimateRow | null>(null);
   const [deltaH, setDeltaH] = useState(0);
   const [gauge, setGauge] = useState<GaugeDraft>(GAUGE_STANDARD);
   const [printPages, setPrintPages] = useState<Tb15PrintPage[] | null>(null);
@@ -165,21 +203,86 @@ export default function CwrInputParams({ en = false }: { en?: boolean }) {
     mo_men_can: TB15_SEED.mo_men_can,
     so_do_tai: TB15_SEED.so_do_tai,
   });
+  async function reloadClimate() {
+    const res = await fetch("/api/tb15-catalogs/khi_hau", { cache: "no-store" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Không tải được bảng khí hậu.");
+    const next = toClimate(Array.isArray(data.rows) ? data.rows : []);
+    if (next.length) setRows(next);
+  }
+
   useEffect(() => {
     let live = true;
-    void (async () => {
-      try {
-        const res = await fetch("/api/tb15-catalogs/khi_hau");
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Không tải được bảng khí hậu.");
-        const next = toClimate(Array.isArray(data.rows) ? data.rows : []);
-        if (live && next.length) setRows(next);
-      } catch (e) {
-        if (live) setStatus(e instanceof Error ? e.message : "Dùng bản seed QCVN trên máy.");
-      }
-    })();
+    void reloadClimate().catch((e) => {
+      if (live) setStatus(e instanceof Error ? e.message : "Dùng bản seed QCVN trên máy.");
+    });
     return () => { live = false; };
   }, []);
+
+  async function saveRegion() {
+    if (!draft) return;
+    const min = monthNumbers(draft.min);
+    const max = monthNumbers(draft.max);
+    if (!draft.ten_tram.trim()) {
+      setStatus(en ? "Enter the region name." : "Nhập tên vùng.");
+      return;
+    }
+    if (!min.every(Number.isFinite) || !max.every(Number.isFinite)) {
+      setStatus(en ? "Enter all 12 months." : "Nhập đủ 12 tháng.");
+      return;
+    }
+    const bad = min.findIndex((value, index) => max[index] < value);
+    if (bad >= 0) {
+      setStatus(en ? `Month ${bad + 1}: max must be at least min.` : `Tháng ${bad + 1}: nhiệt độ cao nhất phải ≥ thấp nhất.`);
+      return;
+    }
+    setBusy(true);
+    setStatus("");
+    try {
+      const editing = Boolean(draft.id);
+      const res = await fetch("/api/tb15-catalogs/khi_hau", {
+        method: editing ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: draft.id || undefined,
+          ma_tram: draft.ma_tram.trim(),
+          ten_tram: draft.ten_tram.trim(),
+          tinh: draft.tinh.trim(),
+          nguon: "QCVN 02:2022/BXD",
+          t_min_thang: min,
+          t_max_thang: max,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Không lưu được.");
+      await reloadClimate();
+      setDraft(null);
+      setStatus(editing ? (en ? "Updated." : "Đã cập nhật vùng.") : (en ? "Added." : "Đã thêm vùng. Chọn vùng này ở Kiểm toán nền đường để tính nhiệt độ khóa."));
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : "Không lưu được.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteRegion() {
+    if (!pendingDelete?.id) return;
+    setBusy(true);
+    setStatus("");
+    try {
+      const res = await fetch(`/api/tb15-catalogs/khi_hau?id=${encodeURIComponent(pendingDelete.id)}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Không xóa được.");
+      setPendingDelete(null);
+      if (draft?.id === pendingDelete.id) setDraft(null);
+      await reloadClimate();
+      setStatus(en ? "Deleted." : "Đã xóa vùng.");
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : "Không xóa được.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   useEffect(() => {
     let live = true;
@@ -243,7 +346,6 @@ export default function CwrInputParams({ en = false }: { en?: boolean }) {
       };
     }
     if (id === "B") {
-      const k = kValues.length === 1 ? kValues[0] : NaN;
       return {
         kicker: "Sheet B",
         title: en ? "SHEET B — RAIL, FASTENER, SLEEPER" : "SHEET B — RAY, PHỤ KIỆN, TÀ VẸT",
@@ -262,14 +364,12 @@ export default function CwrInputParams({ en = false }: { en?: boolean }) {
           },
           {
             heading: en ? "II. Yield strength" : "II. Cường độ chảy σ_s",
-            note: en ? "[σ] = σ_s / K" : "[σ] = σ_s / K",
+            note: en ? "[σ] is the value stored on the steel grade." : "[σ] lấy từ số đã lưu theo mác thép.",
             table: {
               headers: [en ? "Grade" : "Mác thép", "σ_s", "[σ]"],
-              rows: macThep.map((row) => {
-                const sigma = Number(row.sigma_s_mpa);
-                const allow = Number.isFinite(sigma) && Number.isFinite(k) && k > 0 ? fmt(sigma / k, 2) : "—";
-                return [String(row.mac_thep ?? "—"), num(row.sigma_s_mpa, 0), allow];
-              }),
+              rows: macThep.map((row) => [
+                String(row.mac_thep ?? "—"), num(row.sigma_s_mpa, 0), num(row.sigma_cho_phep_mpa, 2),
+              ]),
             },
           },
           {
@@ -386,7 +486,6 @@ export default function CwrInputParams({ en = false }: { en?: boolean }) {
   const moMen = catalogs.mo_men_can ?? [];
   const soDoTai = catalogs.so_do_tai ?? [];
   const show = (id: SectionId) => section === id;
-  const kValues = [...new Set(loaiRay.map((r) => Number(r.k_an_toan)).filter((n) => Number.isFinite(n)))];
 
   return (
     <div className="tb15-print-root space-y-4">
@@ -449,6 +548,19 @@ export default function CwrInputParams({ en = false }: { en?: boolean }) {
           setPage={setPage}
           monthly={monthly}
           setMonthly={setMonthly}
+          canEdit={canEdit}
+          canDelete={canDelete}
+          draft={draft}
+          busy={busy}
+          pendingDelete={pendingDelete}
+          onAdd={() => { setDraft(blankDraft()); setPendingDelete(null); }}
+          onEdit={(row) => { setDraft(draftFrom(row)); setPendingDelete(null); }}
+          onDelete={setPendingDelete}
+          onConfirmDelete={() => { void deleteRegion(); }}
+          onCancelDelete={() => setPendingDelete(null)}
+          onDraft={setDraft}
+          onCancel={() => setDraft(null)}
+          onSave={() => { void saveRegion(); }}
         />
       )}
 
@@ -496,7 +608,7 @@ export default function CwrInputParams({ en = false }: { en?: boolean }) {
 
           <RefBlock
             title={en ? "1b. Steel yield strength σ_s — Table 3.2.4" : "1b. Cường độ chảy σ_s của thép ray — Bảng 3.2.4"}
-            note={en ? "[σ] = σ_s / K. K is the safety factor on the rail row." : "[σ] = σ_s / K. K là hệ số an toàn trên dòng loại ray."}
+            note={en ? "[σ] is the value stored on the steel grade." : "[σ] lấy từ số đã lưu theo mác thép."}
           >
             <div className="overflow-x-auto">
               <table className="w-full min-w-[32rem] border-collapse text-left text-xs sm:text-sm">
@@ -504,22 +616,17 @@ export default function CwrInputParams({ en = false }: { en?: boolean }) {
                   <tr className="border-b border-slate-200">
                     <th className="px-3 py-2">{en ? "Grade" : "Mác thép"}</th>
                     <th className="px-3 py-2 text-right">σ_s (MPa)</th>
-                    <th className="px-3 py-2 text-right">[σ] = σ_s / K (MPa)</th>
+                    <th className="px-3 py-2 text-right">[σ] (MPa)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {macThep.map((r) => {
-                    const sigma = Number(r.sigma_s_mpa);
-                    const k = kValues.length === 1 ? kValues[0] : NaN;
-                    const allow = Number.isFinite(sigma) && Number.isFinite(k) && k > 0 ? sigma / k : null;
-                    return (
-                      <tr key={String(r.id)} className="hover:bg-slate-50">
-                        <td className="px-3 py-2 font-medium">{String(r.mac_thep ?? "—")}</td>
-                        <td className="px-3 py-2 text-right font-mono font-semibold">{num(r.sigma_s_mpa, 0)}</td>
-                        <td className="px-3 py-2 text-right font-mono">{allow === null ? (kValues.length > 1 ? (en ? "Depends on rail K" : "Theo K của dòng ray") : "—") : fmt(allow, 2)}</td>
-                      </tr>
-                    );
-                  })}
+                  {macThep.map((r) => (
+                    <tr key={String(r.id)} className="hover:bg-slate-50">
+                      <td className="px-3 py-2 font-medium">{String(r.mac_thep ?? "—")}</td>
+                      <td className="px-3 py-2 text-right font-mono font-semibold">{num(r.sigma_s_mpa, 0)}</td>
+                      <td className="px-3 py-2 text-right font-mono font-semibold">{num(r.sigma_cho_phep_mpa, 2)}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -751,8 +858,95 @@ function RefBlock({ title, note, children }: { title: string; note?: string; chi
   );
 }
 
+function monthNumbers(values: string[]) {
+  return values.map((value) => (value.trim() === "" ? NaN : Number(value)));
+}
+
+function ClimateForm({
+  en, draft, busy, onChange, onCancel, onSave,
+}: {
+  en: boolean;
+  draft: ClimateDraft;
+  busy: boolean;
+  onChange: (next: ClimateDraft) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  const mins = monthNumbers(draft.min);
+  const maxs = monthNumbers(draft.max);
+  const ready = mins.every(Number.isFinite) && maxs.every(Number.isFinite);
+  const airMin = ready ? Math.min(...mins) : NaN;
+  const airMax = ready ? Math.max(...maxs) : NaN;
+  const field = "mt-1 h-10 w-full rounded-lg border border-slate-300 px-2 font-mono text-sm";
+  return (
+    <form className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" onSubmit={(event) => { event.preventDefault(); onSave(); }}>
+      <h4 className="text-base font-bold text-[#0047AB]">{draft.id ? (en ? "Edit region" : "Sửa vùng") : (en ? "Add region" : "Thêm vùng")}</h4>
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <label className="text-sm font-semibold text-slate-800">{en ? "Station code" : "Mã trạm"}
+          <input value={draft.ma_tram} onChange={(e) => onChange({ ...draft, ma_tram: e.target.value })} className={field} />
+        </label>
+        <label className="text-sm font-semibold text-slate-800">{en ? "Region / station" : "Tên vùng / trạm"}
+          <input required value={draft.ten_tram} onChange={(e) => onChange({ ...draft, ten_tram: e.target.value })} className={field} />
+        </label>
+        <label className="text-sm font-semibold text-slate-800">{en ? "Province" : "Tỉnh / thành"}
+          <input value={draft.tinh} onChange={(e) => onChange({ ...draft, tinh: e.target.value })} className={field} />
+        </label>
+      </div>
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full min-w-[52rem] text-left text-xs">
+          <thead>
+            <tr className="text-slate-600">
+              <th className="py-1 pr-2">{en ? "Month" : "Tháng"}</th>
+              {MONTHS.map((month) => <th key={month} className="px-1 py-1 text-right">T{month}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th className="py-1 pr-2 font-semibold text-sky-800">{en ? "Air min" : "KK thấp nhất"}</th>
+              {MONTHS.map((month, index) => (
+                <td key={month} className="px-1 py-1">
+                  <input required type="number" step="0.1" value={draft.min[index]} aria-label={`${en ? "Air min month" : "KK thấp nhất tháng"} ${month}`} onChange={(e) => onChange({ ...draft, min: draft.min.map((value, i) => i === index ? e.target.value : value) })} className="h-9 w-full rounded border border-slate-300 px-1 text-right font-mono" />
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <th className="py-1 pr-2 font-semibold text-rose-700">{en ? "Air max" : "KK cao nhất"}</th>
+              {MONTHS.map((month, index) => (
+                <td key={month} className="px-1 py-1">
+                  <input required type="number" step="0.1" value={draft.max[index]} aria-label={`${en ? "Air max month" : "KK cao nhất tháng"} ${month}`} onChange={(e) => onChange({ ...draft, max: draft.max.map((value, i) => i === index ? e.target.value : value) })} className="h-9 w-full rounded border border-slate-300 px-1 text-right font-mono" />
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950">
+        {ready
+          ? (en
+            ? `Rail min = ${fmt(airMin)} °C. Rail max = ${fmt(airMax)} + ${RAIL_MAX_OFFSET} = ${fmt(airMax + RAIL_MAX_OFFSET)} °C. The ground check uses the selected month of this region.`
+            : `Nhiệt độ ray thấp nhất = ${fmt(airMin)} °C. Cao nhất = ${fmt(airMax)} + ${RAIL_MAX_OFFSET} = ${fmt(airMax + RAIL_MAX_OFFSET)} °C. Kiểm toán nền đường lấy tháng đã chọn của vùng này để tính nhiệt độ khóa.`)
+          : (en ? "Enter all 12 months. Rail temperatures are calculated from them." : "Nhập đủ 12 tháng. Nhiệt độ ray và nhiệt độ khóa lấy từ các số này.")}
+      </p>
+      <div className="mt-3 flex gap-2">
+        <button type="submit" disabled={busy} className="h-10 rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white disabled:opacity-50">{busy ? (en ? "Saving…" : "Đang lưu…") : (en ? "Save" : "Lưu")}</button>
+        <button type="button" onClick={onCancel} className="h-10 rounded-lg border border-slate-300 px-4 text-sm font-semibold">{en ? "Cancel" : "Hủy"}</button>
+      </div>
+    </form>
+  );
+}
+
+function RowActions({ en, canEdit, canDelete, onEdit, onDelete }: { en: boolean; canEdit: boolean; canDelete: boolean; onEdit: () => void; onDelete: () => void }) {
+  return (
+    <div className="flex gap-1">
+      {canEdit && <button type="button" onClick={onEdit} className="h-8 rounded-md border border-slate-300 px-2 text-xs font-semibold text-[#0047AB]">{en ? "Edit" : "Sửa"}</button>}
+      {canDelete && <button type="button" onClick={onDelete} className="h-8 rounded-md border border-red-200 px-2 text-xs font-semibold text-red-700">{en ? "Delete" : "Xóa"}</button>}
+    </div>
+  );
+}
+
 function ClimateSection({
   en, query, setQuery, status, filteredCount, totalCount, visible, pageIndex, pages, setPage, monthly, setMonthly,
+  canEdit, canDelete, draft, busy, pendingDelete, onAdd, onEdit, onDelete, onConfirmDelete, onCancelDelete, onDraft, onCancel, onSave,
 }: {
   en: boolean;
   query: string;
@@ -766,6 +960,19 @@ function ClimateSection({
   setPage: (fn: (p: number) => number) => void;
   monthly: boolean;
   setMonthly: (value: boolean) => void;
+  canEdit: boolean;
+  canDelete: boolean;
+  draft: ClimateDraft | null;
+  busy: boolean;
+  pendingDelete: ClimateRow | null;
+  onAdd: () => void;
+  onEdit: (row: ClimateRow) => void;
+  onDelete: (row: ClimateRow) => void;
+  onConfirmDelete: () => void;
+  onCancelDelete: () => void;
+  onDraft: (next: ClimateDraft) => void;
+  onCancel: () => void;
+  onSave: () => void;
 }) {
   return (
     <section className="tb15-sheet space-y-4" aria-labelledby="cwr-input-a-title">
@@ -798,6 +1005,11 @@ function ClimateSection({
           <p className="text-xs font-semibold text-slate-500">
             {filteredCount.toLocaleString("vi-VN")} / {totalCount.toLocaleString("vi-VN")} {en ? "stations" : "trạm"}
           </p>
+          {canEdit && (
+            <button type="button" onClick={onAdd} className="h-11 rounded-lg bg-[#0047AB] px-4 text-sm font-semibold text-white">
+              {en ? "Add region" : "Thêm vùng"}
+            </button>
+          )}
           <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5 text-xs font-semibold">
             <button type="button" aria-pressed={!monthly} onClick={() => setMonthly(false)}
               className={`h-8 rounded-md px-3 ${!monthly ? "bg-[#0047AB] text-white" : "text-slate-700"}`}>
@@ -812,9 +1024,20 @@ function ClimateSection({
         {status && <p className="mt-2 text-xs text-amber-700">{status}</p>}
       </div>
 
+      {draft && <ClimateForm en={en} draft={draft} busy={busy} onChange={onDraft} onCancel={onCancel} onSave={onSave} />}
+      {pendingDelete && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+          <p>{en ? `Delete ${pendingDelete.ten_tram}?` : `Xóa vùng ${pendingDelete.ten_tram}?`}</p>
+          <div className="mt-2 flex gap-2">
+            <button type="button" disabled={busy} onClick={onConfirmDelete} className="h-9 rounded-lg bg-red-700 px-3 text-xs font-semibold text-white disabled:opacity-50">{en ? "Delete" : "Xóa"}</button>
+            <button type="button" onClick={onCancelDelete} className="h-9 rounded-lg border border-red-200 bg-white px-3 text-xs font-semibold">{en ? "Cancel" : "Hủy"}</button>
+          </div>
+        </div>
+      )}
+
       {monthly ? (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <ClimateMonthTable rows={visible} en={en} />
+          <ClimateMonthTable rows={visible} en={en} actions={(canEdit || canDelete) ? (row) => <RowActions en={en} canEdit={canEdit} canDelete={canDelete} onEdit={() => onEdit(row)} onDelete={() => onDelete(row)} /> : undefined} />
         </div>
       ) : (
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -830,6 +1053,7 @@ function ClimateSection({
                 <th className="border-l border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-emerald-900" colSpan={2}>
                   {en ? "Rail temperature (°C)" : "Nhiệt độ ray (°C)"}
                 </th>
+                {(canEdit || canDelete) ? <th className="px-3 py-2" rowSpan={2}>{en ? "Actions" : "Thao tác"}</th> : null}
               </tr>
               <tr className="border-b border-slate-200">
                 <th className="border-l border-slate-200 px-3 py-2 text-right font-semibold text-sky-800">
@@ -850,19 +1074,20 @@ function ClimateSection({
               {visible.map((r) => {
                 const tRayMax = Math.round((r.t_kk_max + RAIL_MAX_OFFSET) * 10) / 10;
                 return (
-                  <tr key={`${r.stt}-${r.ten_tram}`} className="hover:bg-slate-50">
+                  <tr key={r.id || `${r.stt}-${r.ten_tram}`} className="hover:bg-slate-50">
                     <td className="px-3 py-2 font-medium text-slate-900">{r.stt}. {r.ten_tram}</td>
                     <td className="px-3 py-2 text-slate-600">{r.tinh || "—"}</td>
                     <td className="border-l border-slate-100 px-3 py-2 text-right font-mono tabular-nums text-sky-800">{fmt(r.t_kk_min)}</td>
                     <td className="px-3 py-2 text-right font-mono tabular-nums text-rose-700">{fmt(r.t_kk_max)}</td>
                     <td className="border-l border-emerald-100 bg-emerald-50/40 px-3 py-2 text-right font-mono font-semibold tabular-nums text-sky-900">{fmt(r.t_kk_min)}</td>
                     <td className="bg-emerald-50/40 px-3 py-2 text-right font-mono font-semibold tabular-nums text-rose-800">{fmt(tRayMax)}</td>
+                    {(canEdit || canDelete) ? <td className="px-3 py-2"><RowActions en={en} canEdit={canEdit} canDelete={canDelete} onEdit={() => onEdit(r)} onDelete={() => onDelete(r)} /></td> : null}
                   </tr>
                 );
               })}
               {!visible.length && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-slate-500">
+                  <td colSpan={(canEdit || canDelete) ? 7 : 6} className="px-3 py-8 text-center text-slate-500">
                     {en ? "No stations match." : "Không có trạm khớp."}
                   </td>
                 </tr>
