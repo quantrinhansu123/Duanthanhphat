@@ -5,7 +5,7 @@ import { isTouchDevice, printOrPdfAcceptance } from "@/lib/pdfExport";
 import { reloadRecordSet, reviseRecord, notifyWeldQualityChanged, loadBbntPrintSeq, advanceBbntPrintSeq, type RecordSet } from "@/lib/weldQualityClient";
 import WeldAcceptanceRecordPages, { ACCEPTANCE_DOCS, acceptancePrintCss, skippedWeldIds, onlySkippedWelds, type RecordKind } from "@/components/WeldAcceptanceRecordPages";
 import { fieldWeldCode } from "@/lib/weldCode";
-import { SIGNER_PARTIES, BBNTCV_SIGNER_KEYS, DEFAULT_SIGNERS, loadSignerDefaults, saveSignerDefaults, defaultAcceptancePrintKinds, advanceBbntcvSeq, nextBbntcvSeq } from "@/lib/weldAcceptance";
+import { ACCEPTANCE_TECHNICIAN, SIGNER_PARTIES, BBNTCV_SIGNER_KEYS, DEFAULT_SIGNERS, loadSignerDefaults, saveSignerDefaults, defaultAcceptancePrintKinds, advanceBbntcvSeq, nextBbntcvSeq } from "@/lib/weldAcceptance";
 import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
 import { loadJournalMachineOptions } from "@/lib/machineRunSchedulesDb";
 import ComboInput from "@/components/ComboInput";
@@ -307,8 +307,8 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
           {SIGNER_PARTIES.map(([party, name]) => (
             <div key={party} className="space-y-1 rounded-lg border border-slate-200 p-2">
               <p className="text-xs font-semibold text-slate-600">{name}</p>
-              <input aria-label={`${name}: họ và tên`} className={input} placeholder="Họ và tên" value={formView[`nguoi_${party}_1_ten`] ?? ""} onChange={(e) => set(`nguoi_${party}_1_ten`, e.target.value)} />
-              <input aria-label={`${name}: chức vụ`} className={input} placeholder="Chức vụ" value={formView[`nguoi_${party}_1_cv`] ?? ""} onChange={(e) => set(`nguoi_${party}_1_cv`, e.target.value)} />
+              <input aria-label={`${name}: họ và tên`} className={input} placeholder="Họ và tên" readOnly={party === "ntc"} value={party === "ntc" ? ACCEPTANCE_TECHNICIAN.ten : formView[`nguoi_${party}_1_ten`] ?? ""} onChange={(e) => set(`nguoi_${party}_1_ten`, e.target.value)} />
+              <input aria-label={`${name}: chức vụ`} className={input} placeholder="Chức vụ" readOnly={party === "ntc"} value={party === "ntc" ? ACCEPTANCE_TECHNICIAN.chucVu : formView[`nguoi_${party}_1_cv`] ?? ""} onChange={(e) => set(`nguoi_${party}_1_cv`, e.target.value)} />
               <input aria-label={`${name}: ngày`} type="date" className={input} value={formView[`ngay_ky_${party}`] ?? ""} onChange={(e) => set(`ngay_ky_${party}`, e.target.value)} />
             </div>
           ))}
@@ -320,8 +320,8 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
               <p className="text-xs font-semibold text-slate-600">{name}</p>
               {[1, 2].map((i) => (
                 <div key={i} className="grid gap-1">
-                  <input aria-label={`BBNTCV ${name} người ${i}: họ tên`} className={input} placeholder={`Ông (người ${i})`} value={formView[`bbntcv_nguoi_${party}_${i}_ten`] ?? ""} onChange={(e) => set(`bbntcv_nguoi_${party}_${i}_ten`, e.target.value)} />
-                  <input aria-label={`BBNTCV ${name} người ${i}: chức vụ`} className={input} placeholder="Chức vụ" value={formView[`bbntcv_nguoi_${party}_${i}_cv`] ?? ""} onChange={(e) => set(`bbntcv_nguoi_${party}_${i}_cv`, e.target.value)} />
+                  <input aria-label={`BBNTCV ${name} người ${i}: họ tên`} className={input} placeholder={`Ông (người ${i})`} readOnly={party === "ntc" && i === 1} value={party === "ntc" && i === 1 ? ACCEPTANCE_TECHNICIAN.ten : formView[`bbntcv_nguoi_${party}_${i}_ten`] ?? ""} onChange={(e) => set(`bbntcv_nguoi_${party}_${i}_ten`, e.target.value)} />
+                  <input aria-label={`BBNTCV ${name} người ${i}: chức vụ`} className={input} placeholder="Chức vụ" readOnly={party === "ntc" && i === 1} value={party === "ntc" && i === 1 ? ACCEPTANCE_TECHNICIAN.chucVu : formView[`bbntcv_nguoi_${party}_${i}_cv`] ?? ""} onChange={(e) => set(`bbntcv_nguoi_${party}_${i}_cv`, e.target.value)} />
                 </div>
               ))}
             </div>

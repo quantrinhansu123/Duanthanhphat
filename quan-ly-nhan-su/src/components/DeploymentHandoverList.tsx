@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { deploymentItems, type DeploymentItem } from "@/data/deploymentItems";
 import { CaretRight } from "@/components/icons";
+import AcceptanceLog from "@/components/AcceptanceLog";
 import Pager, { usePaged } from "@/components/Pager";
 
 const statusStyle: Record<DeploymentItem["status"], string> = {
@@ -98,6 +99,13 @@ export default function DeploymentHandoverList() {
         </div>
       </div>
       <Pager {...paged.pagerProps} />
+
+      <section className="mt-10" aria-labelledby="nghiem-thu-heading">
+        <h2 id="nghiem-thu-heading" className="mb-3 text-base font-semibold text-slate-900 sm:text-lg">
+          Nhật ký nghiệm thu thay đổi
+        </h2>
+        <AcceptanceLog />
+      </section>
     </main>
   );
 }

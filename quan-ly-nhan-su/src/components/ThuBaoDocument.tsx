@@ -6,7 +6,7 @@ import PrintFrame from "@/components/PrintFrame";
 import { qualityRequest } from "@/lib/weldQualityClient";
 import { loadRfiSignatures } from "@/lib/rfiSignatures";
 import { fieldWeldCode } from "@/lib/weldCode";
-import { parseChainageMeters } from "@/lib/weldAcceptance";
+import { parseChainageMeters, SITE_COMMANDER } from "@/lib/weldAcceptance";
 
 const css = `
 #thu-bao-print, #thu-bao-print * {
@@ -77,8 +77,6 @@ const SHARED = {
   kinhGui: KINH_GUI,
   tvgsChucVu: "Tư vấn giám sát trưởng",
   tvgsTen: "Trần Văn Thanh",
-  chtChucVu: "Chỉ huy trưởng",
-  chtTen: "Nguyễn Minh Đức",
 };
 
 /** Mặc định cột Kỹ sư phụ trách — chức danh + tên, mỗi dòng một. */
@@ -110,8 +108,6 @@ type TabState = {
   kinhGui: string;
   tvgsChucVu: string;
   tvgsTen: string;
-  chtChucVu: string;
-  chtTen: string;
   rows: WorkRow[];
 };
 
@@ -149,8 +145,6 @@ function makeBase(partial: Partial<TabState> & { rows: WorkRow[] }): TabState {
     kinhGui: SHARED.kinhGui,
     tvgsChucVu: SHARED.tvgsChucVu,
     tvgsTen: SHARED.tvgsTen,
-    chtChucVu: SHARED.chtChucVu,
-    chtTen: SHARED.chtTen,
     ...partial,
   };
 }
@@ -685,11 +679,11 @@ export default function ThuBaoDocument({
         </label>
         <label className="grid gap-1 font-semibold text-slate-700">
           Chức vụ đơn vị thi công
-          <input className="h-9 rounded-lg border border-slate-300 px-2 font-normal" value={data.chtChucVu} onChange={(e) => patch({ chtChucVu: e.target.value })} />
+          <input className="h-9 rounded-lg border border-slate-300 px-2 font-normal" value={SITE_COMMANDER.chucVu} readOnly />
         </label>
         <label className="grid gap-1 font-semibold text-slate-700">
           Tên chỉ huy trưởng
-          <input className="h-9 rounded-lg border border-slate-300 px-2 font-normal" value={data.chtTen} onChange={(e) => patch({ chtTen: e.target.value })} />
+          <input className="h-9 rounded-lg border border-slate-300 px-2 font-normal" value={SITE_COMMANDER.ten} readOnly />
         </label>
       </div>
       <p className="text-xs text-slate-500">
@@ -763,11 +757,11 @@ export default function ThuBaoDocument({
         </div>
         <div className="tb-sign">
           <p className="tb-b tb-14 uppercase">ĐẠI DIỆN ĐƠN VỊ THI CÔNG</p>
-          <p className="tb-n tb-14 mt-1">{data.chtChucVu || "Chỉ huy trưởng"}</p>
+          <p className="tb-n tb-14 mt-1">{SITE_COMMANDER.chucVu}</p>
           <div className="tb-sign-slot">
             {withSignatures && chtSig ? <img src={chtSig} alt="Chữ ký chỉ huy trưởng" /> : null}
           </div>
-          <p className="tb-b tb-14 tb-sign-name">{data.chtTen || "………………"}</p>
+          <p className="tb-b tb-14 tb-sign-name">{SITE_COMMANDER.ten}</p>
         </div>
       </div>
     </PrintFrame>

@@ -3,7 +3,7 @@
 import type { CSSProperties, FocusEvent } from "react";
 import type { RecordSet } from "@/lib/weldQualityClient";
 import PrintFrame from "@/components/PrintFrame";
-import { rfiScope, SIGNER_PARTIES, DEFAULT_SIGNERS, loadSignerDefaults, bbntcvSo } from "@/lib/weldAcceptance";
+import { ACCEPTANCE_TECHNICIAN, rfiScope, SIGNER_PARTIES, DEFAULT_SIGNERS, loadSignerDefaults, bbntcvSo } from "@/lib/weldAcceptance";
 import { fieldWeldCode } from "@/lib/weldCode";
 import { GEOMETRY_CRITERIA, evaluateGeometry, evaluateGeometryCriterion, type GeometryLimits, type GeometryMeasurements } from "@/lib/weldQuality";
 
@@ -236,10 +236,11 @@ function annexPycSo(saved: string, geometryRfi: string, ultrasoundRfi: string, t
 
 /** Người ký i (1–2) của một bên: bản sửa của biên bản → người đã nhớ → mặc định. prefix = "bbntcv_" cho tờ BBNTCV (tách khỏi Phụ lục). */
 function resolveSigner(t: Record<string, string>, defaults: Record<string, string>, party: string, i: number, prefix = "") {
+  if (party === "ntc" && i === 1) return { ten: ACCEPTANCE_TECHNICIAN.ten, cv: ACCEPTANCE_TECHNICIAN.chucVu };
   const pick = (field: "ten" | "cv") => {
     const key = `${prefix}nguoi_${party}_${i}_${field}`;
     const base = `nguoi_${party}_${i}_${field}`;
-    return (t[key]?.trim() || defaults[key] || DEFAULT_SIGNERS[key] || DEFAULT_SIGNERS[base] || "").replace("Nguyễn Tất Đạt", "Nguyễn Minh Đức");
+    return t[key]?.trim() || defaults[key] || DEFAULT_SIGNERS[key] || DEFAULT_SIGNERS[base] || "";
   };
   return { ten: pick("ten"), cv: pick("cv") };
 }
@@ -571,7 +572,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, kinds, editor,
                           const signer = resolveSigner(t, loadSignerDefaults(), party, 1);
                           return (
                             <td key={party}>
-                              HỌ VÀ TÊN: <Ed k={`nguoi_${party}_1_ten`} v={signer.ten} editor={editor} ph="" /><br /><br />
+                              HỌ VÀ TÊN: <Ed k={`nguoi_${party}_1_ten`} v={signer.ten} editor={party === "ntc" ? undefined : editor} ph="" /><br /><br />
                               NGÀY: <Ed date k={`ngay_ky_${party}`} v={(t[`ngay_ky_${party}`] || acceptanceDate).slice(0, 10)} editor={editor} ph="" /><br /><br />
                               CHỮ KÝ:
                             </td>
@@ -608,7 +609,6 @@ export default function WeldAcceptanceRecordPages({ record, kind, kinds, editor,
       const bbNo = savedNo.trim() || (pycDigits ? `${pycDigits.padStart(3, "0")}-${bbTech}/BBNTCV` : bbntcvSo("", bbTech, bbSeq));
       // Người ký BBNTCV: bản sửa / đã nhớ, chưa có thì Nguyễn Minh Đức (nhà thầu chính) và Trần Công Tiến (nhà thầu phụ).
       const signerDefaults = loadSignerDefaults();
-      const signer = (key: string) => t[`bbntcv_${key}`]?.trim() || signerDefaults[`bbntcv_${key}`] || DEFAULT_SIGNERS[`bbntcv_${key}`] || DEFAULT_SIGNERS[key] || "";
       const objectText = pointRows.some((w) => w.cong_nghe_han === "ATW")
         ? "Nghiệm thu mối hàn ray"
         : "Nghiệm thu mối hàn chảy giáp mép - Hàn trên tuyến";
@@ -651,9 +651,11 @@ export default function WeldAcceptanceRecordPages({ record, kind, kinds, editor,
           ] as const).map(([role, company, party]) => (
             <div className="party" key={role}>
               <p><b>{role}:</b> {company}</p>
-              {[1, 2].map((i) => (
-                <p className="person" key={i}>Ông: <Ed k={`bbntcv_nguoi_${party}_${i}_ten`} v={signer(`nguoi_${party}_${i}_ten`)} editor={editor} write="ten" /> &nbsp; Chức vụ: <Ed k={`bbntcv_nguoi_${party}_${i}_cv`} v={signer(`nguoi_${party}_${i}_cv`)} editor={editor} write="cv" /></p>
-              ))}
+              {[1, 2].map((i) => {
+                const signer = resolveSigner(t, signerDefaults, party, i, "bbntcv_");
+                const signerEditor = party === "ntc" && i === 1 ? undefined : editor;
+                return <p className="person" key={i}>Ông: <Ed k={`bbntcv_nguoi_${party}_${i}_ten`} v={signer.ten} editor={signerEditor} write="ten" /> &nbsp; Chức vụ: <Ed k={`bbntcv_nguoi_${party}_${i}_cv`} v={signer.cv} editor={signerEditor} write="cv" /></p>;
+              })}
             </div>
           ))}
 
@@ -709,6 +711,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, kinds, editor,
     const signerDefaultsHt = loadSignerDefaults();
     const who = (code: string, i: number, field: "ten" | "cv") => {
       const key = `nguoi_${code}_${i}_${field}`;
+      if (code === "ntc" && i === 1) return field === "ten" ? ACCEPTANCE_TECHNICIAN.ten : ACCEPTANCE_TECHNICIAN.chucVu;
       return t[key]?.trim() || signerDefaultsHt[key] || DEFAULT_SIGNERS[key] || "";
     };
     // Phần tự nhập (lưu qua "Sửa thông tin in"): có nội dung thì in ra, chưa có thì để dòng chấm.
@@ -716,7 +719,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, kinds, editor,
     const personBlock = (code: string) => (
       <>
         {[1, 2].map((i) => (
-          <p className="person" key={i}>Ông: <Ed k={`nguoi_${code}_${i}_ten`} v={who(code, i, "ten")} editor={editor} write="ten" /> &nbsp; Chức vụ: <Ed k={`nguoi_${code}_${i}_cv`} v={who(code, i, "cv")} editor={editor} write="cv" /></p>
+          <p className="person" key={i}>Ông: <Ed k={`nguoi_${code}_${i}_ten`} v={who(code, i, "ten")} editor={code === "ntc" && i === 1 ? undefined : editor} write="ten" /> &nbsp; Chức vụ: <Ed k={`nguoi_${code}_${i}_cv`} v={who(code, i, "cv")} editor={code === "ntc" && i === 1 ? undefined : editor} write="cv" /></p>
         ))}
       </>
     );
@@ -825,8 +828,8 @@ export default function WeldAcceptanceRecordPages({ record, kind, kinds, editor,
                 return (
                   <tr key={pt.no}>
                     <td>{pt.label}{pt.org ? <><br /><small>{pt.org}</small></> : null}</td>
-                    <td><Ed k={`nguoi_${pt.code}_1_cv`} v={who(pt.code, 1, "cv") || pt.role} editor={editor} /></td>
-                    <td><Ed k={`nguoi_${pt.code}_1_ten`} v={who(pt.code, 1, "ten")} editor={editor} ph="" /></td>
+                    <td><Ed k={`nguoi_${pt.code}_1_cv`} v={who(pt.code, 1, "cv") || pt.role} editor={pt.code === "ntc" ? undefined : editor} /></td>
+                    <td><Ed k={`nguoi_${pt.code}_1_ten`} v={who(pt.code, 1, "ten")} editor={pt.code === "ntc" ? undefined : editor} ph="" /></td>
                     <td />{/* chữ ký tươi: để trống cho ký tay */}
                   </tr>
                 );

@@ -24,7 +24,7 @@ import {
 import { calculateStressRelease, ceilAbs, DEFAULT_STRESS_INPUT, formatStressNumber, type StressInput } from "@lwr/lib/stress-release";
 import type { StructureSymbol } from "@lwr/types/structure";
 import type { RailJoint } from "@lwr/types/weld";
-import { DEFAULT_SIGNERS, loadSignerDefaults } from "@/lib/weldAcceptance";
+import { ACCEPTANCE_TECHNICIAN, DEFAULT_SIGNERS, loadSignerDefaults } from "@/lib/weldAcceptance";
 import { RailGrid } from "./RailGrid";
 import { StructureLegend } from "./StructureLegend";
 
@@ -192,7 +192,7 @@ function GtusPage({ line, layout, printRange, joints, symbols, projectName, rows
   const pq = /phú quốc/i.test(projectName ?? "");
   const totalMetres = rows.reduce((sum, row) => sum + Math.max(0, rowLength(row)), 0);
   const defaults = loadSignerDefaults();
-  const signerName = (party: string) => (defaults[`nguoi_${party}_1_ten`] || DEFAULT_SIGNERS[`nguoi_${party}_1_ten`] || "").replace("Nguyễn Tất Đạt", "Nguyễn Minh Đức");
+  const signerName = (party: string) => party === "ntc" ? ACCEPTANCE_TECHNICIAN.ten : defaults[`nguoi_${party}_1_ten`] || DEFAULT_SIGNERS[`nguoi_${party}_1_ten`] || "";
   const today = new Date().toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", year: "numeric" });
 
   return (
@@ -290,7 +290,7 @@ function GtusPage({ line, layout, printRange, joints, symbols, projectName, rows
           <tbody>
             <tr>
               {(["tvgs", "ntc", "ntp"] as const).map((party) => (
-                <td key={party}>HỌ VÀ TÊN: {signerName(party)}<br /><br />NGÀY: {today}<br /><br />CHỮ KÝ:</td>
+                <td key={party}>HỌ VÀ TÊN: {signerName(party)}{party === "ntc" && <><br />CHỨC VỤ: {ACCEPTANCE_TECHNICIAN.chucVu}</>}<br /><br />NGÀY: {today}<br /><br />CHỮ KÝ:</td>
               ))}
             </tr>
           </tbody>
