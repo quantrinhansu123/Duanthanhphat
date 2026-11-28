@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { QualityApiError } from "@/lib/server/weldQualityAuth";
 import { object, qualityDate, qualityUuid } from "@/lib/server/weldQualityJournal";
 import { completeWeldAcceptance, publishWeldRfi, loadWeldQuality, saveWeldQualityInspection } from "@/lib/server/weldQualityDb";
-import { rfiScope, rfiChildSigning, SIGNER_KEYS, BBNTCV_SIGNER_KEYS, acceptanceBlockReason, filterRfiCandidates, isRfiEligibleStatus, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
+import { rfiScope, rfiChildSigning, SIGNER_KEYS, BBNTCV_SIGNER_KEYS, RFI_PRINT_SAVED_KEYS, acceptanceBlockReason, filterRfiCandidates, isRfiEligibleStatus, rfiBlockReason, validateMonitoringRange, type RfiCandidate } from "@/lib/weldAcceptance";
 import { summarizeRfiWelds } from "@/lib/rfiTracking";
 import { fieldWeldCode } from "@/lib/weldCode";
 import { deleteGtusThanh, snapshotGtusThanh } from "@/lib/server/gtusServer";
@@ -613,7 +613,6 @@ async function childSigningByRfi(parentIds: string[]) {
 }
 
 /** Nội dung in nhập tay của phiếu yêu cầu (đối tượng nghiệm thu, nội dung vị trí, ngày giờ, Km) — lưu theo phiếu, dùng chung mọi máy. */
-const PRINT_INFO_KEYS = ["doi_tuong", "noi_dung", "ngay_nt", "gio", "km_dau", "km_cuoi", "so_phieu", "ngay_lap", "noi_lap", "ngay_nhan", "dia_diem", "hang_muc", "nguoi_nhan", "chuc_vu_nhan", "kinh_gui", "ntp_ten", "ntp_chuc_vu", "ntc_ten", "ntc_chuc_vu"] as const;
 export async function saveRfiPrintInfo(body: Record<string, unknown>) {
   const id = qualityUuid(body.id);
   const values = object(body.values ?? {});
@@ -628,7 +627,7 @@ export async function saveRfiPrintInfo(body: Record<string, unknown>) {
     if (!found.data) throw new QualityApiError("Không tìm thấy phiếu để lưu.", 404);
   }
   const thong_tin: Record<string, unknown> = { ...(found.data.thong_tin ?? {}) };
-  for (const key of PRINT_INFO_KEYS) {
+  for (const key of RFI_PRINT_SAVED_KEYS) {
     const value = str(values[key], 2000);
     if (value) thong_tin[`in_${key}`] = value; else delete thong_tin[`in_${key}`];
   }

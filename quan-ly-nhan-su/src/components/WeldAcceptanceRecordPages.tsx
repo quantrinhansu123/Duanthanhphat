@@ -236,7 +236,7 @@ function annexPycSo(saved: string, geometryRfi: string, ultrasoundRfi: string, t
 
 /** Người ký i (1–2) của một bên: bản sửa của biên bản → người đã nhớ → mặc định. prefix = "bbntcv_" cho tờ BBNTCV (tách khỏi Phụ lục). */
 function resolveSigner(t: Record<string, string>, defaults: Record<string, string>, party: string, i: number, prefix = "") {
-  if (party === "ntc" && i === 1) return { ten: ACCEPTANCE_TECHNICIAN.ten, cv: ACCEPTANCE_TECHNICIAN.chucVu };
+  if (prefix === "bbntcv_" && party === "ntc" && i === 1) return { ten: ACCEPTANCE_TECHNICIAN.ten, cv: ACCEPTANCE_TECHNICIAN.chucVu };
   const pick = (field: "ten" | "cv") => {
     const key = `${prefix}nguoi_${party}_${i}_${field}`;
     const base = `nguoi_${party}_${i}_${field}`;
@@ -572,7 +572,7 @@ export default function WeldAcceptanceRecordPages({ record, kind, kinds, editor,
                           const signer = resolveSigner(t, loadSignerDefaults(), party, 1);
                           return (
                             <td key={party}>
-                              HỌ VÀ TÊN: <Ed k={`nguoi_${party}_1_ten`} v={signer.ten} editor={party === "ntc" ? undefined : editor} ph="" /><br /><br />
+                              HỌ VÀ TÊN: <Ed k={`nguoi_${party}_1_ten`} v={signer.ten} editor={editor} ph="" /><br /><br />
                               NGÀY: <Ed date k={`ngay_ky_${party}`} v={(t[`ngay_ky_${party}`] || acceptanceDate).slice(0, 10)} editor={editor} ph="" /><br /><br />
                               CHỮ KÝ:
                             </td>

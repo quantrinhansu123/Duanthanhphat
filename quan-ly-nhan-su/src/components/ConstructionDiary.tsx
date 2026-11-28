@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { loadProjects } from "@/lib/projectsDb";
 import { EMPTY_DIARY, averageDayTemperature, deleteDiary, listDiaries, loadDiary, saveDiary, type ConstructionDiary, type DiarySummary } from "@/lib/constructionDiaryDb";
@@ -31,9 +31,10 @@ async function loadDefaults(projectId: string, date: string, ghiNhanHh: boolean)
   };
 }
 
-/** Ba ô chọn thời tiết theo biểu mẫu dự án (NKTC phần B). */
+/** Các ô thời tiết riêng cho từng buổi trong phần B nhật ký. */
 const WEATHER_OPTIONS = ["Bình thường", "Mưa", "Nắng"] as const;
 type WeatherOption = (typeof WEATHER_OPTIONS)[number];
+const PERIODS = [["sang", "Sáng"], ["chieu", "Chiều"], ["toi", "Tối"]] as const;
 
 function weatherMark(thoiTiet: string): WeatherOption | "" {
   const t = thoiTiet.trim().toLowerCase();
@@ -43,7 +44,16 @@ function weatherMark(thoiTiet: string): WeatherOption | "" {
   if (/(bình thường|nhiều mây|sương|mát|âm u|tuyết)/i.test(t)) return "Bình thường";
   // Giá trị đã chọn đúng một trong ba ô
   const exact = WEATHER_OPTIONS.find((o) => o.toLowerCase() === t);
-  return exact ?? "Bình thường";
+  return exact ?? "";
+}
+
+/** Đổi ô tick của một buổi mà vẫn giữ nhiệt độ/ghi chú đã nhập. */
+function changePeriodWeather(text: string, option: WeatherOption | ""): string {
+  const details = text.trim()
+    .replace(/^(?:Sáng|Chiều|Tối)\s*:?\s*/i, "")
+    .replace(/^(?:Bình thường|Mưa(?: rào)?|Dông|Nắng|Trời quang|Quang mây|Nhiều mây|Sương|Mát|Âm u)\s*,?\s*/i, "")
+    .trim();
+  return [option, details].filter(Boolean).join(details && option ? ", " : "");
 }
 
 const inp = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[#0047AB] focus:ring-2 focus:ring-[#0047AB]/25";
@@ -141,7 +151,11 @@ export default function ConstructionDiaryForm() {
   /** Các nhật ký đã lưu được tick trong danh sách để in ghép (khoá "dự án:ngày"). */
   const [picked, setPicked] = useState<Set<string>>(new Set());
   /** Đánh số trang tự động từ trang 1: mỗi nhật ký 2 trang, bản in nhiều ngày nối tiếp theo thứ tự. */
-  const pageOf = (_pid: string, _dt: string, index = 0) => printStart + index * 2;
+  const [pageCounts, setPageCounts] = useState<Record<string, number>>({});
+  const reportPages = useCallback((key: string, count: number) => {
+    setPageCounts((current) => current[key] === count ? current : { ...current, [key]: count });
+  }, []);
+  const pageOf = (index = 0) => printStart + (rangeRows ?? []).slice(0, index).reduce((sum, row) => sum + (pageCounts[`${row.projectId}:${row.date}`] ?? 2), 0);
   useEffect(() => {
     if (!previewOpen) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closePreview(); };
@@ -253,7 +267,6 @@ export default function ConstructionDiaryForm() {
     return () => { live = false; };
   }, [projectId, date, reloadDiary, includeHh, hhReady]);
 
-  const mark = weatherMark(d.thoiTiet);
   const set = (k: keyof ConstructionDiary) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setD((cur) => ({ ...cur, [k]: e.target.value }));
 
   async function autofill() {
@@ -448,27 +461,33 @@ Nội dung thiết bị (2.2) và mục 3 đã sửa tay trong các ngày này s
 
         <fieldset disabled={loading || busy} className="grid gap-x-8 gap-y-5 py-5 lg:grid-cols-2">
           <Card title="1. Thời tiết">
-            <div className="flex flex-wrap items-center gap-4 pt-1">
-              {WEATHER_OPTIONS.map((opt) => (
-                <label key={opt} className="inline-flex items-center gap-2 text-sm font-medium text-slate-800">
-                  <input
-                    type="radio"
-                    name="diary-weather"
-                    checked={mark === opt}
-                    onChange={() => setD((cur) => ({ ...cur, thoiTiet: opt }))}
-                    className="size-4 accent-[#0047AB]"
-                  />
-                  {opt}
-                </label>
+            <label className={lbl}>Nhiệt độ trung bình ngày (°C)
+              <input className={inp} inputMode="decimal" value={averageDayTemperature(d.sang, d.chieu, d.toi) ?? d.nhietDo} onChange={set("nhietDo")} />
+            </label>
+            <div className="mt-3 grid gap-3">
+              {PERIODS.map(([key, label]) => (
+                <div key={key} className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+                  <p className="mb-2 text-sm font-bold text-slate-900">Thời tiết buổi {label.toLowerCase()}</p>
+                  <div className="flex flex-wrap gap-x-5 gap-y-2" role="group" aria-label={`Chọn thời tiết buổi ${label.toLowerCase()}`}>
+                    {WEATHER_OPTIONS.map((opt) => (
+                      <label key={opt} className="inline-flex items-center gap-2 text-sm font-medium text-slate-800">
+                        <input
+                          type="checkbox"
+                          checked={weatherMark(d[key]) === opt}
+                          onChange={(e) => setD((cur) => ({ ...cur, [key]: changePeriodWeather(cur[key], e.target.checked ? opt : "") }))}
+                          className="size-4 accent-[#0047AB]"
+                        />
+                        {opt}
+                      </label>
+                    ))}
+                  </div>
+                  <label className={`${lbl} mt-2`}>Chi tiết {label.toLowerCase()} / nhiệt độ (°C)
+                    <input className={inp} value={d[key]} onChange={set(key)} placeholder={`Ví dụ: ${label} nhiều mây, 26°C`} />
+                  </label>
+                </div>
               ))}
             </div>
-            <div className="grid gap-3 sm:grid-cols-4">
-              <label className={lbl}>Nhiệt độ (°C) — trung bình sáng / chiều / tối<input className={inp} inputMode="decimal" value={averageDayTemperature(d.sang, d.chieu, d.toi) ?? d.nhietDo} onChange={set("nhietDo")} /></label>
-              {(["sang", "chieu", "toi"] as const).map((k) => (
-                <label key={k} className={lbl}>{{ sang: "Sáng", chieu: "Chiều", toi: "Tối" }[k]}<input className={inp} value={d[k]} onChange={set(k)} placeholder="Ví dụ: Nắng, 27°C" /></label>
-              ))}
-            </div>
-            <p className="text-xs text-slate-500">Theo biểu mẫu: Bình thường / Mưa / Nắng + nhiệt độ; Sáng, Chiều, Tối ghi chi tiết. Tự điền từ Open-Meteo theo tọa độ dự án.</p>
+            <p className="mt-2 text-xs text-slate-500">Mỗi buổi có ô tick riêng; chỉ chọn một trạng thái cho mỗi buổi. Chi tiết và nhiệt độ có thể sửa tay hoặc tự điền từ dữ liệu thời tiết.</p>
           </Card>
 
           <Card title="2. Nhân lực, thiết bị thi công">
@@ -614,8 +633,8 @@ Nội dung thiết bị (2.2) và mục 3 đã sửa tay trong các ngày này s
       )}
       <article id="diary-print" className={previewOpen ? "diary-preview" : undefined} data-pdf-split=":scope > .diary-sheet">
         {rangeRows
-          ? rangeRows.map((row, i) => <DiaryPages key={`${row.projectId}:${row.date}`} d={row.diary} date={row.date} pageStart={pageOf(row.projectId, row.date, i)} signers={{ tvgs: row.diary.kyTvgs ?? fallback.tvgs, ntc: row.diary.kyNtc ?? fallback.ntc, ntp: row.diary.kyNtp ?? fallback.ntp }} />)
-          : <DiaryPages d={d} date={date} pageStart={pageOf(projectId, date)} signers={signers} editable={previewOpen} onSigner={setSigner} onSignerBlur={persistSigners} />}
+          ? rangeRows.map((row, i) => <DiaryPages key={`${row.projectId}:${row.date}`} d={row.diary} date={row.date} pageStart={pageOf(i)} pageKey={`${row.projectId}:${row.date}`} onPages={reportPages} signers={{ tvgs: row.diary.kyTvgs ?? fallback.tvgs, ntc: row.diary.kyNtc ?? fallback.ntc, ntp: row.diary.kyNtp ?? fallback.ntp }} />)
+          : <DiaryPages d={d} date={date} pageStart={pageOf()} signers={signers} editable={previewOpen} onSigner={setSigner} onSignerBlur={persistSigners} />}
       </article>
       </>, document.body)}
       {pageAsk && createPortal(
@@ -653,8 +672,9 @@ Nội dung thiết bị (2.2) và mục 3 đã sửa tay trong các ngày này s
 }
 
 /** Hai+ trang in của một nhật ký (dùng cho bản in một ngày và bản ghép nhiều ngày). Mục 3 dài → thêm trang giữa cho đủ mã mối. */
-function DiaryPages({ d, date, pageStart, signers, editable = false, onSigner, onSignerBlur }: {
+function DiaryPages({ d, date, pageStart, signers, editable = false, onSigner, onSignerBlur, pageKey, onPages }: {
   d: ConstructionDiary; date: string; pageStart: number; signers: { tvgs: string; ntc: string; ntp: string };
+  pageKey?: string; onPages?: (key: string, count: number) => void;
   editable?: boolean; onSigner?: (key: "tvgs" | "ntc" | "ntp", value: string) => void; onSignerBlur?: () => void;
 }) {
   const fill1 = useRef<HTMLDivElement>(null), fill2 = useRef<HTMLDivElement>(null), midFill = useRef<HTMLDivElement>(null);
@@ -675,7 +695,6 @@ function DiaryPages({ d, date, pageStart, signers, editable = false, onSigner, o
     return () => ro.disconnect();
   }, []);
   const [y, m, day] = date.split("-");
-  const mark = weatherMark(d.thoiTiet);
   const noAcceptance = (v: string) => !v.trim() || v.trim() === "Không có công tác nghiệm thu"; // không in dòng "không có" vô nghĩa
   // Dòng «Báo RFI số …» của bản cũ không thuộc nhật ký thi công.
   // Danh sách mã mối: dấu cuối phải là dấu chấm (sửa bản đã lưu còn dấu phẩy thừa).
@@ -689,8 +708,13 @@ function DiaryPages({ d, date, pageStart, signers, editable = false, onSigner, o
     noAcceptance(d.nghiemThuHangNgay) ? "" : fixDiarySentenceEnd(d.nghiemThuHangNgay.trim()),
   ].join("\n");
   // Ngắt dòng mục 3 đúng như trình duyệt đang bố cục, rồi chia dòng cho từng trang (trang 1 → các trang giữa → trang cuối).
-  const { lines: all, probe: section3Probe } = useWrapped(section3Print);
+  const { lines: equipmentLines, probe: equipmentProbe } = useWrapped(d.thietBi.trim());
+  const { lines: workLines, probe: section3Probe } = useWrapped(section3Print);
+  const all = ["2.2 Thiết bị:", ...equipmentLines, ...Array(Math.max(0, 5 - equipmentLines.length)).fill(""), "3. Nội dung công việc thực hiện:", ...workLines];
   const midCount = Math.ceil(Math.max(0, all.length - cap[0] - cap[1]) / cap[2]);
+  useEffect(() => {
+    if (pageKey && onPages) onPages(pageKey, 2 + midCount);
+  }, [pageKey, onPages, midCount]);
   return <>
         {/* Đo sức chứa một trang giữa (ẩn). */}
         <div aria-hidden="true" style={{ position: "absolute", left: -10000, top: 0, width: "180mm", visibility: "hidden", pointerEvents: "none" }}>
@@ -703,23 +727,20 @@ function DiaryPages({ d, date, pageStart, signers, editable = false, onSigner, o
           <p className="diary-date">Ngày {day || "……"} tháng {m || "……"} năm {y || "202…."}</p>
 
           <p className="diary-heading" style={{ marginTop: 0 }}>1. Thời tiết</p>
-          <p className="diary-indent diary-check">
-            Bình thường: <Check checked={mark === "Bình thường"} />&nbsp;&nbsp;&nbsp;&nbsp;
-            Mưa <Check checked={mark === "Mưa"} />&nbsp;&nbsp;&nbsp;&nbsp;
-            Nắng <Check checked={mark === "Nắng"} />&nbsp;&nbsp;&nbsp;&nbsp;
-            Nhiệt độ : {(averageDayTemperature(d.sang, d.chieu, d.toi) ?? d.nhietDo) ? `${averageDayTemperature(d.sang, d.chieu, d.toi) ?? d.nhietDo} °C` : ".........."}
-          </p>
-          <p className="diary-indent">Sáng {d.sang || "…………."}&nbsp;&nbsp;&nbsp;&nbsp;Chiều {d.chieu || "……...."}&nbsp;&nbsp;&nbsp;&nbsp;Tối {d.toi || "………….."}</p>
+          <p className="diary-indent">Nhiệt độ trung bình ngày: {(averageDayTemperature(d.sang, d.chieu, d.toi) ?? d.nhietDo) ? `${averageDayTemperature(d.sang, d.chieu, d.toi) ?? d.nhietDo} °C` : ".........."}.</p>
+          {PERIODS.map(([key, label]) => (
+            <p key={key} className="diary-indent diary-check">
+              <b>{label}:</b>&nbsp; Bình thường <Check checked={weatherMark(d[key]) === "Bình thường"} />&nbsp;&nbsp;
+              Mưa <Check checked={weatherMark(d[key]) === "Mưa"} />&nbsp;&nbsp;
+              Nắng <Check checked={weatherMark(d[key]) === "Nắng"} />&nbsp; — {d[key] || "…………."}
+            </p>
+          ))}
 
           <p className="diary-heading">2. Tình hình nhân lực, thiết bị thi công:</p>
           <p className="diary-heading" style={{ marginTop: 0 }}>2.1 Nhân lực:</p>
           <p className="diary-indent">Ban chỉ huy: {d.banChiHuy || "………"}(người); Cán bộ kỹ thuật: {d.canBoKyThuat || ".........."}(người); Công nhân {d.congNhan || "..........."}(người)</p>
-          <p className="diary-heading" style={{ marginTop: 0 }}>2.2 Thiết bị:</p>
-          <Ruled text={d.thietBi} min={5} />
-
-          <p className="diary-heading">3. Nội dung công việc thực hiện:</p>
           <div className="diary-fill" ref={fill1} style={{ position: "relative" }}>
-            {section3Probe}
+            {equipmentProbe}{section3Probe}
             <Rows lines={all.slice(0, cap[0])} count={cap[0]} />
           </div>
           <p className="diary-foot">Trang {pageStart}</p>
@@ -816,7 +837,7 @@ function Ruled({ text, min }: { text: string; min: number }) {
 
 /** Mỗi dòng một khối cao đúng LINE px có hàng chấm ngay dưới chân chữ; thiếu thì thêm dòng chấm trống cho đủ `count`. */
 function Rows({ lines, count }: { lines: string[]; count: number }) {
-  return <>{Array.from({ length: Math.max(count, lines.length) }, (_, i) => <div className="rl" key={i}>{lines[i] ?? ""}</div>)}</>;
+  return <>{Array.from({ length: Math.max(count, lines.length) }, (_, i) => <div className="rl" key={i} style={/^(2\.2 Thiết bị:|3\. Nội dung công việc thực hiện:)$/.test(lines[i] ?? "") ? { fontWeight: "bold" } : undefined}>{lines[i] ?? ""}</div>)}</>;
 }
 
 /**

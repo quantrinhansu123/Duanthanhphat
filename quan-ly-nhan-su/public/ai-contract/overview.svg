@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 580" role="img" aria-labelledby="title desc">
+  <title id="title">Minh họa nền tảng quản lý hợp đồng và kho</title>
+  <desc id="desc">Giao diện mẫu với danh mục hợp đồng, biểu đồ tiến độ, kho hồ sơ và kho vật tư đề xuất</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#f4f8ff"/><stop offset="1" stop-color="#e6f3f2"/></linearGradient>
+    <linearGradient id="blue" x2="1" y2="1"><stop stop-color="#0b5bba"/><stop offset="1" stop-color="#12376f"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#173456" flood-opacity=".12"/></filter>
+  </defs>
+  <rect width="900" height="580" rx="20" fill="url(#bg)"/>
+  <rect x="20" y="20" width="860" height="540" rx="18" fill="#fff" filter="url(#shadow)"/>
+  <rect x="20" y="20" width="166" height="540" rx="18" fill="#0b2b55"/>
+  <rect x="166" y="20" width="20" height="540" fill="#0b2b55"/>
+  <circle cx="48" cy="51" r="12" fill="#5dd4c0"/><text x="69" y="58" fill="#fff" font-family="Arial,sans-serif" font-weight="700" font-size="17">THÀNH PHÁT</text>
+  <text x="39" y="104" fill="#89a9ca" font-family="Arial,sans-serif" font-size="11" letter-spacing="2">WORKSPACE</text>
+  <rect x="30" y="122" width="146" height="37" rx="8" fill="#24518b"/><circle cx="47" cy="140" r="5" fill="#7ddbc9"/><text x="62" y="145" fill="#fff" font-family="Arial,sans-serif" font-size="13">Tổng quan</text>
+  <text x="42" y="193" fill="#b5cce5" font-family="Arial,sans-serif" font-size="13">▣  Hợp đồng</text>
+  <text x="42" y="229" fill="#b5cce5" font-family="Arial,sans-serif" font-size="13">▤  Kho hồ sơ</text>
+  <text x="42" y="265" fill="#b5cce5" font-family="Arial,sans-serif" font-size="13">◇  AI hỏi đáp</text>
+  <text x="42" y="301" fill="#b5cce5" font-family="Arial,sans-serif" font-size="13">▥  Đối chiếu BOQ</text>
+  <rect x="30" y="333" width="146" height="37" rx="8" fill="#133c63"/><text x="42" y="356" fill="#80d7c6" font-family="Arial,sans-serif" font-size="13">▦  Kho vật tư ↗</text>
+  <text x="39" y="523" fill="#83a4c4" font-family="Arial,sans-serif" font-size="11">GIAO DIỆN MINH HỌA</text>
+  <text x="215" y="62" fill="#172f4e" font-family="Arial,sans-serif" font-weight="700" font-size="22">Tổng quan hợp đồng</text>
+  <text x="216" y="83" fill="#73849a" font-family="Arial,sans-serif" font-size="12">Dữ liệu giả lập • Toàn bộ dự án</text>
+  <rect x="718" y="43" width="133" height="34" rx="9" fill="url(#blue)"/><text x="739" y="64" fill="#fff" font-family="Arial,sans-serif" font-size="12">+ Tạo báo cáo</text>
+  <g font-family="Arial,sans-serif">
+    <rect x="215" y="104" width="193" height="94" rx="13" fill="#eef5ff"/><text x="231" y="130" fill="#496889" font-size="12">HỒ SƠ HỢP ĐỒNG</text><text x="231" y="169" fill="#12376f" font-weight="700" font-size="32">128</text><text x="315" y="169" fill="#378d76" font-size="11">↗ 12 mới</text>
+    <rect x="420" y="104" width="193" height="94" rx="13" fill="#ebf9f5"/><text x="436" y="130" fill="#496889" font-size="12">ĐANG THỰC HIỆN</text><text x="436" y="169" fill="#105c55" font-weight="700" font-size="32">42</text><text x="515" y="169" fill="#378d76" font-size="11">dự án</text>
+    <rect x="625" y="104" width="226" height="94" rx="13" fill="#fff5eb"/><text x="641" y="130" fill="#896c4f" font-size="12">CẦN RÀ SOÁT</text><text x="641" y="169" fill="#a66522" font-weight="700" font-size="32">08</text><text x="718" y="169" fill="#a66522" font-size="11">hạn / rủi ro</text>
+    <rect x="215" y="214" width="405" height="195" rx="13" fill="#fff" stroke="#dce5ee"/><text x="233" y="243" fill="#173456" font-weight="700" font-size="14">Tiến độ hợp đồng</text><text x="513" y="243" fill="#7890a7" font-size="11">6 tháng gần đây</text>
+    <path d="M244 366 H586 M244 322 H586 M244 278 H586" stroke="#e9eff6" stroke-width="1"/>
+    <path d="M251 357 C310 340 325 348 375 320 S445 309 483 281 S549 300 580 262" fill="none" stroke="#1265bd" stroke-width="4" stroke-linecap="round"/>
+    <path d="M251 371 C308 360 332 366 375 352 S449 348 483 333 S543 342 580 311" fill="none" stroke="#30ad9c" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="580" cy="262" r="5" fill="#1265bd"/><circle cx="580" cy="311" r="5" fill="#30ad9c"/>
+    <text x="252" y="391" fill="#8da0b4" font-size="10">T6</text><text x="318" y="391" fill="#8da0b4" font-size="10">T7</text><text x="385" y="391" fill="#8da0b4" font-size="10">T8</text><text x="452" y="391" fill="#8da0b4" font-size="10">T9</text><text x="516" y="391" fill="#8da0b4" font-size="10">T10</text><text x="570" y="391" fill="#8da0b4" font-size="10">T11</text>
+    <rect x="633" y="214" width="218" height="195" rx="13" fill="#fff" stroke="#dce5ee"/><text x="650" y="243" fill="#173456" font-weight="700" font-size="14">Kho hồ sơ</text>
+    <rect x="650" y="258" width="184" height="38" rx="7" fill="#f2f7fd"/><text x="661" y="282" fill="#22548c" font-size="12">▤  Hợp đồng gốc</text><text x="810" y="282" fill="#22548c" font-size="12">64</text>
+    <rect x="650" y="303" width="184" height="38" rx="7" fill="#f2f7fd"/><text x="661" y="327" fill="#22548c" font-size="12">▤  Phụ lục</text><text x="810" y="327" fill="#22548c" font-size="12">38</text>
+    <rect x="650" y="348" width="184" height="38" rx="7" fill="#f2f7fd"/><text x="661" y="372" fill="#22548c" font-size="12">▤  Nghiệm thu</text><text x="810" y="372" fill="#22548c" font-size="12">26</text>
+    <rect x="215" y="424" width="636" height="112" rx="13" fill="#f2faf8" stroke="#c9e9df"/><text x="233" y="453" fill="#125950" font-weight="700" font-size="14">Kho vật tư · Đề xuất mở rộng</text>
+    <text x="233" y="477" fill="#607d79" font-size="12">Kết nối BOQ và hợp đồng với nhập – xuất – tồn theo dự án</text>
+    <rect x="233" y="490" width="112" height="29" rx="7" fill="#fff"/><text x="246" y="509" fill="#178271" font-size="11">Nhập kho  ↗</text>
+    <rect x="354" y="490" width="112" height="29" rx="7" fill="#fff"/><text x="367" y="509" fill="#178271" font-size="11">Xuất kho  ↗</text>
+    <rect x="475" y="490" width="112" height="29" rx="7" fill="#fff"/><text x="488" y="509" fill="#178271" font-size="11">Tồn kho  ↗</text>
+  </g>
+</svg>

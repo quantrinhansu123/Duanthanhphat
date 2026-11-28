@@ -27,6 +27,7 @@ import {
   Path,
   SealCheck,
   Shapes,
+  Sparkle,
   Train,
   Users,
   WarningCircle,
@@ -79,6 +80,7 @@ export const childIcons: Record<string, Icon> = {
   "bc-nhan-su": Users,
   "bc-bao-cao-ray": ClipboardText,
   "bc-bao-cao-ngay": CalendarBlank,
+  "bao-cao-ai": Sparkle,
   "cau-hinh": GearSix,
   "trien-khai": Flag,
 };

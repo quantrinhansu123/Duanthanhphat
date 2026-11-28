@@ -742,11 +742,13 @@ export default function MachineAssignmentList() {
               aria-label="Lọc theo máy"
             >
               <option value="">Tất cả máy</option>
-              {machines.map((machine) => (
-                <option key={machine.id} value={machine.id}>
-                  {machine.code}
-                </option>
-              ))}
+              {machines
+                .filter((machine) => /máy\s+hàn/i.test(machine.name ?? "") && machine.code !== "MHĐT-01")
+                .map((machine) => (
+                  <option key={machine.id} value={machine.id}>
+                    {machine.code}
+                  </option>
+                ))}
             </select>
           </label>
           <label className="flex min-w-0 flex-col gap-1 text-[11px] font-semibold text-slate-500">

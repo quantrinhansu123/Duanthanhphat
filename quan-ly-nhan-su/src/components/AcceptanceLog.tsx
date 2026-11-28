@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { acceptanceLog, type AcceptanceEntry, type AcceptanceResult } from "@/data/acceptanceLog";
 
@@ -64,8 +64,14 @@ function ImageDialog({ entry, onClose }: { entry: AcceptanceEntry; onClose: () =
               <figcaption className="mb-1 text-xs font-bold uppercase tracking-wide text-red-700">
                 Trước khi sửa
               </figcaption>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={images.before} alt="Ảnh trước khi sửa" className="w-full border border-slate-300" />
+              {images.before ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={images.before} alt="Ảnh trước khi sửa" className="w-full border border-slate-300" />
+              ) : (
+                <div className="flex min-h-48 items-center justify-center border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-xs italic text-slate-600">
+                  {images.beforeNote ?? "Không có ảnh trước thật (chưa có baseline UI trước khi sửa, không dựng giả)."}
+                </div>
+              )}
             </figure>
             <figure>
               <figcaption className="mb-1 text-xs font-bold uppercase tracking-wide text-emerald-700">
@@ -175,39 +181,119 @@ export default function AcceptanceLog() {
           </thead>
           <tbody>
             {rows.map((e) => (
-              <tr
-                key={e.id}
-                onClick={() => router.push(e.href)}
-                className="cursor-pointer border-b border-slate-200 align-top transition-colors hover:bg-sky-50"
-              >
-                <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">{formatDate(e.date)}</td>
-                <td className="px-3 py-2.5 font-semibold">
-                  <Link href={e.href} className="text-[#0047AB] hover:underline" onClick={(ev) => ev.stopPropagation()}>
-                    {e.item}
-                  </Link>
-                </td>
-                <td className="px-3 py-2.5">{e.requirement}</td>
-                <td className="px-3 py-2.5">{e.solution}</td>
-                <td className="px-3 py-2.5 text-red-700">{e.before}</td>
-                <td className="px-3 py-2.5 text-emerald-700">{e.after}</td>
-                <td className="px-3 py-2.5">
-                  <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${RESULT_CLASS[e.result]}`}>
-                    {RESULT_LABEL[e.result]}
-                  </span>
-                </td>
-                <td className="px-3 py-2.5">
-                  <button
-                    type="button"
-                    onClick={(ev) => {
-                      ev.stopPropagation();
-                      setViewing(e);
-                    }}
-                    className="h-8 border border-[#0047AB] px-3 text-xs font-bold uppercase tracking-wide text-[#0047AB] hover:bg-[#0047AB] hover:text-white"
-                  >
-                    Xem
-                  </button>
-                </td>
-              </tr>
+              <Fragment key={e.id}>
+                <tr
+                  onClick={() => router.push(e.href)}
+                  className="cursor-pointer border-b border-slate-200 align-top transition-colors hover:bg-sky-50"
+                >
+                  <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">{formatDate(e.date)}</td>
+                  <td className="px-3 py-2.5 font-semibold">
+                    <Link href={e.href} className="text-[#0047AB] hover:underline" onClick={(ev) => ev.stopPropagation()}>
+                      {e.item}
+                    </Link>
+                  </td>
+                  <td className="px-3 py-2.5">{e.requirement}</td>
+                  <td className="px-3 py-2.5">{e.solution}</td>
+                  <td className="px-3 py-2.5 text-red-700">{e.before}</td>
+                  <td className="px-3 py-2.5 text-emerald-700">{e.after}</td>
+                  <td className="px-3 py-2.5">
+                    <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${RESULT_CLASS[e.result]}`}>
+                      {RESULT_LABEL[e.result]}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <button
+                      type="button"
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        setViewing(e);
+                      }}
+                      className="h-8 border border-[#0047AB] px-3 text-xs font-bold uppercase tracking-wide text-[#0047AB] hover:bg-[#0047AB] hover:text-white"
+                    >
+                      Xem
+                    </button>
+                  </td>
+                </tr>
+                {e.requirementRows && e.requirementRows.length > 0 && (
+                  <tr className="border-b-2 border-slate-300 bg-slate-50/70">
+                    <td colSpan={8} className="p-3 sm:p-4">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="text-xs font-bold uppercase tracking-wide text-[#0047AB]">
+                          Bảng đối chiếu nghiệm thu chi tiết theo từng ID yêu cầu ({e.requirementRows.length} ID)
+                        </h3>
+                        <span className="text-xs text-slate-500">
+                          Nguồn yêu cầu: <code>docs/yeu-cau-bao-cao-thi-cong-theo-anh.md</code> · Kế hoạch: <code>docs/ke-hoach-bao-cao-thi-cong-theo-anh.md</code>
+                        </span>
+                      </div>
+                      <div className="overflow-x-auto border border-slate-200 bg-white">
+                        <table className="w-full min-w-[980px] border-collapse text-xs">
+                          <thead>
+                            <tr className="border-b border-slate-200 bg-slate-100 text-left font-semibold uppercase tracking-wide text-slate-700">
+                              <th className="w-16 px-2.5 py-2">ID</th>
+                              <th className="w-64 px-2.5 py-2">Yêu cầu / Tiêu chí</th>
+                              <th className="w-28 px-2.5 py-2">Kết quả</th>
+                              <th className="w-44 px-2.5 py-2">Ảnh trước</th>
+                              <th className="w-44 px-2.5 py-2">Ảnh sau</th>
+                              <th className="w-56 px-2.5 py-2">Đường dẫn code</th>
+                              <th className="px-2.5 py-2">Ghi chú &amp; Tồn đọng</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-200">
+                            {e.requirementRows.map((r) => (
+                              <tr key={r.id} className="align-top hover:bg-slate-50">
+                                <td className="whitespace-nowrap px-2.5 py-2 font-mono font-bold text-[#0047AB]">
+                                  {r.id}
+                                </td>
+                                <td className="px-2.5 py-2 text-slate-800">{r.requirement}</td>
+                                <td className="px-2.5 py-2">
+                                  <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${RESULT_CLASS[r.status]}`}>
+                                    {RESULT_LABEL[r.status]}
+                                  </span>
+                                  {r.statusDetail && (
+                                    <div className="mt-1 text-[11px] font-medium text-slate-600">
+                                      {r.statusDetail}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-2.5 py-2">
+                                  {r.beforeImage ? (
+                                    <a
+                                      href={r.beforeImage}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="font-mono text-[11px] font-semibold text-red-700 hover:underline"
+                                    >
+                                      {r.beforeImage.split("/").pop()} ↗
+                                    </a>
+                                  ) : (
+                                    <span className="text-[11px] italic text-slate-500">
+                                      {r.beforeImageNote ?? "Không có ảnh trước thật"}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-2.5 py-2">
+                                  <a
+                                    href={r.afterImage}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-mono text-[11px] font-semibold text-emerald-700 hover:underline"
+                                  >
+                                    {r.afterImageLabel ?? r.afterImage.split("/").pop()} ↗
+                                  </a>
+                                </td>
+                                <td className="px-2.5 py-2 font-mono text-[11px] text-slate-700">
+                                  {r.codePath}
+                                </td>
+                                <td className="px-2.5 py-2 text-slate-700">{r.note}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
             {rows.length === 0 && (
               <tr>
