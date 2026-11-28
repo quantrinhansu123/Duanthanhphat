@@ -32,12 +32,12 @@ const catalogs = [
 type CatalogKey = typeof catalogs[number][0];
 type Catalog = { rows: Tb15Row[]; backend?: string };
 // E, α, K và l₀, i₀, ΔP lấy từ mặt cắt ray; đệm D lấy từ độ cứng gối. Không nhập tay.
-const MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-
-function monthAir(row: Tb15Row | undefined, month: number, field: "t_min_thang" | "t_max_thang") {
+function yearAir(row: Tb15Row | undefined, field: "t_min_thang" | "t_max_thang") {
   const list = row?.[field];
-  if (!Array.isArray(list) || list.length < month) return NaN;
-  return Number(list[month - 1]);
+  if (!Array.isArray(list) || list.length < 12) return { values: [] as number[], mean: NaN };
+  const values = list.slice(0, 12).map(Number);
+  if (values.some((value) => !Number.isFinite(value))) return { values, mean: NaN };
+  return { values, mean: values.reduce((sum, value) => sum + value, 0) / 12 };
 }
 
 const fields = [
@@ -300,14 +300,16 @@ export default function Tb15GroundCheck() {
         throw new Error("Chọn loại sức kéo điện hoặc diesel.");
       }
       const speedFactor = matchSpeedFactor(data.he_so_tai?.rows, read("speed"), traction);
-      const airMin = monthAir(climate, climateMonth, "t_min_thang");
-      const airMax = monthAir(climate, climateMonth, "t_max_thang");
+      const minYear = yearAir(climate, "t_min_thang");
+      const maxYear = yearAir(climate, "t_max_thang");
+      const airMin = minYear.mean;
+      const airMax = maxYear.mean;
       if (!Number.isFinite(airMin) || !Number.isFinite(airMax)) {
-        throw new Error(`Trạm ${climate?.ten_tram ?? "đã chọn"} chưa có nhiệt độ không khí tháng ${climateMonth}.`);
+        throw new Error(`Trạm ${climate?.ten_tram ?? "đã chọn"} chưa đủ 12 tháng nhiệt độ không khí.`);
       }
       setSourceLines([
         caseLine,
-        `Trạm ${climate?.ten_tram}, tháng ${climateMonth}: Tmin không khí = ${airMin} °C, Tmax không khí = ${airMax} °C. Tmin ray = ${airMin} °C, Tmax ray = ${airMax + 20} °C.`,
+        `Trạm ${climate?.ten_tram}: Tmin không khí = trung bình 12 tháng = ${airMin} °C, Tmax không khí = trung bình 12 tháng = ${airMax} °C. Tmin ray = ${airMin} °C, Tmax ray = ${airMax + 20} °C.`,
         `Khổ ${gauge.gauge} mm, H = ${geometry.cgHeightMm} mm (${gauge.vehicle === "dau_may" ? "đầu máy" : "toa xe"}), S = ${geometry.railCenterMm} mm. Hệ số lực ngang f = ${matchingFactor.he_so} (${matchingFactor.nhan}). Hệ số vận tốc ${speedFactor.row.nhan}: ${speedFactor.coefficient}.`,
         `Ray ${rail?.loai_kg_m} kg/m, mòn ${rail?.do_mon_mm} mm: E = ${railE} MPa, α = ${railAlpha} /°C, K = ${railK}. Mác ${steel?.mac_thep}: σ_s = ${sigmaS} MPa, [σ] = ${allowable} MPa.`,
         `Gối ${selectedSeat ? seatOptionLabel(selectedSeat) : "chưa chọn"} (${selectedSeat?.loai_duong === "co_ba_lat" ? "có ba lát" : "không ba lát"}).`,
@@ -353,7 +355,7 @@ export default function Tb15GroundCheck() {
         ["Khoảng cách tim ray S (mm)", format(geometry.railCenterMm)],
         ["Trạm khí hậu", String(climate?.ten_tram ?? "—")],
         ["Tỉnh", String(climate?.tinh ?? "—")],
-        ["Tháng", String(climateMonth)],
+        ["Nhiệt độ không khí", "Trung bình 12 tháng"],
         ["Tmin không khí (°C)", format(airMin)],
         ["Tmax không khí (°C)", format(airMax)],
         ["Tmin ray (°C)", format(airMin)],
@@ -397,7 +399,9 @@ export default function Tb15GroundCheck() {
         ] as [string, string][] : []),
       ].map(([label, value]) => ({ label, value }));
       const origin: Step10Origin = {
-        climate: climate?.ten_tram ? `${climate.ten_tram}, tháng ${climateMonth}` : undefined,
+        climate: climate?.ten_tram ? `${climate.ten_tram}, trung bình 12 tháng` : undefined,
+        airMinMonths: minYear.values,
+        airMaxMonths: maxYear.values,
         rail: rail ? `${rail.loai_kg_m} kg/m, mòn ${rail.do_mon_mm} mm` : undefined,
         steel: steel?.mac_thep ? String(steel.mac_thep) : undefined,
         track: track?.ten ? String(track.ten) : undefined,
@@ -646,7 +650,7 @@ export default function Tb15GroundCheck() {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-slate-900">Tính thử kiểm toán nền đường có ba lát</h2>
-          <p className="mt-1 text-sm text-slate-600">E, α, K, σ_s và l₀, i₀, ΔP lấy theo danh mục. Đệm D theo độ cứng gối. B.0.4-1 theo tà vẹt, B.0.4-2 theo phụ kiện đã chọn. Hệ số lực ngang tra theo đường thẳng hoặc bán kính. Hệ số vận tốc tra theo tốc độ và loại sức kéo trong cùng bảng. Nhiệt độ không khí lấy theo tháng đã chọn của trạm. Tmin ray bằng Tmin tháng đó, Tmax ray bằng Tmax tháng đó cộng 20 °C. Sheet này chạy cho nền có ba lát. Trên cầu và không ba lát được gắn dữ liệu, chưa có mô hình lực tương tác.</p>
+          <p className="mt-1 text-sm text-slate-600">E, α, K, σ_s và l₀, i₀, ΔP lấy theo danh mục. Đệm D theo độ cứng gối. B.0.4-1 theo tà vẹt, B.0.4-2 theo phụ kiện đã chọn. Hệ số lực ngang tra theo đường thẳng hoặc bán kính. Hệ số vận tốc tra theo tốc độ và loại sức kéo trong cùng bảng. Tmin và Tmax không khí là trung bình 12 tháng của trạm. Tmin ray bằng trung bình Tmin, Tmax ray bằng trung bình Tmax cộng 20 °C. Sheet này chạy cho nền có ba lát. Trên cầu và không ba lát được gắn dữ liệu, chưa có mô hình lực tương tác.</p>
         </div>
         <button type="button" onClick={openPrint} className="tb15-no-print h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800">In sheet kiểm toán</button>
       </header>
@@ -765,12 +769,7 @@ export default function Tb15GroundCheck() {
             return (
               <Fragment key={key}>
                 {station}
-                <label className="text-sm font-medium text-slate-800">Tháng
-                  <select name="climateMonth" value={climateMonth} required className={control} onChange={(e) => setClimateMonth(Number(e.target.value))}>
-                    {MONTHS.map((month) => <option key={month} value={month}>Tháng {month}</option>)}
-                  </select>
-                  <span className="mt-1 block text-xs font-normal text-slate-500">Mặc định là tháng hiện tại. Tmin và Tmax không khí lấy theo tháng này.</span>
-                </label>
+                <p className="self-end text-xs leading-5 text-slate-500">Tmin và Tmax không khí lấy trung bình 12 tháng của trạm này. Tmax ray cộng thêm 20 °C.</p>
               </Fragment>
             );
           })}

@@ -20,6 +20,10 @@ export type Step10Origin = {
   fastener?: string;
   /** Dòng hệ số vận tốc A.0.2-1 đã tra. */
   speed?: string;
+  /** Tmin không khí từng tháng, tháng 1 đến tháng 12. */
+  airMinMonths?: number[];
+  /** Tmax không khí từng tháng, tháng 1 đến tháng 12. */
+  airMaxMonths?: number[];
 };
 
 export type WorkedItem = {
@@ -73,6 +77,11 @@ function piece(text: string, source?: string): FormulaPiece {
 
 function equation(symbols: string, values: FormulaPiece[], result: string, note?: string): FormulaLine {
   return note ? { symbols, values, result, note } : { symbols, values, result };
+}
+
+function yearMonths(values: number[] | undefined) {
+  if (!values || values.length !== 12 || values.some((value) => !Number.isFinite(value))) return null;
+  return values;
 }
 
 function origins(origin?: Step10Origin) {
@@ -463,7 +472,7 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
       equation("ΔTd,max = Tu − Tmin", [
         piece(temp(te + input.lockTolerance), "Tu vừa tính"),
         piece(" − "),
-        piece(temp(input.minRailTemperature), `${from.climate}: Tmin ray bằng Tmin không khí của tháng đã chọn`),
+        piece(temp(input.minRailTemperature), `${from.climate}: Tmin ray bằng trung bình Tmin không khí của 12 tháng`),
       ], `${temp(dropActual)} °C`, "Trừ Tmin ra biên độ giảm nhiệt thực tế."),
       equation("σt = E · α · ΔTd,max", [
         piece(num(input.steelModulus, 1), `${from.rail}: mô đun đàn hồi E`),
@@ -648,7 +657,7 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
     display: `${num(compression / 1000)} kN`,
     steps: [
       equation("ΔTu,max = Tmax − Te + biên độ", [
-        piece(temp(input.maxRailTemperature), `${from.climate}: Tmax ray = Tmax không khí của tháng đã chọn + 20 °C`),
+        piece(temp(input.maxRailTemperature), `${from.climate}: Tmax ray bằng trung bình Tmax không khí của 12 tháng cộng 20 °C`),
         piece(" − "),
         piece(temp(te), inside ? "Te của bài khóa đường, nằm trong khoảng" : "Te tính thử của bài khóa đường, đang nằm ngoài khoảng"),
         piece(" + "),
@@ -804,18 +813,30 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
 
   const airMin = input.minRailTemperature;
   const airMax = input.maxRailTemperature - 20;
+  const minMonths = yearMonths(origin?.airMinMonths);
+  const maxMonths = yearMonths(origin?.airMaxMonths);
   const climate: WorkedItem = item({
     id: "climate",
-    label: "Nhiệt độ ray theo tháng",
+    label: "Nhiệt độ ray theo trung bình năm",
     display: `Tmin = ${temp(airMin)} °C, Tmax = ${temp(input.maxRailTemperature)} °C`,
     steps: [
-      equation("Tmin ray = Tmin không khí", [
-        piece(temp(airMin), `${from.climate}: Tmin không khí của tháng đã chọn`),
-      ], `${temp(airMin)} °C`, "Nhiệt độ ray thấp nhất lấy bằng nhiệt độ không khí thấp nhất của tháng."),
-      equation("Tmax ray = Tmax không khí + 20", [
-        piece(temp(airMax), `${from.climate}: Tmax không khí của tháng đã chọn`),
+      ...(minMonths
+        ? [equation("Tmin kk = (T1 + T2 + … + T12) / 12", [
+          piece(`(${minMonths.map((value) => temp(value)).join(" + ")}) / 12`, `${from.climate}: Tmin không khí từng tháng`),
+        ], `${temp(airMin)} °C`, "Lấy trung bình Tmin không khí của 12 tháng.")]
+        : []),
+      equation("Tmin ray = Tmin kk", [
+        piece(temp(airMin), minMonths ? "Tmin không khí trung bình vừa tính" : `${from.climate}: Tmin không khí đã lưu`),
+      ], `${temp(airMin)} °C`, "Nhiệt độ ray thấp nhất bằng trung bình Tmin không khí."),
+      ...(maxMonths
+        ? [equation("Tmax kk = (T1 + T2 + … + T12) / 12", [
+          piece(`(${maxMonths.map((value) => temp(value)).join(" + ")}) / 12`, `${from.climate}: Tmax không khí từng tháng`),
+        ], `${temp(airMax)} °C`, "Lấy trung bình Tmax không khí của 12 tháng.")]
+        : []),
+      equation("Tmax ray = Tmax kk + 20", [
+        piece(temp(airMax), maxMonths ? "Tmax không khí trung bình vừa tính" : `${from.climate}: Tmax không khí đã lưu`),
         piece(" + 20"),
-      ], `${temp(input.maxRailTemperature)} °C`, "Nhiệt độ ray cao nhất bằng nhiệt độ không khí cao nhất của tháng cộng 20 °C."),
+      ], `${temp(input.maxRailTemperature)} °C`, "Nhiệt độ ray cao nhất bằng trung bình Tmax không khí cộng 20 °C."),
     ],
   });
   const sectionProps: WorkedItem = item({
@@ -863,7 +884,7 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
     {
       id: "step-1",
       title: "Bước 1 · Nhiệt độ ray",
-      scope: "Tmin ray bằng Tmin không khí của tháng. Tmax ray bằng Tmax không khí cộng 20 °C.",
+      scope: "Tmin và Tmax không khí là trung bình 12 tháng. Tmin ray bằng trung bình Tmin. Tmax ray bằng trung bình Tmax cộng 20 °C.",
       items: [climate],
     },
     {

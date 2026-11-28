@@ -80,6 +80,21 @@ function fmt(n: number, digits = 1) {
   return n.toLocaleString("vi-VN", { maximumFractionDigits: digits, minimumFractionDigits: 0 });
 }
 
+function yearMean(values: number[] | null) {
+  if (!values || values.length !== 12 || values.some((value) => !Number.isFinite(value))) return null;
+  return values.reduce((sum, value) => sum + value, 0) / 12;
+}
+
+function climateTemps(row: ClimateRow) {
+  const airMin = yearMean(row.t_min_thang);
+  const airMax = yearMean(row.t_max_thang);
+  return { airMin, airMax, railMax: airMax === null ? null : airMax + RAIL_MAX_OFFSET };
+}
+
+function fmtTemp(value: number | null) {
+  return value === null ? "—" : fmt(value);
+}
+
 function num(v: unknown, digits = 1) {
   if (v === null || v === undefined || v === "") return "—";
   const n = Number(v);
@@ -327,20 +342,23 @@ export default function CwrInputParams({ en = false }: { en?: boolean }) {
         sections: [{
           heading: en ? "I. Stations" : "I. Trạm khí hậu",
           note: en
-            ? `Lowest rail temperature = lowest air temperature. Highest rail temperature = highest air temperature + ${RAIL_MAX_OFFSET} °C.`
-            : `Nhiệt độ ray thấp nhất = nhiệt độ không khí thấp nhất. Cao nhất = nhiệt độ không khí cao nhất + ${RAIL_MAX_OFFSET} °C.`,
+            ? `Air min and max are the mean of 12 months. Rail min equals that air min. Rail max equals that air max + ${RAIL_MAX_OFFSET} °C.`
+            : `Tmin và Tmax không khí là trung bình 12 tháng. Tmin ray bằng trung bình Tmin. Tmax ray bằng trung bình Tmax + ${RAIL_MAX_OFFSET} °C.`,
           table: {
             headers: en
-              ? ["Station", "Province", "Air min", "Air max", "Rail min", "Rail max"]
-              : ["Trạm", "Tỉnh", "KK thấp nhất", "KK cao nhất", "Ray thấp nhất", "Ray cao nhất"],
-            rows: filtered.map((row) => [
-              `${row.stt}. ${row.ten_tram}`,
-              row.tinh || "—",
-              fmt(row.t_kk_min),
-              fmt(row.t_kk_max),
-              fmt(row.t_kk_min),
-              fmt(Math.round((row.t_kk_max + RAIL_MAX_OFFSET) * 10) / 10),
-            ]),
+              ? ["Station", "Province", "Mean air min", "Mean air max", "Rail min", "Rail max"]
+              : ["Trạm", "Tỉnh", "KK trung bình thấp nhất", "KK trung bình cao nhất", "Ray thấp nhất", "Ray cao nhất"],
+            rows: filtered.map((row) => {
+              const temps = climateTemps(row);
+              return [
+                `${row.stt}. ${row.ten_tram}`,
+                row.tinh || "—",
+                fmtTemp(temps.airMin),
+                fmtTemp(temps.airMax),
+                fmtTemp(temps.airMin),
+                fmtTemp(temps.railMax),
+              ];
+            }),
           },
         }],
       };
@@ -875,8 +893,8 @@ function ClimateForm({
   const mins = monthNumbers(draft.min);
   const maxs = monthNumbers(draft.max);
   const ready = mins.every(Number.isFinite) && maxs.every(Number.isFinite);
-  const airMin = ready ? Math.min(...mins) : NaN;
-  const airMax = ready ? Math.max(...maxs) : NaN;
+  const airMin = ready ? mins.reduce((sum, value) => sum + value, 0) / 12 : NaN;
+  const airMax = ready ? maxs.reduce((sum, value) => sum + value, 0) / 12 : NaN;
   const field = "mt-1 h-10 w-full rounded-lg border border-slate-300 px-2 font-mono text-sm";
   return (
     <form className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" onSubmit={(event) => { event.preventDefault(); onSave(); }}>
@@ -923,8 +941,8 @@ function ClimateForm({
       <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950">
         {ready
           ? (en
-            ? `Rail min = ${fmt(airMin)} °C. Rail max = ${fmt(airMax)} + ${RAIL_MAX_OFFSET} = ${fmt(airMax + RAIL_MAX_OFFSET)} °C. The ground check uses the selected month of this region.`
-            : `Nhiệt độ ray thấp nhất = ${fmt(airMin)} °C. Cao nhất = ${fmt(airMax)} + ${RAIL_MAX_OFFSET} = ${fmt(airMax + RAIL_MAX_OFFSET)} °C. Kiểm toán nền đường lấy tháng đã chọn của vùng này để tính nhiệt độ khóa.`)
+            ? `Mean air min = ${fmt(airMin)} °C. Mean air max = ${fmt(airMax)} °C. Rail min = ${fmt(airMin)} °C. Rail max = ${fmt(airMax)} + ${RAIL_MAX_OFFSET} = ${fmt(airMax + RAIL_MAX_OFFSET)} °C.`
+            : `Tmin không khí = trung bình 12 tháng = ${fmt(airMin)} °C. Tmax không khí = ${fmt(airMax)} °C. Tmin ray = ${fmt(airMin)} °C. Tmax ray = ${fmt(airMax)} + ${RAIL_MAX_OFFSET} = ${fmt(airMax + RAIL_MAX_OFFSET)} °C.`)
           : (en ? "Enter all 12 months. Rail temperatures are calculated from them." : "Nhập đủ 12 tháng. Nhiệt độ ray và nhiệt độ khóa lấy từ các số này.")}
       </p>
       <div className="mt-3 flex gap-2">
@@ -985,8 +1003,8 @@ function ClimateSection({
         <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950">
           <span className="font-bold">2.</span>{" "}
           {en
-            ? `Lowest rail temperature = lowest air temperature. Highest rail temperature = highest air temperature + ${RAIL_MAX_OFFSET} °C.`
-            : `Nhiệt độ ray thấp nhất = nhiệt độ không khí thấp nhất; cao nhất = nhiệt độ không khí cao nhất + ${RAIL_MAX_OFFSET} °C.`}
+            ? `The year view shows the mean of 12 months. Rail min equals the mean air min. Rail max equals the mean air max + ${RAIL_MAX_OFFSET} °C.`
+            : `Bảng theo năm lấy trung bình 12 tháng. Nhiệt độ ray thấp nhất bằng trung bình Tmin; cao nhất bằng trung bình Tmax + ${RAIL_MAX_OFFSET} °C.`}
         </p>
         <div className="mt-3 flex flex-wrap items-end gap-3">
           <label className="min-w-0 grow basis-56 text-xs font-semibold text-slate-700">
@@ -1048,7 +1066,7 @@ function ClimateSection({
                 <th className="px-3 py-2.5" rowSpan={2}>{en ? "Station" : "Trạm"}</th>
                 <th className="px-3 py-2.5" rowSpan={2}>{en ? "Province" : "Tỉnh"}</th>
                 <th className="border-l border-slate-200 px-3 py-2 text-center" colSpan={2}>
-                  {en ? "Air temperature (°C) — Year" : "Nhiệt độ không khí (°C) — Năm"}
+                  {en ? "Air temperature (°C) — mean of 12 months" : "Nhiệt độ không khí (°C) — trung bình 12 tháng"}
                 </th>
                 <th className="border-l border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-emerald-900" colSpan={2}>
                   {en ? "Rail temperature (°C)" : "Nhiệt độ ray (°C)"}
@@ -1057,30 +1075,30 @@ function ClimateSection({
               </tr>
               <tr className="border-b border-slate-200">
                 <th className="border-l border-slate-200 px-3 py-2 text-right font-semibold text-sky-800">
-                  {en ? "Min (A.6)" : "Thấp nhất (A.6)"}
+                  {en ? "Mean min" : "Trung bình thấp nhất"}
                 </th>
                 <th className="px-3 py-2 text-right font-semibold text-rose-700">
-                  {en ? "Max (A.5)" : "Cao nhất (A.5)"}
+                  {en ? "Mean max" : "Trung bình cao nhất"}
                 </th>
                 <th className="border-l border-emerald-200 bg-emerald-50 px-3 py-2 text-right font-semibold text-sky-900">
-                  {en ? "Min (= air min)" : "Thấp nhất (= T_kk min)"}
+                  {en ? "Min (= mean air min)" : "Thấp nhất (= Tkk trung bình)"}
                 </th>
                 <th className="bg-emerald-50 px-3 py-2 text-right font-semibold text-rose-800">
-                  {en ? `Max (= air max + ${RAIL_MAX_OFFSET})` : `Cao nhất (= T_kk max + ${RAIL_MAX_OFFSET})`}
+                  {en ? `Max (= mean air max + ${RAIL_MAX_OFFSET})` : `Cao nhất (= Tkk trung bình + ${RAIL_MAX_OFFSET})`}
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {visible.map((r) => {
-                const tRayMax = Math.round((r.t_kk_max + RAIL_MAX_OFFSET) * 10) / 10;
+                const temps = climateTemps(r);
                 return (
                   <tr key={r.id || `${r.stt}-${r.ten_tram}`} className="hover:bg-slate-50">
                     <td className="px-3 py-2 font-medium text-slate-900">{r.stt}. {r.ten_tram}</td>
                     <td className="px-3 py-2 text-slate-600">{r.tinh || "—"}</td>
-                    <td className="border-l border-slate-100 px-3 py-2 text-right font-mono tabular-nums text-sky-800">{fmt(r.t_kk_min)}</td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums text-rose-700">{fmt(r.t_kk_max)}</td>
-                    <td className="border-l border-emerald-100 bg-emerald-50/40 px-3 py-2 text-right font-mono font-semibold tabular-nums text-sky-900">{fmt(r.t_kk_min)}</td>
-                    <td className="bg-emerald-50/40 px-3 py-2 text-right font-mono font-semibold tabular-nums text-rose-800">{fmt(tRayMax)}</td>
+                    <td className="border-l border-slate-100 px-3 py-2 text-right font-mono tabular-nums text-sky-800">{fmtTemp(temps.airMin)}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-rose-700">{fmtTemp(temps.airMax)}</td>
+                    <td className="border-l border-emerald-100 bg-emerald-50/40 px-3 py-2 text-right font-mono font-semibold tabular-nums text-sky-900">{fmtTemp(temps.airMin)}</td>
+                    <td className="bg-emerald-50/40 px-3 py-2 text-right font-mono font-semibold tabular-nums text-rose-800">{fmtTemp(temps.railMax)}</td>
                     {(canEdit || canDelete) ? <td className="px-3 py-2"><RowActions en={en} canEdit={canEdit} canDelete={canDelete} onEdit={() => onEdit(r)} onDelete={() => onDelete(r)} /></td> : null}
                   </tr>
                 );
@@ -1102,7 +1120,7 @@ function ClimateSection({
         <p className="text-xs text-slate-500">
           {monthly
             ? (en ? "Monthly values from QCVN (12 months). Rail min = air min of month; rail max = air max of month + 20 °C." : "Giá trị theo 12 tháng từ QCVN. Ray thấp nhất = không khí thấp nhất của tháng; ray cao nhất = không khí cao nhất của tháng + 20 °C.")
-            : (en ? "Year column from QCVN. Rail columns calculated." : "Cột Năm theo QCVN. Hai cột nhiệt độ ray tính tự động.")}
+            : (en ? "Year columns are the mean of 12 months. Rail min equals the mean air min. Rail max equals the mean air max + 20 °C." : "Cột năm là trung bình 12 tháng. Ray thấp nhất bằng trung bình Tmin. Ray cao nhất bằng trung bình Tmax cộng 20 °C.")}
         </p>
         <div className="flex items-center gap-2">
           <button type="button" disabled={pageIndex <= 0} onClick={() => setPage((p) => Math.max(0, p - 1))}
