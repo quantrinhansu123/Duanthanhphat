@@ -99,8 +99,9 @@ export function diaryWorkText(rows: DiaryWork[], kind: "weld" | "grind" | "accep
     const fieldCodes = group.map(diaryCode).filter(Boolean).sort((a, b) => a.localeCompare(b, "vi", { numeric: true }));
     // Ghép liền; mẫu in tự xuống dòng theo khổ (không cắt cứng mỗi 6 mã).
     const codesJoined = joinDiaryFieldCodes(fieldCodes);
+    const missingCodes = Math.max(0, quantity - fieldCodes.length);
     if (kind === "weld") {
-      return `- Thi công ${task.charAt(0).toLowerCase()}${task.slice(1)}, thuộc ${route}, khối lượng ${quantity} mối hàn${codesJoined ? `; bao gồm mối số: ${codesJoined}` : "."}`;
+      return `- Thi công ${task.charAt(0).toLowerCase()}${task.slice(1)}, thuộc ${route}, khối lượng ${quantity} mối hàn${codesJoined ? `; bao gồm mối số: ${codesJoined}` : "."}${missingCodes ? ` (còn ${missingCodes} mối chưa có mã hiện trường)` : ""}`;
     }
     return `- ${task} đoạn ${range}, thuộc ${route}. Khối lượng: ${quantity} mối${codesJoined ? ` Mối số: ${codesJoined}` : "."}${missing}`;
   }).join("\n");

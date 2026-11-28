@@ -307,8 +307,8 @@ export default function WeldAcceptancePrintPack({ record: initial, onClose: clos
           {SIGNER_PARTIES.map(([party, name]) => (
             <div key={party} className="space-y-1 rounded-lg border border-slate-200 p-2">
               <p className="text-xs font-semibold text-slate-600">{name}</p>
-              <input aria-label={`${name}: họ và tên`} className={input} placeholder="Họ và tên" readOnly={party === "ntc"} value={party === "ntc" ? ACCEPTANCE_TECHNICIAN.ten : formView[`nguoi_${party}_1_ten`] ?? ""} onChange={(e) => set(`nguoi_${party}_1_ten`, e.target.value)} />
-              <input aria-label={`${name}: chức vụ`} className={input} placeholder="Chức vụ" readOnly={party === "ntc"} value={party === "ntc" ? ACCEPTANCE_TECHNICIAN.chucVu : formView[`nguoi_${party}_1_cv`] ?? ""} onChange={(e) => set(`nguoi_${party}_1_cv`, e.target.value)} />
+              <input aria-label={`${name}: họ và tên`} className={input} placeholder="Họ và tên" value={formView[`nguoi_${party}_1_ten`] ?? ""} onChange={(e) => set(`nguoi_${party}_1_ten`, e.target.value)} />
+              <input aria-label={`${name}: chức vụ`} className={input} placeholder="Chức vụ" value={formView[`nguoi_${party}_1_cv`] ?? ""} onChange={(e) => set(`nguoi_${party}_1_cv`, e.target.value)} />
               <input aria-label={`${name}: ngày`} type="date" className={input} value={formView[`ngay_ky_${party}`] ?? ""} onChange={(e) => set(`ngay_ky_${party}`, e.target.value)} />
             </div>
           ))}

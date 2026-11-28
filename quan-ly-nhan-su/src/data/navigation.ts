@@ -284,6 +284,13 @@ export const navigation: NavItem[] = [
         description: "Báo cáo công việc ngày và báo cáo ảnh (tab trong cùng màn hình); in kèm nhau",
         descriptionEn: "Daily work report and photo report (inner tabs); print together",
       },
+      {
+        id: "bao-cao-ai",
+        label: "Báo cáo AI",
+        labelEn: "AI Report",
+        description: "Giới thiệu sản phẩm Chatbot AI quản lý hợp đồng (17 module), đọc thư mục cục bộ, soạn thảo Word/PDF và thống kê hợp đồng",
+        descriptionEn: "Product showcase for Contract AI Chatbot (17 modules), authorized local folder reading, Word/PDF drafting, and contract statistics",
+      },
     ],
   },
   {

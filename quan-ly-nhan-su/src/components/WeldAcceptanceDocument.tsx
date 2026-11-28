@@ -7,7 +7,7 @@ import { reloadRecordSet, reviseRecord, saveRfiPrintInfo, type RecordSet, type R
 import WeldAcceptanceRecordPages, { acceptancePrintCss, Ed, EdViDate, type RecordEditor, type RecordKind } from "@/components/WeldAcceptanceRecordPages";
 import { exportPagesPdf, isTouchDevice, printOrPdfAcceptance } from "@/lib/pdfExport";
 import { fieldWeldCode, parseCoordinateCode } from "@/lib/weldCode";
-import { ACCEPTANCE_TECHNICIAN, SITE_COMMANDER, rfiScope, SIGNER_KEYS, BBNTCV_SIGNER_KEYS, SIGNER_PARTIES, loadSignerDefaults, saveSignerDefaults } from "@/lib/weldAcceptance";
+import { ACCEPTANCE_TECHNICIAN, SITE_COMMANDER, RFI_PRINT_SAVED_KEYS, rfiScope, SIGNER_KEYS, BBNTCV_SIGNER_KEYS, SIGNER_PARTIES, loadSignerDefaults, saveSignerDefaults } from "@/lib/weldAcceptance";
 import { loadPersonnelPickerRows } from "@/lib/personnelCertificatesDb";
 import { loadJournalMachineOptions } from "@/lib/machineRunSchedulesDb";
 import { loadRfiSignatures, saveRfiSignature, uploadSignatureImage, type SignatureKey, type SignatureStore } from "@/lib/rfiSignatures";
@@ -72,24 +72,27 @@ export function initialRfiOverrides(r: { rfi: RfiSummary; projectName: string })
     try { remembered = JSON.parse(window.localStorage.getItem(rfiPrintDefaultsKey(scopeKey)) ?? "{}") as RfiOverrides; } catch { /* bỏ qua */ }
     try { legacy = JSON.parse(window.localStorage.getItem(RFI_PRINT_DEFAULTS) ?? "{}") as RfiOverrides; } catch { /* bỏ qua */ }
     const saved: RfiOverrides = {};
+    const localOverrides: RfiOverrides = {};
     for (const key of RFI_PRINT_SAVED_KEYS) {
       const value = r.rfi.thong_tin?.[`in_${key}`];
       if (value) saved[key] = value;
+      const draft = local?.[key];
+      if (typeof draft === "string") localOverrides[key] = draft;
     }
     // doi_tuong nhớ chung cũ (không phân HH/SA) chỉ lấy khi khớp loại phiếu hiện tại.
-    const doiTuong = [saved.doi_tuong, local.doi_tuong, remembered.doi_tuong, legacy.doi_tuong]
+    const doiTuong = [saved.doi_tuong, localOverrides.doi_tuong, remembered?.doi_tuong, legacy?.doi_tuong]
       .map((value) => normalizeUltrasoundTitle(value))
       .find((value) => doiTuongFitsScope(value, info));
-    const tvgsName = saved.nguoi_nhan || local.nguoi_nhan || (/phú quốc/i.test(r.projectName) ? "Trần Văn Thanh" : "");
-    const kinhGuiRaw = sanitizeKinhGui(saved.kinh_gui ?? local.kinh_gui, tvgsName);
+    const tvgsName = saved.nguoi_nhan || localOverrides.nguoi_nhan || (/phú quốc/i.test(r.projectName) ? "Trần Văn Thanh" : "");
+    const kinhGuiRaw = sanitizeKinhGui(saved.kinh_gui ?? localOverrides.kinh_gui, tvgsName);
     // Kính gửi chỉ giữ tổ chức — bỏ tên người nhận nếu bản cũ còn gắn sau dòng TVGS.
     const kinhGui = kinhGuiRaw
       ? stripTvgsPersonName(kinhGuiRaw.split("\n").map((line) => line.replace(/^-\s*/, "").trim()).filter(Boolean), tvgsName)
         .map((line) => `- ${line}`).join("\n")
       : "";
     const merged: RfiOverrides = {
-      noi_dung: remembered.noi_dung || legacy.noi_dung,
-      ...local,
+      noi_dung: remembered?.noi_dung || legacy?.noi_dung,
+      ...localOverrides,
       ...saved,
       ...(doiTuong ? { doi_tuong: doiTuong } : { doi_tuong: "" }),
       ...(kinhGui ? { kinh_gui: kinhGui } : { kinh_gui: "" }),
@@ -396,7 +399,7 @@ export default function WeldAcceptanceDocument({ view, onClose, onEditRfi }: {
                   {SIGNER_PARTIES.map(([party, label]) => (
                     <div key={party} className="grid gap-2 rounded-lg border border-slate-200 bg-white p-2 sm:col-span-2 sm:grid-cols-2">
                       <label className="block text-xs font-semibold text-slate-600">{label}: họ và tên
-                        <input className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" readOnly={party === "ntc"} value={party === "ntc" ? ACCEPTANCE_TECHNICIAN.ten : form[`nguoi_${party}_1_ten`] ?? ""} onChange={(e) => setForm({ ...form, [`nguoi_${party}_1_ten`]: e.target.value })} />
+                        <input className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form[`nguoi_${party}_1_ten`] ?? ""} onChange={(e) => setForm({ ...form, [`nguoi_${party}_1_ten`]: e.target.value })} />
                       </label>
                       <label className="block text-xs font-semibold text-slate-600">{label}: ngày
                         <input type="date" className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm font-normal" value={form[`ngay_ky_${party}`] ?? ""} onChange={(e) => setForm({ ...form, [`ngay_ky_${party}`]: e.target.value })} />
@@ -464,10 +467,8 @@ function Signer({ title, org, who, ten, chucVu, signatures, party, editor }: { t
   );
 }
 
-/** Mọi mục sửa ở «Sửa nội dung in» được lưu vào CSDL theo phiếu (dùng lâu dài, mọi máy). */
-const RFI_PRINT_SAVED_KEYS = ["doi_tuong", "noi_dung", "ngay_nt", "gio", "km_dau", "km_cuoi", "so_phieu", "ngay_lap", "noi_lap", "ngay_nhan", "dia_diem", "hang_muc", "nguoi_nhan", "chuc_vu_nhan", "kinh_gui", "ntp_ten", "ntp_chuc_vu"] as const;
 const RFI_PRINT_DEFAULTS = "rfi-print-defaults";
-type RfiOverrides = Partial<Record<"noi_dung" | "so_phieu" | "ngay_lap" | "noi_lap" | "dia_diem" | "hang_muc" | "kinh_gui" | "doi_tuong" | "ngay_nt" | "gio" | "km_dau" | "km_cuoi" | "nguoi_nhan" | "chuc_vu_nhan" | "ngay_nhan" | "ntp_ten" | "ntp_chuc_vu", string>>;
+type RfiOverrides = Partial<Record<(typeof RFI_PRINT_SAVED_KEYS)[number], string>>;
 
 /** Khóa nhớ theo loại phiếu — HH và SA không dùng chung nội dung đối tượng. */
 function rfiPrintScopeKey(info: Record<string, unknown> = {}) {
@@ -635,7 +636,7 @@ export function RfiForm({ rfi, welds, projectName, signatures, o = {}, editor, b
       <div className="rfi-sign mt-6 grid grid-cols-2 gap-4">
         {/* Phiếu nghiệm thu siêu âm (không kèm hình học) chỉ có Nhà thầu chính ký; để trống bên trái giữ vị trí chữ ký bên phải. */}
         {ultrasoundOnly ? <div aria-hidden /> : <Signer title="NHÀ THẦU PHỤ" org="Công ty CP công trình Thành Phát" who={pq?.phu} ten={o.ntp_ten} chucVu={o.ntp_chuc_vu} signatures={signatures} party="ntp" editor={editor} />}
-        <Signer title="NHÀ THẦU CHÍNH" org="Liên danh VNR-CRCC16" who={PQ.chinh} signatures={signatures} />
+        <Signer title="NHÀ THẦU CHÍNH" org="Liên danh VNR-CRCC16" who={pq?.chinh} ten={SITE_COMMANDER.ten} chucVu={SITE_COMMANDER.chucVu} signatures={signatures} />
       </div>
       <table className="rfi-sign mt-3 w-full border-collapse border border-black">
         <tbody>

@@ -68,6 +68,7 @@ const RailReportEntry = dynamic(
 const RailReportDashboard = dynamic(
   () => import("@/components/RailReportDashboard"), { loading: TabLoading, ssr: false });
 const DailyWorkReport = dynamic(() => import("@/components/DailyWorkReport"), { loading: TabLoading, ssr: false });
+const AiReportPage = dynamic(() => import("@/components/AiReportPage"), { loading: TabLoading, ssr: false });
 const ProjectManagement = dynamic(() => import("@/components/ProjectManagement"), { loading: TabLoading, ssr: false });
 const WeldingJournalList = dynamic(() => import("@/components/WeldingJournalList"), { loading: TabLoading, ssr: false });
 const WeldAcceptanceReport = dynamic(
@@ -118,6 +119,7 @@ const viewRenderers: Record<string, () => React.ReactNode> = {
   "bc-bao-cao-ray": () => <RailReportDashboard />,
   "bc-nhan-su": () => <PersonnelReportDashboard />,
   "bc-bao-cao-ngay": () => <DailyWorkReport />,
+  "bao-cao-ai": () => <AiReportPage />,
   "quan-ly-du-an": () => <ProjectManagement />,
   "lwr-giai-toa-ung-suat": () => (
     <LwrModuleEmbed path="/giai-toa-ung-suat" title="Giải toả ứng suất" />
