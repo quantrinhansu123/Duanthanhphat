@@ -44,7 +44,7 @@ const fields = [
   ["speed", "Tốc độ thiết kế (km/h)", ""],
   ["cant", "Siêu cao thiếu hoặc thừa Δh (mm)", ""],
   ["tolerance", "Biên độ khóa ± (3 hoặc 5 °C)", "5"],
-  ["adjustment", "Hiệu chỉnh tâm khóa (−5 đến +5 °C)", "0"],
+  ["adjustment", "ΔTk hiệu chỉnh tâm khóa (0 đến 5 °C)", "0"],
   ["gap", "Giới hạn khe đứt (mm)", "70"],
   ["extra", "Ứng suất kéo phụ σf (MPa)", ""],
   ["braking", "Ứng suất kéo/hãm σz (MPa)", ""],
@@ -386,7 +386,7 @@ export default function Tb15GroundCheck() {
         ["Siêu cao Δh (mm)", format(read("cant"))],
         ["Phương pháp [ΔTu]", riseLabel],
         ["Biên độ khóa (°C)", format(read("tolerance"))],
-        ["Hiệu chỉnh tâm khóa (°C)", format(read("adjustment"))],
+        ["ΔTk (°C)", format(read("adjustment"))],
         ["Giới hạn khe đứt (mm)", format(read("gap"))],
         ["σf (MPa)", format(read("extra"))],
         ["σz (MPa)", format(read("braking"))],
@@ -604,18 +604,38 @@ export default function Tb15GroundCheck() {
     const sheets = buildTb15Step10(audit.input, audit.result, audit.origin);
     setPrintPages([
       {
-        kicker: "Bước 10",
-        title: "DỮ LIỆU GẮN VÀO SHEET",
-        subtitle: result.lockTemperature === null ? "KHÔNG ĐẠT" : `ĐẠT — nhiệt độ khóa ${format(result.lockTemperature)} °C`,
-        sections: [{ heading: "Dữ liệu đã chọn", table: { headers: ["Nội dung"], rows: sourceLines.map((line) => [line]) } }],
+        kicker: "Đầu vào",
+        title: "DỮ LIỆU ĐẦU VÀO",
+        subtitle: result.lockTemperature === null ? "KHÔNG ĐẠT" : `ĐẠT — nhiệt độ khóa ${result.lockTemperature.toLocaleString("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} °C`,
+        sections: [{
+          heading: "Thông số đã chọn",
+          table: {
+            headers: ["Hạng mục", "Giá trị"],
+            rows: audit.parameters.map((row) => [row.label, row.value]),
+            align: "text",
+          },
+        }],
       },
       ...sheets.map((sheet) => ({
-        kicker: "Bước 10",
+        kicker: "TB 10015",
         title: sheet.title,
         subtitle: sheet.scope,
         sections: [
-          { heading: sheet.scope, pairs: sheet.items.map((entry) => [entry.label, entry.display] as [string, string]) },
-          ...(sheet.table ? [{ heading: sheet.table.caption, table: { headers: sheet.table.headers, rows: sheet.table.rows } }] : []),
+          ...sheet.items.map((entry) => ({
+            heading: entry.label,
+            result: entry.display,
+            note: entry.lines?.join(" "),
+            formulas: (entry.steps ?? []).map((step) => ({
+              note: step.note,
+              symbols: step.symbols,
+              data: step.values.map((piece) => piece.text).join(""),
+              result: step.result,
+            })),
+          })),
+          ...(sheet.table ? [{
+            heading: sheet.table.caption,
+            table: { headers: sheet.table.headers, rows: sheet.table.rows, highlight: true },
+          }] : []),
         ],
       })),
     ]);
@@ -773,7 +793,7 @@ export default function Tb15GroundCheck() {
               {name === "cant" ? (
                 <input name="cant" type="number" step="any" required value={deltaH} onChange={(e) => setDeltaH(Number(e.target.value))} className={control} />
               ) : (
-                <input name={name} type="number" step="any" required value={nums[name as keyof Nums]} onChange={(e) => setNums((prev) => ({ ...prev, [name]: e.target.value }))} className={control} />
+                <input name={name} type="number" step="any" required min={name === "adjustment" ? 0 : undefined} max={name === "adjustment" ? 5 : undefined} value={nums[name as keyof Nums]} onChange={(e) => setNums((prev) => ({ ...prev, [name]: e.target.value }))} className={control} />
               )}
             </label>
           ))}

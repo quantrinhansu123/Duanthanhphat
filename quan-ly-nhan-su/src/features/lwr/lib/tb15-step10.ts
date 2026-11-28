@@ -49,13 +49,18 @@ export type Step10Sheet = {
   };
 };
 
-function num(value: number, digits = 4) {
+function num(value: number, digits = 2) {
   if (!Number.isFinite(value)) return "—";
   const abs = Math.abs(value);
   if (abs !== 0 && abs < 5 * 10 ** -(digits + 1)) {
     return value.toLocaleString("vi-VN", { maximumSignificantDigits: 4 });
   }
   return value.toLocaleString("vi-VN", { maximumFractionDigits: digits });
+}
+
+/** Nhiệt độ làm tròn 1 chữ số. Số khác dùng num, mặc định 2 chữ số. */
+function temp(value: number) {
+  return num(value, 1);
 }
 
 function item(partial: WorkedItem): WorkedItem {
@@ -113,22 +118,22 @@ function sectionLines(
         piece(num(term.load * 1000, 1), `${scheme}: Y = ${num(term.load)} kN, đổi sang N`),
         piece(" · "),
         piece(num(term.eta, 6), "η vừa tính"),
-      ], `${num(term.settlementTerm, 4)} N`, "Pn của trục lấy lực này, N. Cột Pn trong bảng mở ra."),
+      ], `${num(term.settlementTerm)} N`, "Pn của trục lấy lực này, N. Cột Pn trong bảng mở ra."),
       equation("Pμ = Y · μ", [
         piece(num(term.load * 1000, 1), `${scheme}: Y đổi sang N`),
         piece(" · "),
         piece(num(term.mu, 6), "μ vừa tính"),
-      ], `${num(term.momentTerm, 4)} N`, "Pμ của trục lấy lực này, N. Cột Pμ trong bảng mở ra."),
+      ], `${num(term.momentTerm)} N`, "Pμ của trục lấy lực này, N. Cột Pμ trong bảng mở ra."),
     ];
   });
   const seatNewton = k * spacingMm * section.settlementSum / 2;
   lines.push(
     equation("Σ Pn", [
-      piece(section.terms.map((term) => num(term.settlementTerm, 4)).join(" + "), "Cộng Pn của mọi trục lấy lực, kể cả chính mặt cắt"),
-    ], `${num(section.settlementSum, 4)} N`, "Tổng cột Pn. Độ lún và phản lực gối lấy tổng này."),
+      piece(section.terms.map((term) => num(term.settlementTerm)).join(" + "), "Cộng Pn của mọi trục lấy lực, kể cả chính mặt cắt"),
+    ], `${num(section.settlementSum)} N`, "Tổng cột Pn. Độ lún và phản lực gối lấy tổng này."),
     equation("Σ Pμ", [
-      piece(section.terms.map((term) => num(term.momentTerm, 4)).join(" + "), "Cộng Pμ của mọi trục lấy lực, kể cả chính mặt cắt"),
-    ], `${num(section.momentSum, 4)} N`, "Tổng cột Pμ. Mô men tĩnh lấy tổng này."),
+      piece(section.terms.map((term) => num(term.momentTerm)).join(" + "), "Cộng Pμ của mọi trục lấy lực, kể cả chính mặt cắt"),
+    ], `${num(section.momentSum)} N`, "Tổng cột Pμ. Mô men tĩnh lấy tổng này."),
     equation("độ lún = k · tổng lún / (2u)", [
       piece(num(k, 8), "k, 1/mm"),
       piece(" · "),
@@ -315,11 +320,6 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
   const forceRatio = compression / result.allowedForce;
   const chain = uniformChain(input);
   const from = origins(origin);
-  const methodLabel = result.riseMethod === "uniform"
-    ? "B.0.3 — bước sóng đều"
-    : result.riseMethod === "irregular"
-      ? "B.0.4 — bước sóng không đều"
-      : "số nhỏ hơn giữa B.0.3 và B.0.4";
   const governing = result.sections.reduce((best, section) => section.moment > best.moment ? section : best);
   const bendingSum = governing.momentSum;
   const seatD = input.seatStiffness * 1000;
@@ -327,7 +327,7 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
   const passedStrength = totalStress <= result.stressLimit;
   const passedGap = gapActual <= input.gapLimit;
   const passedRise = riseActual <= result.riseLimit;
-  const coldLimit = Math.min(result.dropStrength, result.dropGap);
+  const lockRise = result.riseUniform;
 
   const moment: WorkedItem = item({
     id: "m0",
@@ -338,7 +338,7 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
         piece(num(seatD, 1), `${from.seat}: D, đổi từ kN/mm sang N/mm`),
         piece(" / "),
         piece(num(spacingMm, 1), `${from.track}: cự ly nút a, đổi từ m sang mm`),
-      ], `${num(result.foundation)} N/mm²`),
+      ], `${num(result.foundation)} N/mm²`, "Đổi D sang N/mm, a sang mm, rồi chia để ra độ cứng nền u."),
       equation("4 · E · Ix", [
         piece("4 · "),
         piece(num(input.steelModulus, 1), `${from.rail}: mô đun đàn hồi E, N/mm²`),
@@ -370,26 +370,26 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
       input.speed > (input.speedCapKmh ?? 160)
         ? equation("α = hệ số vận tốc", [
           piece(num(input.highSpeedFactor ?? 1, 4), `${from.speed}. v = ${num(input.speed, 1)} km/h vượt ngưỡng ${num(input.speedCapKmh ?? 160, 2)} km/h`),
-        ], num(input.highSpeedFactor ?? 1, 4))
+        ], num(input.highSpeedFactor ?? 1, 4), "Tốc độ vượt ngưỡng nên α lấy bằng hệ số vận tốc của dòng v lớn hơn ngưỡng.")
         : equation("α = hệ số sức kéo · v / 100", [
           piece(num(input.speedCoefficient, 4), `${from.speed}: hệ số theo loại sức kéo`),
           piece(" · "),
           piece(num(input.speed, 1), "Ô Tốc độ thiết kế (km/h)"),
           piece(" / 100"),
-        ], num(result.alphaSpeed)),
+        ], num(result.alphaSpeed), "Nhân hệ số sức kéo với tốc độ thiết kế rồi chia 100."),
       result.betaStandard
         ? equation("β = 0,002 · |Δh|", [
           piece("0,002", "Cặp chuẩn H = 2.300 mm và S = 1.500 mm, dùng hệ số 0,002 của bảng tính"),
           piece(" · "),
           piece(num(Math.abs(input.cantDeficiency)), "Ô Siêu cao thiếu hoặc thừa Δh (mm)"),
-        ], num(result.betaLoad))
+        ], num(result.betaLoad), "Khổ tiêu chuẩn dùng hệ số 0,002 nhân với siêu cao không cân bằng.")
         : equation("β = 2 · |Δh| · H / S²", [
           piece(num(Math.abs(input.cantDeficiency)), "Ô Siêu cao thiếu hoặc thừa Δh (mm)"),
           piece(" · "),
           piece(num(input.cgHeightMm ?? 0, 1), "Chiều cao trọng tâm H trên bảng khổ ray"),
           piece(" / "),
           piece(`${num(input.railCenterMm ?? 0, 1)}²`, "Khoảng cách tim hai ray S trên bảng khổ ray"),
-        ], num(result.betaLoad)),
+        ], num(result.betaLoad), "Khổ khác khổ tiêu chuẩn dùng β = 2·|Δh|·H / S²."),
       equation("Md = M₀ · (1 + α + β)", [
         piece(num(result.staticMoment / 1e6), "M₀, mô men tĩnh lớn nhất vừa tính"),
         piece(" · (1 + "),
@@ -397,7 +397,7 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
         piece(" + "),
         piece(num(result.betaLoad), "β vừa tính từ siêu cao"),
         piece(")"),
-      ], `${num(result.dynamicMoment / 1e6)} kN·m`),
+      ], `${num(result.dynamicMoment / 1e6)} kN·m`, "Nhân M₀ của bước 5 với 1 cộng α cộng β."),
     ],
   });
 
@@ -412,7 +412,7 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
         piece(num(result.dynamicMoment, 1), "Md vừa tính, đổi ra N·mm"),
         piece(" / "),
         piece(num(input.baseModulus, 1), `${from.rail}: mô đun chống uốn đáy Wđế, mm³`),
-      ], `${num(result.baseStress)} MPa`),
+      ], `${num(result.baseStress)} MPa`, "Nhân hệ số lực ngang với Md rồi chia cho mô đun chống uốn đáy."),
     ],
   });
 
@@ -423,14 +423,14 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
     steps: [
       equation("[σ] của mác thép", [
         piece(num(result.stressLimit, 2), from.steel),
-      ], `${num(result.stressLimit, 2)} MPa`),
+      ], `${num(result.stressLimit, 2)} MPa`, "Lấy ứng suất cho phép đã lưu của mác thép, không chia lại σs cho K."),
     ],
   });
 
   const dropStrength: WorkedItem = item({
     id: "drop-strength",
     label: "Biên độ giảm nhiệt cho phép theo cường độ [ΔTd]",
-    display: `${num(result.dropStrength)} °C`,
+    display: `${temp(result.dropStrength)} °C`,
     steps: [
       equation("[ΔTd] = ([σ] − σđế − σf − σz) / (E · α)", [
         piece("("),
@@ -446,7 +446,7 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
         piece(" · "),
         piece(num(input.expansion, 8), `${from.rail}: hệ số giãn nở α`),
         piece(")"),
-      ], `${num(result.dropStrength)} °C`),
+      ], `${temp(result.dropStrength)} °C`, "Ra biên độ giảm nhiệt cho phép theo cường độ, °C. Bài khóa đường lấy số này làm [ΔTd]."),
     ],
   });
 
@@ -456,21 +456,21 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
     display: `${passedStrength ? "ĐẠT" : "KHÔNG ĐẠT"} — ${num(totalStress)} MPa so với ${num(result.stressLimit)} MPa`,
     steps: [
       equation("Tu = Te + biên độ", [
-        piece(num(te), inside ? "Nhiệt độ khóa Te vừa tính, nằm trong khoảng" : "Tâm khóa tính thử, đang nằm ngoài khoảng khóa"),
+        piece(temp(te), inside ? "Nhiệt độ khóa Te của bài khóa đường, nằm trong khoảng" : "Tâm khóa tính thử của bài khóa đường, đang nằm ngoài khoảng khóa"),
         piece(" + "),
-        piece(num(input.lockTolerance), "Ô Biên độ khóa"),
-      ], `${num(te + input.lockTolerance)} °C`),
+        piece(temp(input.lockTolerance), "Ô Biên độ khóa"),
+      ], `${temp(te + input.lockTolerance)} °C`, "Cộng Te với biên độ khóa ra nhiệt độ ray cao nhất dùng để kiểm cường độ."),
       equation("ΔTd,max = Tu − Tmin", [
-        piece(num(te + input.lockTolerance), "Tu vừa tính"),
+        piece(temp(te + input.lockTolerance), "Tu vừa tính"),
         piece(" − "),
-        piece(num(input.minRailTemperature), `${from.climate}: Tmin ray bằng Tmin không khí của tháng đã chọn`),
-      ], `${num(dropActual)} °C`),
+        piece(temp(input.minRailTemperature), `${from.climate}: Tmin ray bằng Tmin không khí của tháng đã chọn`),
+      ], `${temp(dropActual)} °C`, "Trừ Tmin ra biên độ giảm nhiệt thực tế."),
       equation("σt = E · α · ΔTd,max", [
         piece(num(input.steelModulus, 1), `${from.rail}: mô đun đàn hồi E`),
         piece(" · "),
         piece(num(input.expansion, 8), `${from.rail}: hệ số giãn nở α`),
         piece(" · "),
-        piece(num(dropActual), "ΔTd,max vừa tính"),
+        piece(temp(dropActual), "ΔTd,max vừa tính"),
       ], `${num(thermalStress)} MPa`),
       equation("Tổng = σđế + σt + σf + σz", [
         piece(num(result.baseStress), "σđế vừa tính"),
@@ -487,8 +487,8 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
 
   const uniformRise: WorkedItem = item({
     id: "rise-b03",
-    label: "[ΔTu] theo B.0.3",
-    display: `${num(result.riseUniform)} °C`,
+    label: "[ΔTu] = [P] / (2 · E · α · F)",
+    display: `${temp(result.riseUniform)} °C`,
     steps: [
       equation("E (N/cm²) = E (MPa) · 100", [
         piece(num(input.steelModulus, 1), `${from.rail}: E, N/mm²`),
@@ -599,7 +599,7 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
         piece(" · "),
         piece(num(input.area, 1), `${from.rail}: diện tích một ray F`),
         piece(")"),
-      ], `${num(result.riseUniform)} °C`, "Ra biên độ tăng nhiệt cho phép theo B.0.3, °C."),
+      ], `${temp(result.riseUniform)} °C`, "Đây là [ΔTu] đưa vào bài tính nhiệt độ khóa. B.0.4 không thay số này."),
     ],
   });
 
@@ -615,7 +615,7 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
     : item({
       id: "rise-b04",
       label: "[ΔTu] theo B.0.4",
-      display: `${num(result.riseIrregular)} °C`,
+      display: `${temp(result.riseIrregular)} °C`,
       steps: [
         ...(result.irregularWave ? waveLines(result.irregularWave, input.irregular, from.rail, from.ballast, from.fastener) : []),
         equation("ΔT = (Pmin / 2 − ΔP) / (E · α · F)", [
@@ -629,36 +629,18 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
           piece(" · "),
           piece(num(input.area, 1), `${from.rail}: diện tích F`),
           piece(")"),
-        ], `${num((result.irregularMinP / 2 - input.irregular.dpKn * 1000) / (input.steelModulus * input.expansion * input.area))} °C`),
+        ], `${temp((result.irregularMinP / 2 - input.irregular.dpKn * 1000) / (input.steelModulus * input.expansion * input.area))} °C`, "Ra ΔT của B.0.4, °C. Số này không đưa vào bài khóa đường."),
         input.radius === 0 || input.radius >= 2000
           ? equation("[ΔTu] = ΔT − 8", [
-            piece(num((result.irregularMinP / 2 - input.irregular.dpKn * 1000) / (input.steelModulus * input.expansion * input.area)), "ΔT vừa tính"),
+            piece(temp((result.irregularMinP / 2 - input.irregular.dpKn * 1000) / (input.steelModulus * input.expansion * input.area)), "ΔT vừa tính"),
             piece(" − "),
             piece("8", "Đường thẳng hoặc R ≥ 2.000 m thì trừ 8 °C theo quy ước bảng tính"),
-          ], `${num(result.riseIrregular)} °C`)
+          ], `${temp(result.riseIrregular ?? 0)} °C`, "Trừ 8 °C. Đây là kết quả B.0.4, không thay [ΔTu] của bài khóa đường.")
           : equation("[ΔTu] = ΔT", [
-            piece(num(result.riseIrregular), `Không trừ 8 °C vì R = ${num(input.radius, 1)} m, lấy từ ô bán kính cong`),
-          ], `${num(result.riseIrregular)} °C`),
+            piece(temp(result.riseIrregular ?? 0), `Không trừ 8 °C vì R = ${num(input.radius, 1)} m, lấy từ ô bán kính cong`),
+          ], `${temp(result.riseIrregular ?? 0)} °C`, "Giữ ΔT vì bán kính cong nhỏ hơn 2.000 m. Không đưa số này vào bài khóa đường."),
       ],
     });
-
-  const selectedRise: WorkedItem = item({
-    id: "rise-selected",
-    label: "Biên độ tăng nhiệt cho phép [ΔTu] đã chọn",
-    display: `${num(result.riseLimit)} °C`,
-    steps: [
-      equation(
-        result.riseMethod === "min" ? "[ΔTu] = min(B.0.3, B.0.4)" : result.riseMethod === "uniform" ? "[ΔTu] = [ΔTu] B.0.3" : "[ΔTu] = [ΔTu] B.0.4",
-        [
-          piece(num(result.riseUniform), "Kết quả B.0.3 vừa tính"),
-          piece(result.riseIrregular === null ? "" : " và "),
-          piece(result.riseIrregular === null ? "không tính B.0.4" : num(result.riseIrregular), result.riseIrregular === null ? "Ô phương pháp đang là bước sóng đều" : "Kết quả B.0.4 vừa tính"),
-        ],
-        `${num(result.riseLimit)} °C`,
-      ),
-    ],
-    lines: [`Ô Phương pháp [ΔTu] ổn định đang chọn: ${methodLabel}.`],
-  });
 
   const compressionItem: WorkedItem = item({
     id: "pt",
@@ -666,12 +648,12 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
     display: `${num(compression / 1000)} kN`,
     steps: [
       equation("ΔTu,max = Tmax − Te + biên độ", [
-        piece(num(input.maxRailTemperature), `${from.climate}: Tmax ray = Tmax không khí của tháng đã chọn + 20 °C`),
+        piece(temp(input.maxRailTemperature), `${from.climate}: Tmax ray = Tmax không khí của tháng đã chọn + 20 °C`),
         piece(" − "),
-        piece(num(te), inside ? "Te nằm trong khoảng khóa" : "Te tính thử, đang nằm ngoài khoảng"),
+        piece(temp(te), inside ? "Te của bài khóa đường, nằm trong khoảng" : "Te tính thử của bài khóa đường, đang nằm ngoài khoảng"),
         piece(" + "),
-        piece(num(input.lockTolerance), "Ô Biên độ khóa"),
-      ], `${num(riseActual)} °C`),
+        piece(temp(input.lockTolerance), "Ô Biên độ khóa"),
+      ], `${temp(riseActual)} °C`, "Ra biên độ tăng nhiệt thực tế tại Te, °C."),
       equation("Pt = 2 · E · F · α · ΔTu,max", [
         piece("2 · "),
         piece(num(input.steelModulus, 1), `${from.rail}: E`),
@@ -680,7 +662,7 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
         piece(" · "),
         piece(num(input.expansion, 8), `${from.rail}: α`),
         piece(" · "),
-        piece(num(riseActual), "ΔTu,max vừa tính"),
+        piece(temp(riseActual), "ΔTu,max vừa tính"),
       ], `${num(compression, 1)} N = ${num(compression / 1000)} kN`),
     ],
   });
@@ -691,10 +673,10 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
     display: `${passedRise && inside ? "ĐẠT" : "KHÔNG ĐẠT"} — η = ${num(useRatio)} theo [ΔTu] đã chọn`,
     steps: [
       equation("η = ΔTu,max / [ΔTu]", [
-        piece(num(riseActual), "ΔTu,max vừa tính tại Te"),
+        piece(temp(riseActual), "ΔTu,max vừa tính tại Te"),
         piece(" / "),
-        piece(num(result.riseLimit), "[ΔTu] đã chọn theo ô phương pháp ổn định"),
-      ], num(useRatio)),
+        piece(temp(result.riseLimit), "Biên độ của phương pháp đang chọn trên form. Bài khóa đường vẫn dùng [P]/(2·E·α·F)"),
+      ], num(useRatio), "Chia biên độ thực tế cho biên độ của phương pháp trên form."),
       equation("Pt / [P] =", [
         piece(num(compression / 1000), "Pt vừa tính, kN"),
         piece(" / "),
@@ -707,7 +689,7 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
   const dropGap: WorkedItem = item({
     id: "drop-gap",
     label: "Giảm nhiệt cho phép theo khe đứt [ΔT khe]",
-    display: `${num(result.dropGap)} °C`,
+    display: `${temp(result.dropGap)} °C`,
     steps: [
       equation("λ · r / (E · F)", [
         piece(num(input.gapLimit, 1), "Ô Giới hạn khe đứt λ, mm"),
@@ -726,7 +708,7 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
         piece(num(Math.sqrt(input.gapLimit * input.resistance / (input.steelModulus * input.area)), 8), "căn vừa tính"),
         piece(" / "),
         piece(num(input.expansion, 8), `${from.rail}: hệ số giãn nở α, 1/°C`),
-      ], `${num(result.dropGap)} °C`, "Chia căn cho α ra biên độ giảm nhiệt, °C."),
+      ], `${temp(result.dropGap)} °C`, "Chia căn cho α ra biên độ giảm nhiệt theo khe, °C. Số này không siết cửa sổ khóa."),
     ],
   });
 
@@ -738,7 +720,7 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
       equation("α · ΔTd,max", [
         piece(num(input.expansion, 8), `${from.rail}: α, 1/°C`),
         piece(" · "),
-        piece(num(dropActual), "ΔTd,max tại tâm khóa, °C"),
+        piece(temp(dropActual), "ΔTd,max tại tâm khóa của bài cường độ, °C"),
       ], num(input.expansion * dropActual, 8), "Nhân α với biên độ giảm nhiệt. Kết quả không thứ nguyên."),
       equation("(α · ΔTd,max)²", [
         piece(num(input.expansion * dropActual, 8), "tích vừa tính"),
@@ -760,79 +742,153 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
     id: "lock",
     label: "Nhiệt độ khóa Te",
     display: inside
-      ? `ĐẠT — ${num(te)} °C, khoảng ${num(result.lockMin)} đến ${num(result.lockMax)} °C`
-      : `KHÔNG ĐẠT — tâm thử ${num(result.candidate)} °C nằm ngoài ${num(result.lockMin)} đến ${num(result.lockMax)} °C`,
+      ? `ĐẠT — ${temp(te)} °C, khoảng ${temp(result.lockMin)} đến ${temp(result.lockMax)} °C`
+      : `KHÔNG ĐẠT — tâm thử ${temp(result.candidate)} °C nằm ngoài ${temp(result.lockMin)} đến ${temp(result.lockMax)} °C`,
     steps: [
-      equation("Tmax − [ΔTu]", [
-        piece(num(input.maxRailTemperature), `${from.climate}: Tmax ray`),
+      equation("[ΔTd] = ([σ] − σđế − σf − σz) / (E · α)", [
+        piece("("),
+        piece(num(result.stressLimit), "[σ] của mác thép. Bài cường độ có bài giải σđế"),
         piece(" − "),
-        piece(num(result.riseLimit), "[ΔTu] đã chọn"),
-      ], `${num(input.maxRailTemperature - result.riseLimit)} °C`, "Cận tăng nhiệt trước khi lấy max."),
-      equation("max(Tmin, Tmax − [ΔTu])", [
-        piece(num(input.minRailTemperature), `${from.climate}: Tmin ray`),
-        piece(" và "),
-        piece(num(input.maxRailTemperature - result.riseLimit), "Tmax − [ΔTu] vừa tính"),
-      ], `${num(Math.max(input.minRailTemperature, input.maxRailTemperature - result.riseLimit))} °C`, "Lấy số lớn hơn trong hai vế, °C."),
-      equation("Cận dưới = max(Tmin, Tmax − [ΔTu]) + biên độ", [
-        piece(num(Math.max(input.minRailTemperature, input.maxRailTemperature - result.riseLimit)), "max vừa tính"),
-        piece(" + "),
-        piece(num(input.lockTolerance), "Ô Biên độ khóa, °C"),
-      ], `${num(result.lockMin)} °C`, "Cộng biên độ khóa ra cận dưới của Te, °C."),
-      equation("min([ΔTd], [ΔT khe])", [
-        piece(num(result.dropStrength), "[ΔTd] theo cường độ, °C"),
-        piece(" và "),
-        piece(num(result.dropGap), "[ΔT khe], °C"),
-      ], `${num(coldLimit)} °C`, "Lấy biên độ giảm nhiệt nhỏ hơn, °C."),
-      equation("Tmin + min([ΔTd], [ΔT khe])", [
-        piece(num(input.minRailTemperature), `${from.climate}: Tmin ray`),
-        piece(" + "),
-        piece(num(coldLimit), "min vừa tính"),
-      ], `${num(input.minRailTemperature + coldLimit)} °C`, "Cộng Tmin với biên độ giảm nhiệt nhỏ hơn."),
-      equation("min(Tmax, Tmin + min([ΔTd], [ΔT khe]))", [
-        piece(num(input.maxRailTemperature), `${from.climate}: Tmax ray`),
-        piece(" và "),
-        piece(num(input.minRailTemperature + coldLimit), "Tmin + min vừa tính"),
-      ], `${num(Math.min(input.maxRailTemperature, input.minRailTemperature + coldLimit))} °C`, "Lấy số nhỏ hơn trong hai vế, °C."),
-      equation("Cận trên = min(Tmax, Tmin + min([ΔTd], [ΔT khe])) − biên độ", [
-        piece(num(Math.min(input.maxRailTemperature, input.minRailTemperature + coldLimit)), "min vừa tính"),
+        piece(num(result.baseStress), "σđế của bài cường độ"),
         piece(" − "),
-        piece(num(input.lockTolerance), "Ô Biên độ khóa, °C"),
-      ], `${num(result.lockMax)} °C`, "Trừ biên độ khóa ra cận trên của Te, °C."),
-      equation("Te = (Tmax + Tmin + [ΔTd] − [ΔTu]) / 2 + hiệu chỉnh", [
-        piece(num(input.maxRailTemperature), `${from.climate}: Tmax ray`),
-        piece(" + "),
-        piece(num(input.minRailTemperature), `${from.climate}: Tmin ray`),
-        piece(" + "),
-        piece(num(result.dropStrength), "[ΔTd] theo cường độ"),
+        piece(num(input.additionalStress), "Ô Ứng suất kéo phụ σf"),
         piece(" − "),
-        piece(num(result.riseLimit), "[ΔTu] đã chọn"),
+        piece(num(input.brakingStress), "Ô Ứng suất kéo/hãm σz"),
+        piece(") / ("),
+        piece(num(input.steelModulus, 1), `${from.rail}: E`),
+        piece(" · "),
+        piece(num(input.expansion, 8), `${from.rail}: α`),
+        piece(")"),
+      ], `${temp(result.dropStrength)} °C`, "Lấy biên độ giảm nhiệt cho phép từ bài cường độ trước khi tính Te."),
+      equation("[ΔTu] = [P] / (2 · E · α · F)", [
+        piece(num(result.allowedForce, 1), "[P] của bài ổn định, N. Bài đó có bài giải từ Pw đến [P]"),
+        piece(" / (2 · "),
+        piece(num(input.steelModulus, 1), `${from.rail}: E`),
+        piece(" · "),
+        piece(num(input.expansion, 8), `${from.rail}: α`),
+        piece(" · "),
+        piece(num(input.area, 1), `${from.rail}: diện tích F`),
+        piece(")"),
+      ], `${temp(lockRise)} °C`, "Lấy biên độ tăng nhiệt cho phép theo [P]/(2·E·α·F). Không lấy [ΔTu] của B.0.4."),
+      equation("Te = (Tmax + Tmin + [ΔTd] − [ΔTu]) / 2 + ΔTk", [
+        piece("("),
+        piece(temp(input.maxRailTemperature), `${from.climate}: Tmax ray`),
+        piece(" + "),
+        piece(temp(input.minRailTemperature), `${from.climate}: Tmin ray`),
+        piece(" + "),
+        piece(temp(result.dropStrength), "[ΔTd] vừa tính"),
+        piece(" − "),
+        piece(temp(lockRise), "[ΔTu] vừa tính"),
         piece(") / 2 + "),
-        piece(num(input.lockAdjustment), "Ô Hiệu chỉnh tâm khóa"),
-      ], inside ? `${num(te)} °C` : `Không lấy ${num(result.candidate)} °C`),
+        piece(temp(input.lockAdjustment), "Ô ΔTk, từ 0 đến 5 °C"),
+      ], `${temp(result.candidate)} °C`, "Ra tâm khóa thiết kế theo 4.4.2-1, °C."),
+      equation("Tu = Tmin + [ΔTd] − biên độ", [
+        piece(temp(input.minRailTemperature), `${from.climate}: Tmin ray`),
+        piece(" + "),
+        piece(temp(result.dropStrength), "[ΔTd] vừa tính"),
+        piece(" − "),
+        piece(temp(input.lockTolerance), "Ô Biên độ khóa, 3 hoặc 5 °C"),
+      ], `${temp(result.lockMax)} °C`, "Cận trên của nhiệt độ khóa theo 4.4.3-1."),
+      equation("Tl = Tmax − [ΔTu] + biên độ", [
+        piece(temp(input.maxRailTemperature), `${from.climate}: Tmax ray`),
+        piece(" − "),
+        piece(temp(lockRise), "[ΔTu] vừa tính"),
+        piece(" + "),
+        piece(temp(input.lockTolerance), "Ô Biên độ khóa, 3 hoặc 5 °C"),
+      ], `${temp(result.lockMin)} °C`, "Cận dưới của nhiệt độ khóa theo 4.4.3-2."),
     ],
+    lines: [inside
+      ? `Te = ${temp(te)} °C nằm trong khoảng ${temp(result.lockMin)} đến ${temp(result.lockMax)} °C.`
+      : `Te = ${temp(result.candidate)} °C nằm ngoài khoảng ${temp(result.lockMin)} đến ${temp(result.lockMax)} °C.`],
   });
 
-  const answerOnly = (entry: WorkedItem): WorkedItem => ({ ...entry, steps: undefined, formula: undefined, lines: undefined });
-  const stabilityItems = [
-    ...(result.riseMethod !== "irregular" ? [uniformRise] : []),
-    ...(result.riseIrregular !== null ? [irregularRiseItem] : []),
-    selectedRise,
-    compressionItem,
-    ratioItem,
-  ];
+  const airMin = input.minRailTemperature;
+  const airMax = input.maxRailTemperature - 20;
+  const climate: WorkedItem = item({
+    id: "climate",
+    label: "Nhiệt độ ray theo tháng",
+    display: `Tmin = ${temp(airMin)} °C, Tmax = ${temp(input.maxRailTemperature)} °C`,
+    steps: [
+      equation("Tmin ray = Tmin không khí", [
+        piece(temp(airMin), `${from.climate}: Tmin không khí của tháng đã chọn`),
+      ], `${temp(airMin)} °C`, "Nhiệt độ ray thấp nhất lấy bằng nhiệt độ không khí thấp nhất của tháng."),
+      equation("Tmax ray = Tmax không khí + 20", [
+        piece(temp(airMax), `${from.climate}: Tmax không khí của tháng đã chọn`),
+        piece(" + 20"),
+      ], `${temp(input.maxRailTemperature)} °C`, "Nhiệt độ ray cao nhất bằng nhiệt độ không khí cao nhất của tháng cộng 20 °C."),
+    ],
+  });
+  const sectionProps: WorkedItem = item({
+    id: "section",
+    label: "Mặt cắt ray và mác thép",
+    display: `F = ${num(input.area, 1)} mm², [σ] = ${num(result.stressLimit)} MPa`,
+    steps: [
+      equation("F = diện tích mặt cắt đã chọn", [
+        piece(num(input.area, 1), `${from.rail}: diện tích F, mm²`),
+      ], `${num(input.area, 1)} mm²`, "Lấy diện tích ray đã lưu theo loại ray và độ mòn."),
+      equation("Wđế = mô đun chống uốn đáy đã chọn", [
+        piece(num(input.baseModulus, 1), `${from.rail}: Wđế, mm³`),
+      ], `${num(input.baseModulus, 1)} mm³`, "Lấy mô đun chống uốn đáy đã lưu. Bước 6 dùng số này."),
+      equation("Ix = mô men quán tính đứng đã chọn", [
+        piece(num(input.ix, 1), `${from.rail}: Ix, mm⁴`),
+      ], `${num(input.ix, 1)} mm⁴`, "Lấy Ix đã lưu. Bước 3 dùng số này để tính k."),
+      equation("Iy = mô men quán tính ngang đã chọn", [
+        piece(num(input.iy, 1), `${from.rail}: Iy, mm⁴`),
+      ], `${num(input.iy, 1)} mm⁴`, "Lấy Iy đã lưu. Bước 8 dùng số này để tính [P]."),
+      equation("E = mô đun đàn hồi đã chọn", [
+        piece(num(input.steelModulus, 1), `${from.rail}: E, MPa`),
+      ], `${num(input.steelModulus, 1)} MPa`, "Lấy E đã lưu. Các bước nhiệt dùng cùng số này."),
+      equation("α = hệ số giãn nở đã chọn", [
+        piece(num(input.expansion, 8), `${from.rail}: α, 1/°C`),
+      ], `${num(input.expansion, 8)} 1/°C`, "Lấy α đã lưu, giữ đủ số có nghĩa."),
+      ...allowable.steps!,
+    ],
+  });
+  const foundation: WorkedItem = item({
+    id: "foundation",
+    label: "Độ cứng nền u và hệ số k",
+    display: `u = ${num(result.foundation)} N/mm², k = ${num(result.k * 1000)} 1/m`,
+    steps: moment.steps!.slice(0, 4),
+  });
+  const factors: WorkedItem = item({
+    id: "factors",
+    label: "Hệ số vận tốc α và hệ số siêu cao β",
+    display: `α = ${num(result.alphaSpeed)}, β = ${num(result.betaLoad)}`,
+    steps: dynamicMoment.steps!.slice(0, 2),
+  });
+  const staticMoment: WorkedItem = { ...moment, steps: moment.steps!.slice(4) };
+  const bending: WorkedItem = { ...dynamicMoment, steps: dynamicMoment.steps!.slice(2) };
 
   return [
     {
-      id: "summary",
-      title: "Tổng hợp",
-      scope: "Kết quả cần đọc",
-      items: [answerOnly(strengthCheck), answerOnly(selectedRise), answerOnly(lockItem), answerOnly(gapItem)],
+      id: "step-1",
+      title: "Bước 1 · Nhiệt độ ray",
+      scope: "Tmin ray bằng Tmin không khí của tháng. Tmax ray bằng Tmax không khí cộng 20 °C.",
+      items: [climate],
     },
     {
-      id: "strength",
-      title: "Bảng tính 1 · Cường độ",
-      scope: "Ứng suất đế, ứng suất nhiệt và so với [σ]",
-      items: [moment, dynamicMoment, baseStress, allowable, dropStrength, strengthCheck],
+      id: "step-2",
+      title: "Bước 2 · Mặt cắt và mác thép",
+      scope: "F, Wđế, Ix, Iy, E, α và [σ] đã lưu.",
+      items: [sectionProps],
+    },
+    {
+      id: "step-3",
+      title: "Bước 3 · Nền đường",
+      scope: "u = D/a, rồi k từ u, E và Ix.",
+      items: [foundation],
+    },
+    {
+      id: "step-4",
+      title: "Bước 4 · Hệ số động",
+      scope: "α theo tốc độ và sức kéo. β theo siêu cao.",
+      items: [factors],
+    },
+    {
+      id: "step-5",
+      title: "Bước 5 · Nội lực",
+      scope: "Pn, Pμ tại từng mặt cắt, rồi M₀ ở mô men lớn nhất.",
+      items: [staticMoment],
       table: {
         caption: "Nội lực tại từng mặt cắt bánh. M₀ lấy ở dòng mô men lớn nhất.",
         headers: ["Vị trí (m)", "P động (kN)", "M tĩnh (kN·m)", "Độ lún (mm)", "Phản lực gối (kN)"],
@@ -845,31 +901,43 @@ export function buildTb15Step10(input: GroundCheckInput, result: GroundCheckResu
         ]),
         forces: result.sections.map((section) => section.terms.map((term) => ({
           axle: num(term.position),
-          pn: num(term.settlementTerm, 4),
-          pmu: num(term.momentTerm, 4),
-          sumPn: num(section.settlementSum, 4),
-          sumPmu: num(section.momentSum, 4),
+          pn: num(term.settlementTerm),
+          pmu: num(term.momentTerm),
+          sumPn: num(section.settlementSum),
+          sumPmu: num(section.momentSum),
         }))),
         details: result.sections.map((section) => sectionLines(section, result.k, result.foundation, spacingMm, from.scheme)),
       },
     },
     {
-      id: "stability",
-      title: "Bảng tính 2 · Ổn định",
-      scope: "Biên độ tăng nhiệt của phương pháp đang chọn",
-      items: stabilityItems,
+      id: "step-6",
+      title: "Bước 6 · Cường độ",
+      scope: "Md từ M₀, α và β. σđế từ f, Md và Wđế.",
+      items: [bending, baseStress],
     },
     {
-      id: "lock",
-      title: "Bảng tính 3 · Nhiệt độ khóa đường",
-      scope: "Tâm khóa và hai cận",
-      items: [lockItem],
+      id: "step-7",
+      title: "Bước 7 · Biên độ giảm nhiệt",
+      scope: "[ΔTd] đưa sang bước 10.",
+      items: [dropStrength],
     },
     {
-      id: "gap",
-      title: "Bảng tính 4 · Khe đứt ray",
-      scope: "Biên độ giảm nhiệt theo khe và khe tính được",
-      items: [dropGap, gapItem],
+      id: "step-8",
+      title: "Bước 8 · Ổn định",
+      scope: "[P] rồi [ΔTu] = [P] / (2·E·α·F). B.0.4 nếu đang chọn không thay số này.",
+      items: [uniformRise, ...(result.riseIrregular !== null ? [irregularRiseItem] : [])],
+    },
+    {
+      id: "step-9",
+      title: "Bước 9 · Khe đứt cho phép",
+      scope: "[ΔT khe] từ giới hạn khe. Số này không siết cửa sổ khóa.",
+      items: [dropGap],
+    },
+    {
+      id: "step-10",
+      title: "Bước 10 · Nhiệt độ khóa",
+      scope: "Te, Tu, Tl từ [ΔTd] và [ΔTu]. Kiểm cường độ và khe thực dùng Te vừa tính.",
+      items: [lockItem, strengthCheck, gapItem, compressionItem, ratioItem],
     },
   ];
 }

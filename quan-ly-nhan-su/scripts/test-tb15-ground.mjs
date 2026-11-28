@@ -54,9 +54,15 @@ assert.equal(result.riseMethod, "irregular");
 close(checkTb15Ground({ ...input, riseMethod: "uniform" }).riseLimit, 96.15745848362717);
 close(checkTb15Ground({ ...input, riseMethod: "min" }).riseLimit, Math.min(96.15745848362717, 83.7066), 1e-5);
 
-// Lock temperature and gap checks use the chosen riseLimit.
+// Lock window is 4.4.3 and uses [ΔTu] = [P]/(2EαF), not B.0.4 and not the broken-gap limit.
+close(result.candidate, (input.maxRailTemperature + input.minRailTemperature + result.dropStrength - result.riseUniform) / 2);
+close(result.lockMin, input.maxRailTemperature - result.riseUniform + input.lockTolerance);
+close(result.lockMax, input.minRailTemperature + result.dropStrength - input.lockTolerance);
 assert.ok(result.lockTemperature !== null && result.gap <= input.gapLimit);
-assert.equal(checkTb15Ground({ ...input, gapLimit: 0.01 }).lockTemperature, null);
+const tinyGap = checkTb15Ground({ ...input, gapLimit: 0.01 });
+assert.notEqual(tinyGap.lockTemperature, null);
+assert.ok(tinyGap.gap > 0.01);
+assert.throws(() => checkTb15Ground({ ...input, lockAdjustment: -1 }));
 
 // Invalid inputs.
 assert.throws(() => checkTb15Ground({ ...input, irregular: undefined }));

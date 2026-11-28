@@ -23,14 +23,15 @@ function FormulaSteps({ steps }: { steps: FormulaLine[] }) {
   return (
     <div className="space-y-4">
       {steps.map((step, index) => (
-        <div key={index}>
-          <p className="text-base font-bold text-[#0047AB]">{step.symbols}</p>
+        <div key={index} className="border-t border-slate-200 pt-3 first:border-t-0 first:pt-0">
+          {step.note ? <p>{step.note}</p> : null}
           <p className="mt-1 break-words tabular-nums">
+            <span className="font-bold text-[#0047AB]">{step.symbols}</span>
+            <span> = </span>
             {step.values.map((value, valueIndex) => <Piece key={valueIndex} piece={value} />)}
             <span> = </span>
             <span className="font-semibold text-slate-950">{step.result}</span>
           </p>
-          {step.note ? <p className="text-xs leading-5 text-slate-600">{step.note}</p> : null}
         </div>
       ))}
     </div>
@@ -155,7 +156,7 @@ function ResultRow({ item }: { item: WorkedItem }) {
 export function Tb15Step10Report({ sheets }: { sheets: Step10Sheet[] }) {
   return (
     <div className="space-y-4" aria-live="polite">
-      <p className="text-sm text-slate-600">Bấm chữ i để xem phép tính. Bấm một vị trí trong bảng nội lực để xem vòng tính của mặt cắt đó. Đưa chuột vào số màu xanh để xem nguồn. Chữ đỏ là phần chưa tính được.</p>
+      <p className="text-sm text-slate-600">Tính lần lượt từ Bước 1 đến Bước 10. Bấm chữ i để xem bài giải. Mỗi phép là một dòng: công thức = dữ liệu = kết quả. Bấm một vị trí trong bảng nội lực để xem vòng tính của mặt cắt đó.</p>
       {sheets.map((sheet) => (
         <section key={sheet.id} className="rounded-lg border border-slate-200" aria-labelledby={`step10-${sheet.id}`}>
           <header className="bg-slate-50 px-3 py-3">

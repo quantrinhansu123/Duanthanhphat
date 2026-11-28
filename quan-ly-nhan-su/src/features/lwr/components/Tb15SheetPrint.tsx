@@ -1,15 +1,25 @@
 "use client";
 
-import { useEffect } from "react";
+import { Fragment, useEffect } from "react";
 import { createPortal } from "react-dom";
 import PrintFrame from "@/components/PrintFrame";
 import { Printer, X } from "@/components/icons";
 
+export type Tb15PrintFormula = {
+  note?: string;
+  symbols: string;
+  data: string;
+  result: string;
+};
+
 export type Tb15PrintSection = {
   heading: string;
+  /** Kết quả của mục, bôi vàng trên đầu mục. */
+  result?: string;
   note?: string;
   pairs?: [string, string][];
-  table?: { headers: string[]; rows: string[][] };
+  formulas?: Tb15PrintFormula[];
+  table?: { headers: string[]; rows: string[][]; highlight?: boolean; align?: "number" | "text" };
 };
 
 export type Tb15PrintPage = {
@@ -78,8 +88,8 @@ export function Tb15SheetPrint({
         </div>
       </div>
       <div className="print-stage">
-        {pages.map((page) => (
-          <article key={page.kicker} className="print-sheet">
+        {pages.map((page, pageIndex) => (
+          <article key={`${page.title}-${pageIndex}`} className="print-sheet">
             <PrintFrame>
               <header className="doc-head">
                 <div className="brand">
@@ -100,10 +110,43 @@ export function Tb15SheetPrint({
               </header>
               <h1 className="form-title">{page.title}</h1>
               {page.subtitle ? <p className="form-sub">{page.subtitle}</p> : null}
-              {page.sections.map((section) => (
-                <section key={section.heading}>
-                  <h2 className="section-h">{section.heading}</h2>
-                  {section.note ? <p className="legend">{section.note}</p> : null}
+              {page.sections.some((section) => section.formulas?.length) ? (
+                <p className="legend">Ô nền vàng là kết quả của phép tính.</p>
+              ) : null}
+              {page.sections.map((section, sectionIndex) => (
+                <section key={`${section.heading}-${sectionIndex}`}>
+                  <h2 className="section-h">
+                    <span className="section-name">{section.heading}</span>
+                    {section.result ? <span className="result">{section.result}</span> : null}
+                  </h2>
+                  {section.note ? <p className="aside">{section.note}</p> : null}
+                  {section.formulas && section.formulas.length > 0 ? (
+                    <table className="formula-table">
+                      <thead>
+                        <tr>
+                          <th>Công thức</th>
+                          <th>Dữ liệu</th>
+                          <th>Kết quả</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {section.formulas.map((line, lineIndex) => (
+                          <Fragment key={lineIndex}>
+                            {line.note ? (
+                              <tr className="solve">
+                                <td colSpan={3}>{line.note}</td>
+                              </tr>
+                            ) : null}
+                            <tr className={line.note ? "calc" : "calc solo"}>
+                              <td className="sym">{line.symbols}</td>
+                              <td>{line.data}</td>
+                              <td className="result">{line.result}</td>
+                            </tr>
+                          </Fragment>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : null}
                   {section.pairs && section.pairs.length > 0 ? (
                     <table className="kv-table">
                       <tbody>
@@ -124,7 +167,7 @@ export function Tb15SheetPrint({
                     </table>
                   ) : null}
                   {section.table ? (
-                    <table className="data-table">
+                    <table className={`data-table${section.table.highlight ? " is-result" : ""}${section.table.align === "text" ? " is-text" : ""}`}>
                       <thead>
                         <tr>
                           {section.table.headers.map((header) => <th key={header}>{header}</th>)}
@@ -256,17 +299,33 @@ const PRINT_CSS = `
 }
 #tb15-sheet-print .form-sub { margin: 0 0 2mm; text-align: center; font-size: 10pt; font-weight: 700; }
 #tb15-sheet-print .section-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3mm;
   margin: 3mm 0 1.2mm;
   padding: 1.2mm 2mm;
   background: #f3e8ff;
   border-left: 1.1mm solid #9333ea;
-  font-size: 10pt;
+  font-size: 11.5pt;
   font-weight: 800;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: #6b21a8;
 }
-#tb15-sheet-print .legend { margin: 0 0 1.5mm; font-size: 8pt; font-style: italic; color: #334155; }
+#tb15-sheet-print .section-name { text-transform: uppercase; }
+#tb15-sheet-print .section-h .result { padding: 0.3mm 1.6mm; }
+#tb15-sheet-print .result {
+  background: #ffe14a;
+  color: #111;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+#tb15-sheet-print .legend { margin: 0 0 2mm; font-size: 9.5pt; color: #334155; }
+#tb15-sheet-print .aside { margin: 0 0 1.6mm; font-size: 11pt; line-height: 1.4; color: #111; }
 #tb15-sheet-print table { width: 100%; border-collapse: collapse; }
 #tb15-sheet-print .kv-table td {
   border: 0.28mm solid #c4a3dc;
@@ -281,7 +340,8 @@ const PRINT_CSS = `
 #tb15-sheet-print .data-table td {
   border: 0.28mm solid #a477bd;
   padding: 0.7mm 1.4mm;
-  font-size: 8pt;
+  font-size: 10pt;
+  line-height: 1.35;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -292,7 +352,42 @@ const PRINT_CSS = `
 }
 #tb15-sheet-print .data-table td:first-child,
 #tb15-sheet-print .data-table th:first-child { text-align: left; }
+#tb15-sheet-print .data-table.is-text td { text-align: left; font-weight: 700; }
+#tb15-sheet-print .data-table.is-result td { background: #ffe14a; }
 #tb15-sheet-print .data-table tr { break-inside: avoid; }
+#tb15-sheet-print .formula-table th,
+#tb15-sheet-print .formula-table td {
+  border: 0.25mm solid #d4c4e4;
+  padding: 1.8mm 2.4mm;
+  vertical-align: middle;
+  font-size: 11pt;
+  line-height: 1.35;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+#tb15-sheet-print .formula-table th {
+  background: #f6f0fb;
+  padding: 1.3mm 2mm;
+  font-size: 10pt;
+  font-weight: 800;
+  text-align: center;
+  color: #581c87;
+}
+#tb15-sheet-print .formula-table tr.solve td {
+  border-bottom: 0;
+  padding: 2.8mm 2.6mm 0.4mm;
+  background: #fff;
+  font-size: 13pt;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #111;
+}
+#tb15-sheet-print .formula-table tr.calc td { border-top: 0; padding: 1.1mm 2.6mm 2.6mm; }
+#tb15-sheet-print .formula-table tr.calc.solo td { border-top: 0.25mm solid #d4c4e4; padding: 2.2mm 2.6mm; }
+#tb15-sheet-print .formula-table .sym { font-weight: 700; color: #1e3a8a; }
+#tb15-sheet-print .formula-table td.result { width: 22%; font-size: 12pt; text-align: right; white-space: nowrap; }
+#tb15-sheet-print .formula-table tr.solve { break-inside: avoid; break-after: avoid; }
+#tb15-sheet-print .formula-table tr.calc { break-inside: avoid; break-before: avoid; }
 #tb15-sheet-print .sign-row {
   break-inside: avoid;
   display: grid;

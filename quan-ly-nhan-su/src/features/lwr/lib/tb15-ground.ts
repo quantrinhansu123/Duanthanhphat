@@ -178,7 +178,7 @@ export function checkTb15Ground(input: GroundCheckInput) {
     nonnegative.some((n) => !Number.isFinite(n) || n < 0) ||
     !Number.isFinite(input.safety) || input.safety < 1.3 ||
     !Number.isFinite(input.cantDeficiency) ||
-    !Number.isFinite(input.lockAdjustment) || Math.abs(input.lockAdjustment) > 5 ||
+    !Number.isFinite(input.lockAdjustment) || input.lockAdjustment < 0 || input.lockAdjustment > 5 ||
     ![3, 5].includes(input.lockTolerance) ||
     !Number.isFinite(minRailTemperature) || !Number.isFinite(maxRailTemperature) ||
     minRailTemperature >= maxRailTemperature || !wheels.length ||
@@ -258,9 +258,11 @@ export function checkTb15Ground(input: GroundCheckInput) {
       : Math.min(riseUniform, riseIrregular as number);
 
   const dropGap = Math.sqrt(input.gapLimit * input.resistance / (E * area)) / expansion;
-  const lockMin = Math.max(minRailTemperature, maxRailTemperature - riseLimit) + input.lockTolerance;
-  const lockMax = Math.min(maxRailTemperature, minRailTemperature + Math.min(dropStrength, dropGap)) - input.lockTolerance;
-  const candidate = (maxRailTemperature + minRailTemperature + dropStrength - riseLimit) / 2 + input.lockAdjustment;
+  // Bài khóa đường dùng [ΔTu] = [P]/(2·E·α·F). B.0.4 không thay số này.
+  const lockRise = riseUniform;
+  const lockMin = maxRailTemperature - lockRise + input.lockTolerance;
+  const lockMax = minRailTemperature + dropStrength - input.lockTolerance;
+  const candidate = (maxRailTemperature + minRailTemperature + dropStrength - lockRise) / 2 + input.lockAdjustment;
   const lockTemperature = candidate >= lockMin && candidate <= lockMax ? candidate : null;
   const drop = lockTemperature === null ? null : lockTemperature + input.lockTolerance - minRailTemperature;
   const rise = lockTemperature === null ? null : maxRailTemperature - lockTemperature + input.lockTolerance;
